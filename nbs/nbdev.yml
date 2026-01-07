@@ -1,0 +1,9 @@
+project:
+  output-dir: _docs
+
+website:
+  title: "HexMagic"
+  site-url: "https://ArthurConner.github.io/HexMagic"
+  description: "This is a hex map generation system that outputs svg files"
+  repo-branch: main
+  repo-url: "https://github.com/ArthurConner/HexMagic"
