@@ -1416,6 +1416,43 @@ class HexRegion:
         return cls(hexes=adds, hex_grid=grid)
 
 
+# %% ../nbs/02_primitives.ipynb 69
+@patch
+def __or__(self: HexRegion, other: 'HexRegion') -> 'HexRegion':
+    """Union: region1 | region2"""
+    return HexRegion(self.hexes | other.hexes, self.hex_grid)
+
+@patch
+def __and__(self: HexRegion, other: 'HexRegion') -> 'HexRegion':
+    """Intersection: region1 & region2"""
+    return HexRegion(self.hexes & other.hexes, self.hex_grid)
+
+@patch
+def __sub__(self: HexRegion, other: 'HexRegion') -> 'HexRegion':
+    """Difference: region1 - region2"""
+    return HexRegion(self.hexes - other.hexes, self.hex_grid)
+
+@patch
+def __xor__(self: HexRegion, other: 'HexRegion') -> 'HexRegion':
+    """Symmetric difference: region1 ^ region2"""
+    return HexRegion(self.hexes ^ other.hexes, self.hex_grid)
+
+@patch
+def __contains__(self: HexRegion, idx: int) -> bool:
+    """Membership: idx in region"""
+    return idx in self.hexes
+
+@patch
+def __len__(self: HexRegion) -> int:
+    """Size: len(region)"""
+    return len(self.hexes)
+
+@patch
+def __iter__(self: HexRegion):
+    """Iterate over hex indices"""
+    return iter(self.hexes)
+
+
 # %% ../nbs/02_primitives.ipynb 70
 @patch
 def outside(self:HexRegion,ring=1):

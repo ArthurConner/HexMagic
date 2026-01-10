@@ -177,10 +177,10 @@ showRing(12)
 # %% ../nbs/00_core.ipynb 25
 showRing(12,ring=2)
 
-# %% ../nbs/00_core.ipynb 34
+# %% ../nbs/00_core.ipynb 36
 #??HexPosition.line_to
 
-# %% ../nbs/00_core.ipynb 35
+# %% ../nbs/00_core.ipynb 37
 def line_demo(start_idx=20, end_idx=8):
     """Demo showing line drawing between two hexes using cube coordinates"""
     grid = sampleGrid()
@@ -220,7 +220,7 @@ def line_demo(start_idx=20, end_idx=8):
 line_demo(20, 8)
 
 
-# %% ../nbs/00_core.ipynb 37
+# %% ../nbs/00_core.ipynb 39
 def range_demo( max_distance=2):
     """Demo showing all hexes within a certain distance"""
     
@@ -258,7 +258,7 @@ def range_demo( max_distance=2):
 range_demo(3)
 
 
-# %% ../nbs/00_core.ipynb 38
+# %% ../nbs/00_core.ipynb 40
 def rotation_demo(center_idx=12):
     """Demo showing rotation around a center hex"""
     grid = sampleGrid()
