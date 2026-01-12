@@ -18,8 +18,8 @@ from .primitives import HexGrid, HexPosition ,  HexRegion, GosperCurve
 import numpy as np
 
 from .terrain import Terrain
-#from HexMagic.voronoi import generate_plate_terrain
+from .voronoi import generate_plate_terrain
 
-#Terrain.fromSeeds = generate_plate_terrain
+Terrain.fromSeeds = generate_plate_terrain
 
 

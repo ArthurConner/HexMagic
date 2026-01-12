@@ -7,6 +7,19 @@ __all__ = ['grid', 'sampleMap', 'coords', 'indexes', 'vern', 'dOV', 'dOD', 'samp
            'voronoi_seeds', 'PlateKind', 'Plate', 'demoVornoi', 'demoOutlineVornoi', 'mark_oceanic_plates',
            'calculate_distances_from_ocean', 'demoOceanicDistance', 'generate_plate_terrain', 'demoTerr']
 
+# %% ../../nbs/tutorials/Voronoi.ipynb 4
+#data
+from collections import namedtuple, defaultdict
+from dataclasses import dataclass,  field, asdict
+from typing import List
+from enum import Enum
+
+#math
+from random import randint
+import numpy as np
+
+from fastcore.basics import patch
+
 # %% ../../nbs/tutorials/Voronoi.ipynb 5
 from ..primitives import Hex, MapCord , HexPosition,  MapSize, MapRect, MapCord, MapPath ,HexGrid, HexRegion
 
@@ -126,7 +139,7 @@ def demo_voronoi_growth_simple():
     return grid.builder.show()
 
 
-# %% ../../nbs/tutorials/Voronoi.ipynb 15
+# %% ../../nbs/tutorials/Voronoi.ipynb 14
 sampleMap = pompeii().scaled(0.5)
 
 sampleMap.colorMap()
@@ -134,7 +147,7 @@ sampleMap.hexGrid.update()
 sampleMap.hexGrid.builder.show()
 
 
-# %% ../../nbs/tutorials/Voronoi.ipynb 17
+# %% ../../nbs/tutorials/Voronoi.ipynb 16
 def voronoi_seeds(rows, cols, num_seeds, elimination_rate=0.3, max_offset=3, s=None,debug=False):
     """
     Generate evenly-spaced seeds with randomization for Voronoi diagram.
@@ -201,7 +214,7 @@ print("\n1D indexes:")
 print(indexes)
 
 
-# %% ../../nbs/tutorials/Voronoi.ipynb 18
+# %% ../../nbs/tutorials/Voronoi.ipynb 17
 class PlateKind(Enum):
     oceanic = 0        # Ocean/sea
     continental = 1    # Lakes/rivers
@@ -310,7 +323,7 @@ class Plate:
                     plate.hexes.add(add)
         return plates
 
-# %% ../../nbs/tutorials/Voronoi.ipynb 19
+# %% ../../nbs/tutorials/Voronoi.ipynb 18
 def demoVornoi(rings=5,points=10,radius=20):
     grid = sampleGrid(rings, radius=radius, fill="lightgray")
     plates = Plate.voronoi(grid,points)
@@ -325,11 +338,11 @@ def demoVornoi(rings=5,points=10,radius=20):
     grid.update()
     return grid
 
-# %% ../../nbs/tutorials/Voronoi.ipynb 20
+# %% ../../nbs/tutorials/Voronoi.ipynb 19
 vern = demoVornoi(rings=15,points=80,radius=10)
 vern.builder.show()
 
-# %% ../../nbs/tutorials/Voronoi.ipynb 21
+# %% ../../nbs/tutorials/Voronoi.ipynb 20
 def demoOutlineVornoi(rings=5,points=10,radius=20):
     grid = sampleGrid(rings, radius=radius, fill="lightgray")
     plates = Plate.voronoi(grid,points)
@@ -356,11 +369,11 @@ def demoOutlineVornoi(rings=5,points=10,radius=20):
     grid.builder.adjust("plates", plateLayer)
     return grid
 
-# %% ../../nbs/tutorials/Voronoi.ipynb 22
+# %% ../../nbs/tutorials/Voronoi.ipynb 21
 dOV = demoOutlineVornoi(rings=15,points=80,radius=10)
 dOV.builder.show()
 
-# %% ../../nbs/tutorials/Voronoi.ipynb 25
+# %% ../../nbs/tutorials/Voronoi.ipynb 24
 def mark_oceanic_plates(plates, ocean_fraction=0.4, seed=None):
     """
     Randomly mark some plates as oceanic.
@@ -392,7 +405,7 @@ def mark_oceanic_plates(plates, ocean_fraction=0.4, seed=None):
 
 
 
-# %% ../../nbs/tutorials/Voronoi.ipynb 26
+# %% ../../nbs/tutorials/Voronoi.ipynb 25
 def calculate_distances_from_ocean(plates, grid):
     """
     Calculate distance from each plate to nearest oceanic plate centroid.
@@ -418,7 +431,7 @@ def calculate_distances_from_ocean(plates, grid):
    
 
 
-# %% ../../nbs/tutorials/Voronoi.ipynb 27
+# %% ../../nbs/tutorials/Voronoi.ipynb 26
 def demoOceanicDistance(rings=5, points=10, radius=20, ocean_fraction=0.4):
     grid = sampleGrid(rings, radius=radius, fill="lightgray")
     plates = Plate.voronoi(grid, points)
@@ -452,7 +465,7 @@ def demoOceanicDistance(rings=5, points=10, radius=20, ocean_fraction=0.4):
     return grid
 
 
-# %% ../../nbs/tutorials/Voronoi.ipynb 28
+# %% ../../nbs/tutorials/Voronoi.ipynb 27
 dOD = demoOceanicDistance(rings=25,points=300,radius=5, ocean_fraction=0.2)
 dOD.builder.show()
 
@@ -536,3 +549,6 @@ def demoTerr():
     sampleMap.hexGrid.update()
 
     return sampleMap.hexGrid.builder.show()
+
+# %% ../../nbs/tutorials/Voronoi.ipynb 32
+demoTerr()
