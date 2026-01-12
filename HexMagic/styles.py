@@ -1203,7 +1203,7 @@ def demoDrawColor(self:StyleDemo,prefix="bacon", body = simpleSVG):
     patterns = []
     styles = []
     levels = StyleCSS.elevations()
-    aLoader = SVGPatternLoader(patterns_dir="patterns")
+    aLoader = SVGPatternLoader(patterns_dir="data/patterns")
    
     for i, level in enumerate(levels):
         if i < len(levels) - 1:
@@ -1335,7 +1335,7 @@ def main():
     """Demo showcasing SVGBuilder features: patterns, styles, layers, and animations"""
     
     # Initialize
-    aLoader = SVGPatternLoader(patterns_dir="patterns")
+    aLoader = SVGPatternLoader(patterns_dir="data/patterns")
     builder = SVGBuilder()
     builder.width = 400
     builder.height = 500

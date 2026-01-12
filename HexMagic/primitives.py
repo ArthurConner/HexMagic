@@ -24,9 +24,6 @@ import sys
 import os
 import math
 import random
-sys.path.append(".")
-sys.path.append("..")
-
 
 from .styles import StyleCSS, SVGLayer, SVGBuilder, SVGPatternLoader, preview, indent,SVGDef, Generatable
 

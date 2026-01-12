@@ -29,9 +29,6 @@ from treelib import Tree
 import heapq
 
 # %% ../nbs/03_terrain.ipynb 5
-sys.path.append(".")
-sys.path.append("..")
-
 from .styles import StyleCSS, SVGBuilder,SVGLayer, SVGPatternLoader, preview, app, rt, StyleDemo
 
 from .primitives import MapCord, MapSize, MapRect, MapPath, Hex, HexGrid, HexRegion, HexWrapper, HexPosition, PrimitiveDemo, hexBackground
@@ -947,7 +944,7 @@ def convolution(self: Terrain, field, shape:[HexPosition], fraction, weights = N
     
     return new_field, new_rows, new_cols
 
-# %% ../nbs/03_terrain.ipynb 57
+# %% ../nbs/03_terrain.ipynb 54
 @patch
 def scaled(self: Terrain, scale: float):
     """Create a scaled terrain that maintains proportional grid dimensions"""
@@ -992,7 +989,7 @@ def scaled(self: Terrain, scale: float):
 
     
 
-# %% ../nbs/03_terrain.ipynb 63
+# %% ../nbs/03_terrain.ipynb 60
 @patch
 def growFromHex(self: Terrain, center_idx, origin=0):
     """Grow a region from center hex at same elevation level."""
@@ -1020,7 +1017,7 @@ def growFromHex(self: Terrain, center_idx, origin=0):
     
     return HexRegion(hexes=hex_set, hex_grid=self.hexGrid)
 
-# %% ../nbs/03_terrain.ipynb 64
+# %% ../nbs/03_terrain.ipynb 61
 @patch
 def find_region_at_level(self:Terrain, center_idx):
     """Find all connected hexes within tolerance of center_idx's elevation.
@@ -1038,7 +1035,7 @@ def find_region_at_level(self:Terrain, center_idx):
     return set(levels)
 
 
-# %% ../nbs/03_terrain.ipynb 65
+# %% ../nbs/03_terrain.ipynb 62
 @patch
 def demoRegion(self:TerraDemo):
     """Practice building up coord."""
@@ -1074,7 +1071,7 @@ def demoRegion(self:TerraDemo):
     return sampleMap.hexGrid.builder.show()
 
 
-# %% ../nbs/03_terrain.ipynb 66
+# %% ../nbs/03_terrain.ipynb 63
 @patch
 def demoRegion(self:TerraDemo):
     """Practice building up coord."""
@@ -1118,7 +1115,7 @@ def demoRegion(self:TerraDemo):
  
 
 
-# %% ../nbs/03_terrain.ipynb 68
+# %% ../nbs/03_terrain.ipynb 65
 @patch
 def coastline_svg(self:Terrain,pathstyle=StyleCSS("coastPath",fill="none",stroke="#917910ff",stroke_width=3)):
     """Add a coast to the terrain."""
@@ -1144,7 +1141,7 @@ def coastline_svg(self:Terrain,pathstyle=StyleCSS("coastPath",fill="none",stroke
         
     return pathLayer
 
-# %% ../nbs/03_terrain.ipynb 69
+# %% ../nbs/03_terrain.ipynb 66
 @patch
 def addCoast(self:Terrain,pathstyle=StyleCSS("coastPath",fill="none",stroke="#917910ff",stroke_width=3)):
     """Add a coast to the terrain."""
@@ -1152,20 +1149,21 @@ def addCoast(self:Terrain,pathstyle=StyleCSS("coastPath",fill="none",stroke="#91
 
     pathLayer = self.coastline_svg(pathstyle=pathstyle)
         
-    self.builder.adjust("coastline", pathLayer)
+   
     self.colorMap()
     self.hexGrid.update()
+    self.builder.adjust("coastline", pathLayer)
 
     
 
-# %% ../nbs/03_terrain.ipynb 70
+# %% ../nbs/03_terrain.ipynb 67
 @patch
 def demoCoast(self:TerraDemo):
     """Practice building up coord."""
     
     sampleMap = self.sanFran()
     sampleMap.addCoast()
-    sampleMap.builder.layers[0].hide()
+   
     
     return sampleMap.hexGrid.builder.show()
  
