@@ -9,17 +9,17 @@ __all__ = []
 from .primitives import Hex, MapCord 
 
 
-# %% ../nbs/00_core.ipynb 9
 from .styles import StyleCSS,  SVGBuilder
 
-# %% ../nbs/00_core.ipynb 11
-from .primitives import HexGrid
+# %% ../nbs/00_core.ipynb 9
+from .primitives import MapPath, MapSize, MapRect, MapCord 
+from .primitives import HexGrid, HexPosition ,  HexRegion, GosperCurve
+
+import numpy as np
+
+from .terrain import Terrain
+#from HexMagic.voronoi import generate_plate_terrain
+
+#Terrain.fromSeeds = generate_plate_terrain
 
 
-
-# %% ../nbs/00_core.ipynb 12
-from .primitives import HexPosition , MapPath
-
-
-# %% ../nbs/00_core.ipynb 13
-from .primitives import HexRegion

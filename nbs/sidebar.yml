@@ -6,6 +6,8 @@ website:
       - 01_styles.ipynb
       - 02_primitives.ipynb
       - 03_terrain.ipynb
+      - 04_voronoi.ipynb
       - section: tutorials
         contents:
+          - tutorials/Voronoi.ipynb
           - tutorials/math.ipynb

@@ -2,7 +2,7 @@
 
 # %% auto 0
 __all__ = ['EASING_PRESETS', 'daisy_hdrs', 'app', 'rt', 'preview', 'simpleSVG', 'StyleDemo', 'tag', 'indent', 'Generatable',
-           'SVGDef', 'StyleCSS', 'LayerAnimation', 'SVGLayer', 'SVGBuilder', 'get_preview', 'SVGPatternLoader', 'main']
+           'SVGDef', 'StyleCSS', 'LayerAnimation', 'SVGLayer', 'SVGBuilder', 'get_preview', 'SVGPatternLoader']
 
 # %% ../nbs/01_styles.ipynb 4
 import numpy as np
@@ -1329,97 +1329,3 @@ def animate_cascade(self: SVGBuilder,
             )
     
     return self
-
-# %% ../nbs/01_styles.ipynb 76
-def main():
-    """Demo showcasing SVGBuilder features: patterns, styles, layers, and animations"""
-    
-    # Initialize
-    aLoader = SVGPatternLoader(patterns_dir="data/patterns")
-    builder = SVGBuilder()
-    builder.width = 400
-    builder.height = 500
-    builder.title = "SVG Builder Feature Demo"
-    
-    # 1. Create a patterned background
-    bg_pattern, bg_path = aLoader.stylizedPattern(
-        'ball.svg',
-        colors=StyleCSS.elevations()[:2],
-        patName="background",
-        transform="scale(0.3)"
-    )
-    builder.add_definition(bg_pattern)
-    bg_style = StyleCSS("bg_layer", fill=bg_path, opacity=0.3)
-    builder.add_style(bg_style)
-    
-    # 2. Add background layer
-    bg_body = f'<rect x="0" y="0" width="{builder.width}" height="{builder.height}" class="bg_layer"/>'
-    builder.adjust("background", bg_body)
-    
-    # 3. Create main content with hover effect
-    hills = StyleCSS("hills", fill="#D4E157", stroke="#333333", stroke_width=2, opacity=0.9)
-    hover = StyleCSS("hover_effect", fill="#007fff", cursor="pointer")
-    hills.customize(hover)
-    builder.add_style(hills)
-    
-    # 4. Add geometric shape
-    shape_body = '<polygon points="200,150 350,200 300,300 100,300 50,200" class="hills"/>'
-    builder.adjust("shape", shape_body)
-    
-    # 5. Add title and subtitle
-    builder.add_title(
-        "SVG Builder Demo",
-        subtitle="Patterns • Styles • Animations",
-        title_offset=-180,
-        subtitle_offset=-155
-    )
-    
-    # Add title/subtitle styles
-    title_style = StyleCSS("title", 
-                          fill="#2c3e50",
-                          font_size="24px",
-                          font_weight="bold",
-                          font_family="Arial, sans-serif")
-    subtitle_style = StyleCSS("subtitle",
-                             fill="#7f8c8d", 
-                             font_size="14px",
-                             font_family="Arial, sans-serif")
-    builder.add_style(title_style)
-    builder.add_style(subtitle_style)
-    
-    # 6. Add legend
-    legend_styles = StyleCSS.elevations()[:4]
-    legend_body = builder.legend(legend_styles, xOffset=20, yOffset=350)
-    builder.adjust("legend", legend_body)
-    
-    # Add legend label style
-    key_style = StyleCSS("keyLabel",
-                        fill="#333",
-                        font_size="12px",
-                        font_family="Arial, sans-serif")
-    builder.add_style(key_style)
-    
-    # 7. Animate layers with cascade effect
-    builder.animate_cascade(
-        duration=0.8,
-        stagger=0.2,
-        animation_type="fade",
-        easing="ease-out"
-    )
-    
-    # 8. Save and display
-    output_file = "tmp/feature_demo.svg"
-    with open(output_file, 'w') as f:
-        f.write(builder.xml())
-    
-    print(f"✓ Generated: {output_file}")
-    print(f"✓ Dimensions: {builder.width}x{builder.height}")
-    print(f"✓ Layers: {len(builder.layers)}")
-    print(f"✓ Styles: {len(builder.styles)}")
-    print(f"✓ Animations: {len(builder.animations)}")
-    
-    return builder.show()
-
-if __name__ == "__main__":
-    main()
-
