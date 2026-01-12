@@ -4,7 +4,7 @@
 __all__ = ['PrimitiveDemo', 'MapCord', 'MapSize', 'MapRect', 'MakeCord', 'MakeSize', 'MapPath', 'HexPosition', 'GosperCurve',
            'Hex', 'hexSVG', 'hexBackground', 'HexGrid', 'HexWrapper', 'HexRegion', 'LinearGradient']
 
-# %% ../nbs/02_primitives.ipynb 3
+# %% ../nbs/02_primitives.ipynb 6
 import numpy as np
 import math
 
@@ -19,7 +19,7 @@ from fasthtml.common import *
 from fasthtml.jupyter import *
 import httpx
 
-# %% ../nbs/02_primitives.ipynb 4
+# %% ../nbs/02_primitives.ipynb 7
 import sys
 import os
 import math
@@ -30,13 +30,13 @@ sys.path.append("..")
 
 from .styles import StyleCSS, SVGLayer, SVGBuilder, SVGPatternLoader, preview, indent,SVGDef, Generatable
 
-# %% ../nbs/02_primitives.ipynb 6
+# %% ../nbs/02_primitives.ipynb 9
 class PrimitiveDemo:
     def __init__(self):
         self.help = ""
         
 
-# %% ../nbs/02_primitives.ipynb 9
+# %% ../nbs/02_primitives.ipynb 12
 @dataclass(frozen=True)
 class MapCord:
     x: float
@@ -157,7 +157,7 @@ def MakeCord(x):
 def MakeSize(x):
     return MapSize(x[0],x[1])
 
-# %% ../nbs/02_primitives.ipynb 12
+# %% ../nbs/02_primitives.ipynb 15
 class MapPath:
     def __init__(self,points,style = StyleCSS("blank")):
 
@@ -247,7 +247,7 @@ class MapPath:
 
 
 
-# %% ../nbs/02_primitives.ipynb 13
+# %% ../nbs/02_primitives.ipynb 16
 @patch
 def length(self: MapPath) -> float:
     """Calculate total path length"""
@@ -453,7 +453,7 @@ def make_windy_variable(self: MapPath, iterations: int = 1,
     
     return MapPath(points, self.style)
 
-# %% ../nbs/02_primitives.ipynb 14
+# %% ../nbs/02_primitives.ipynb 17
 @patch
 def drawClosed(self: MapPath, adds: str = "") -> str:
     """Draw closed polygon"""
@@ -483,7 +483,7 @@ def bounds(self: MapPath) -> MapRect:
         MapSize(max_x - min_x, max_y - min_y)
     )
 
-# %% ../nbs/02_primitives.ipynb 15
+# %% ../nbs/02_primitives.ipynb 18
 @patch
 def with_arrowhead(self: MapPath, arrow_size: float = 10, arrow_angle: float = 25, shouldFill = True) -> str:
     """Draw path with an arrowhead at the end.
@@ -538,7 +538,7 @@ def with_arrowhead(self: MapPath, arrow_size: float = 10, arrow_angle: float = 2
     
     return result
 
-# %% ../nbs/02_primitives.ipynb 20
+# %% ../nbs/02_primitives.ipynb 21
 @dataclass
 class HexPosition:
     _coords: np.ndarray = field(default_factory=lambda: np.array([0, 0, 0]))
@@ -635,7 +635,7 @@ class HexPosition:
         
         return HexPosition(int(rq), int(rr), int(rs))
 
-# %% ../nbs/02_primitives.ipynb 21
+# %% ../nbs/02_primitives.ipynb 22
 @patch
 def distance(self: HexPosition, other: HexPosition) -> int:
     """Cube coordinate distance using numpy"""
@@ -674,7 +674,7 @@ def __hash__(self: HexPosition) -> int:
 
 
 
-# %% ../nbs/02_primitives.ipynb 22
+# %% ../nbs/02_primitives.ipynb 23
 @patch
 def line_to(self: HexPosition, other: HexPosition) -> list[HexPosition]:
     """Get line of hexes from self to other using linear interpolation"""
@@ -692,7 +692,7 @@ def line_to(self: HexPosition, other: HexPosition) -> list[HexPosition]:
     return results
 
 
-# %% ../nbs/02_primitives.ipynb 24
+# %% ../nbs/02_primitives.ipynb 25
 @patch
 def ring(self: HexPosition, radius: int, clockwise: bool = True) -> list['HexPosition']:
     """Generate all HexPositions in a ring at given radius from center."""
@@ -722,7 +722,7 @@ def neighbor(self: HexPosition, direction: int) -> 'HexPosition':
     return self + directions[direction % 6]
 
 
-# %% ../nbs/02_primitives.ipynb 25
+# %% ../nbs/02_primitives.ipynb 26
 @patch
 def __repr__(self: HexPosition) -> str:
     """Better string representation"""
@@ -730,7 +730,7 @@ def __repr__(self: HexPosition) -> str:
         return f"HexPosition({self.q}, {self.r}, {self.s}, '{self.label}')"
     return f"HexPosition({self.q}, {self.r}, {self.s})"
 
-# %% ../nbs/02_primitives.ipynb 26
+# %% ../nbs/02_primitives.ipynb 27
 @patch
 def spiral(self: HexPosition, radius: int,clockwise=True) -> list[HexPosition]:
     """Get all hexes in a true spiral pattern from center out to radius.
@@ -770,7 +770,7 @@ def spiral(self: HexPosition, radius: int,clockwise=True) -> list[HexPosition]:
     return results
 
 
-# %% ../nbs/02_primitives.ipynb 27
+# %% ../nbs/02_primitives.ipynb 28
 @patch
 def closest_in_ring(self: HexPosition, root: 'HexPosition', radius: int) -> 'HexPosition':
     """Find the hex in the given ring (centered at root) closest to self.
@@ -790,7 +790,7 @@ def closest_in_ring(self: HexPosition, root: 'HexPosition', radius: int) -> 'Hex
     
     return ring_hexes[0]  # Fallback
 
-# %% ../nbs/02_primitives.ipynb 28
+# %% ../nbs/02_primitives.ipynb 29
 @patch
 def path_through_waypoints(self: HexPosition, waypoints: list[HexPosition], 
                            destination: HexPosition) -> list[HexPosition]:
@@ -828,7 +828,7 @@ def path_through_waypoints(self: HexPosition, waypoints: list[HexPosition],
     return full_path
 
 
-# %% ../nbs/02_primitives.ipynb 29
+# %% ../nbs/02_primitives.ipynb 30
 @patch
 def rotate_left(self: HexPosition) -> 'HexPosition':
     """Rotate 60° counter-clockwise: (q,r,s) -> (-s,-q,-r)"""
@@ -850,7 +850,7 @@ def rotate(self: HexPosition, steps: int = 1) -> HexPosition:
     return HexPosition(*(sign * rolled), label=self.label)
 
 
-# %% ../nbs/02_primitives.ipynb 31
+# %% ../nbs/02_primitives.ipynb 32
 @patch
 def move_in(self: HexPosition, center: HexPosition) -> HexPosition:
     """Move one step toward center."""
@@ -866,12 +866,12 @@ def move_out(self: HexPosition, center: HexPosition) -> HexPosition:
     return 2 * self - self.move_in(center)
 
 
-# %% ../nbs/02_primitives.ipynb 36
+# %% ../nbs/02_primitives.ipynb 37
 for x in ["E","NE","NW", "W","SW", "SE"]:
     setattr(HexPosition, x, HexPosition.direction(x))
 
 
-# %% ../nbs/02_primitives.ipynb 38
+# %% ../nbs/02_primitives.ipynb 39
 class GosperCurve:
     """Generate Gosper curves using L-system rules and cube coordinates."""
     
@@ -1026,7 +1026,7 @@ class GosperCurve:
         pixel_points = [hexpos.pixel(hex_radius, center) for hexpos in hex_path]
         return MapPath(pixel_points, style)
 
-# %% ../nbs/02_primitives.ipynb 40
+# %% ../nbs/02_primitives.ipynb 41
 class Hex:
     radius: float
     center: MapCord
@@ -1120,7 +1120,7 @@ class Hex:
         center = MapCord(self.center.x + self.bounds.width, self.center.y)
         return Hex(self.radius,center,self.style)
 
-# %% ../nbs/02_primitives.ipynb 42
+# %% ../nbs/02_primitives.ipynb 43
 @patch
 def edges(self: Hex) -> set[tuple[int, int, int, int]]:
     """Return the edges of the hexagon as a set of normalized tuples (x1, y1, x2, y2).
@@ -1136,7 +1136,7 @@ def edges(self: Hex) -> set[tuple[int, int, int, int]]:
     return edges
 
 
-# %% ../nbs/02_primitives.ipynb 43
+# %% ../nbs/02_primitives.ipynb 44
 @patch
 def verticalStretch(self: Hex, size: MapSize, attrs=None) -> str:
     
@@ -1164,7 +1164,7 @@ def verticalStretch(self: Hex, size: MapSize, attrs=None) -> str:
     ret += "/>"
     return ret
 
-# %% ../nbs/02_primitives.ipynb 44
+# %% ../nbs/02_primitives.ipynb 45
 def hexSVG(size:MapSize,levels = 2, pad=5, fill="#f4edb2ff",eles=StyleCSS.elevations()):
     myStyles = []
     radius = size.width/2
@@ -1213,7 +1213,7 @@ def hexSVG(size:MapSize,levels = 2, pad=5, fill="#f4edb2ff",eles=StyleCSS.elevat
 
 
 
-# %% ../nbs/02_primitives.ipynb 47
+# %% ../nbs/02_primitives.ipynb 48
 def hexBackground( content=None,levels = 2, pad=5,fill="#f4edb2ff",size=MapSize(300,300)):
      return Div(
         hexSVG(size,levels,pad,fill),
@@ -1230,14 +1230,14 @@ def hexBackground( content=None,levels = 2, pad=5,fill="#f4edb2ff",size=MapSize(
      )
 
 
-# %% ../nbs/02_primitives.ipynb 48
+# %% ../nbs/02_primitives.ipynb 49
 @patch
 def demoHexBackground(self:PrimitiveDemo):
     a = hexBackground(P("hi"),size=MapSize(300,700))
     return a
 
 
-# %% ../nbs/02_primitives.ipynb 51
+# %% ../nbs/02_primitives.ipynb 52
 @patch
 def hexIcon(self: SVGBuilder, size: int) -> str:
     """Generate hex-shaped icon cropped from center of SVG."""
@@ -1276,106 +1276,140 @@ def hexIcon(self: SVGBuilder, size: int) -> str:
 </g>
 </svg>'''
 
-# %% ../nbs/02_primitives.ipynb 54
+# %% ../nbs/02_primitives.ipynb 55
 class HexGrid:
-    """Perfect hexagonal grid using geohexgrid library."""
-
-    def pointy_top_hex_to_cartesian(self, row, col, style) -> Hex:
-        """
-        Calculates the centroid (x, y) for a pointy-top hex grid.
-        
-        Args:
-            row (int): The row index of the hexagon.
-            col (int): The column index of the hexagon.
-            radius (float): The radius of the hexagon (center to vertex).
-        
-        Returns:
-            tuple: The (x, y) coordinates of the centroid.
-        """
-        width = math.sqrt(3) * self.radius
-        height = 2 * self.radius
-        
-        x = width * (col + 0.5 * (row % 2))  
-        y = height * 0.75 * row
-        
-        # Apply offset
-        x += self.offset.x
-        y += self.offset.y
-        
-        return Hex(self.radius, MapCord(x, y), style)
-
-    def adjustRadius(self, radius):
-        self.radius = radius
-        self.hexes = []
-        for row in range(self.nRows):
-            for col in range(self.nCols):
-                aHex = self.pointy_top_hex_to_cartesian(row, col, self.style)
-                self.hexes.append(aHex)
-
-        exportSize = MapSize(max([hex.center.x for hex in self.hexes]),
-        max([hex.center.y for hex in self.hexes]))
-        self.builder.width = exportSize.width
-        self.builder.height = exportSize.height
+    """Hexagonal grid with cube coordinate support."""
 
     def __init__(self, 
-        bounds: MapRect,  # how big are we
-        style: StyleCSS,  # the default style for a hex
-        radius: float = 25.0,  # the radius of each of the hexes
-        offset: MapCord = None  # offset for positioning the grid
-    ):
+                 nRows: int,
+                 nCols: int, 
+                 radius: float,
+                 style: StyleCSS,
+                 offset: MapCord = None):
+        self.nRows = nRows
+        self.nCols = nCols
         self.radius = radius
-        self.offset = offset if offset is not None else MapCord(0, 0)
-
+        self.style = style
+        self.offset = offset or MapCord(0, 0)
+        
         self.builder = SVGBuilder()
         self.builder.add_style(style)
         for x in StyleCSS.elevations():
             self.builder.add_style(x)
-        self.style = style
-
-        self.nRows = int(bounds.dimensons.height / radius)
-        self.nCols = int(bounds.dimensons.width / radius)
-        self.adjustRadius(radius)
         
+        self._build_hexes()
+    
+    def _build_hexes(self):
+        """Build hex array from current parameters."""
+        self.hexes = []
+        for row in range(self.nRows):
+            for col in range(self.nCols):
+                self.hexes.append(self._hex_at(row, col, self.style))
+        self._update_builder_size()
+    
+    def _hex_at(self, row: int, col: int, style: StyleCSS) -> Hex:
+        """Calculate hex at grid position."""
+        width = math.sqrt(3) * self.radius
+        height = 2 * self.radius
         
-    @property
-    def bounds(self):
-        return MapRect(
-            self.hexes[0].center,
-            MapSize(width=self.nCols * self.radius, height=self.nRows * self.radius)
-        )
-    @property
-    def middle(self):
-        """Middle hex index for a rectangular hex grid"""
-        middle_row = self.nRows // 2
-        middle_col = self.nCols // 2
-        return middle_row * self.nCols + middle_col
-    @property
-    def midpoint(self):
-        return int(len(self.hexes)/2)
+        # Add radius to offset so first hex center is actually inside the bounds
+        x = width * (col + 0.5 * (row % 2)) + self.offset.x + self.radius
+        y = height * 0.75 * row + self.offset.y + self.radius
+        
+        return Hex(self.radius, MapCord(x, y), style)
 
     @classmethod
-    def create_centered(cls, rings: int, radius: float, style: StyleCSS):
-        width = math.sqrt(3) * radius
-        height = 2 * radius
-        n = rings * 2 + 1
+    def from_bounds(cls, bounds: MapRect, radius: float=25, style: StyleCSS=StyleCSS("Hex")) -> 'HexGrid':
+        """Create grid to fill a bounding rectangle."""
+
+        nRows = int(bounds.dimensons.height / radius)
+        nCols = int(bounds.dimensons.width / radius)
+        offset = MapCord(bounds.origin.x - radius, bounds.origin.y - radius)
         
-        total_width = width * n + 2 * radius
-        total_height = height * 0.75 * (n - 1) + height + 2 * radius
+        return cls(nRows, nCols, radius, style, offset)
+
+    
+    def _update_builder_size(self):
+        """Update SVG builder dimensions."""
+        if self.hexes:
+            self.builder.width = max(h.center.x for h in self.hexes) + self.radius
+            self.builder.height = max(h.center.y for h in self.hexes) + self.radius
+    
+    def _middle_hex_natural_position(self) -> MapCord:
+        """Where the middle hex center would be with zero offset."""
+        middle_row = self.nRows // 2
+        middle_col = self.nCols // 2
         
-        bounds = MapRect(MapCord(0, 0), MapSize(total_width, total_height))
+        width = math.sqrt(3) * self.radius
+        height = 2 * self.radius
         
-        # Offset by radius to prevent clipping
-        offset = MapCord(radius, radius)
+        x = width * (middle_col + 0.5 * (middle_row % 2))
+        y = height * 0.75 * middle_row
         
-        grid = cls(bounds, style, radius, offset)
-        grid.nRows = n
-        grid.nCols = n
-        grid.adjustRadius(radius)
+        return MapCord(x, y)
+    
+    def adjustRadius(self, new_radius: float):
+        """Adjust radius while keeping middle hex at same pixel position."""
+        if not self.hexes:
+            self.radius = new_radius
+            return
+        
+        # Get current middle hex pixel position
+        middle_idx = self.middle
+        old_middle_pos = self.hexes[middle_idx].center
+        
+        # Update radius
+        self.radius = new_radius
+        
+        # Calculate where middle would be with zero offset
+        natural_middle = self._middle_hex_natural_position()
+        
+        # Offset to keep middle at same pixel position
+        self.offset = MapCord(
+            old_middle_pos.x - natural_middle.x + self.offset.x,
+            old_middle_pos.y - natural_middle.y + self.offset.y
+        )
+        
+        # Rebuild hexes with new radius and offset
+        self._build_hexes()
+    
+
+    
+    @classmethod
+    def centered(cls, rings: int, radius: float, style: StyleCSS, 
+                 center: MapCord = None) -> 'HexGrid':
+        """Create grid with specified rings around a center point."""
+        n = 2 * rings + 1
+        
+        # Create grid first with no offset
+        grid = cls(nRows=n, nCols=n, radius=radius, style=style, offset=MapCord(0, 0))
+        
+        if center is not None:
+            # Calculate offset to place middle hex at center
+            natural_middle = grid._middle_hex_natural_position()
+            grid.offset = MapCord(
+                center.x - natural_middle.x,
+                center.y - natural_middle.y
+            )
+            grid._build_hexes()
         
         return grid
-
-
-
+    
+    @property
+    def middle(self) -> int:
+        """Middle hex index."""
+        return (self.nRows // 2) * self.nCols + (self.nCols // 2)
+    
+    @property
+    def bounds(self) -> MapRect:
+        """Bounding rectangle of grid."""
+        if not self.hexes:
+            return MapRect(MapCord(0, 0), MapSize(0, 0))
+        return MapRect(
+            self.hexes[0].center,
+            MapSize(self.nCols * self.radius * math.sqrt(3), 
+                    self.nRows * self.radius * 1.5)
+        )
 
 
     def text(self, cb=lambda s, i: i):
@@ -1391,8 +1425,12 @@ class HexGrid:
         "This returns whether a row is even or odd"
         return int(index / self.nCols) % 2
 
+    @property
+    def midpoint(self):
+        return int(len(self.hexes)/2)
 
-# %% ../nbs/02_primitives.ipynb 57
+
+# %% ../nbs/02_primitives.ipynb 59
 @patch
 def index_to_row_col(self: HexGrid, index: int) -> tuple[int, int]:
     """Convert flat grid index to (row, col)."""
@@ -1454,7 +1492,7 @@ def hexposition_to_index(self: HexGrid, hexpos: HexPosition, origin_index:int = 
     # Convert to index and check bounds
     return self.row_col_to_index(row, col)
 
-# %% ../nbs/02_primitives.ipynb 58
+# %% ../nbs/02_primitives.ipynb 60
 @patch
 def neighborsOf(self: HexGrid, index: int,ring=1) -> list[int]:
     """Get all valid neighbor indices using HexPosition."""
@@ -1462,7 +1500,7 @@ def neighborsOf(self: HexGrid, index: int,ring=1) -> list[int]:
     neighbor_indices = [self.hexposition_to_index(hp, index) for hp in ring_hexpositions]
     return [i for i in neighbor_indices if i >= 0]  # Filter out-of-bounds
 
-# %% ../nbs/02_primitives.ipynb 60
+# %% ../nbs/02_primitives.ipynb 62
 @patch
 def arrow(self: HexGrid, start:int, end:int, style = StyleCSS("arrow", stroke="black",stroke_width=1)) -> str:
     self.builder.add_style(style)
@@ -1496,7 +1534,7 @@ def arrow(self: HexGrid, start:int, end:int, style = StyleCSS("arrow", stroke="b
     path = MapPath(points, style)
     return path.with_arrowhead()
 
-# %% ../nbs/02_primitives.ipynb 63
+# %% ../nbs/02_primitives.ipynb 65
 class HexWrapper:
     """This class stores svg configuration. """
     def __init__(self,
@@ -1515,14 +1553,14 @@ class HexWrapper:
         "hx-target": f"{target}" # the element we need to update
     }
 
-# %% ../nbs/02_primitives.ipynb 64
+# %% ../nbs/02_primitives.ipynb 66
 @patch
 def commonEdge(self: HexGrid, i: int, j: int) -> tuple[int, int, int, int] | None:
     """Get the shared edge between two hex indices, or None if not adjacent."""
     pos = self.index_to_hexposition(j, i)  # j's position relative to i
     return self.hexes[i].edgeFrom(pos)
 
-# %% ../nbs/02_primitives.ipynb 67
+# %% ../nbs/02_primitives.ipynb 69
 @dataclass
 class HexRegion:
     """A set of adjacent hexes with computed perimeter boundaries."""
@@ -1611,7 +1649,7 @@ class HexRegion:
         return cls(hexes=adds, hex_grid=grid)
 
 
-# %% ../nbs/02_primitives.ipynb 68
+# %% ../nbs/02_primitives.ipynb 70
 @patch
 def __or__(self: HexRegion, other: 'HexRegion') -> 'HexRegion':
     """Union: region1 | region2"""
@@ -1648,7 +1686,7 @@ def __iter__(self: HexRegion):
     return iter(self.hexes)
 
 
-# %% ../nbs/02_primitives.ipynb 69
+# %% ../nbs/02_primitives.ipynb 71
 @patch
 def outside(self:HexRegion,ring=1):
     m = set()
@@ -1686,14 +1724,14 @@ def shift(self:HexRegion,direction:HexPosition):
             m.add(neighbor)
     return HexRegion(m,grid)
 
-# %% ../nbs/02_primitives.ipynb 70
+# %% ../nbs/02_primitives.ipynb 72
 @patch
 def inside(self:HexRegion,ring=1):
     out = self.outside().outside()
     m = self.hexes - out.hexes
     return HexRegion(m,self.hex_grid) # Filter out-of-bounds
 
-# %% ../nbs/02_primitives.ipynb 71
+# %% ../nbs/02_primitives.ipynb 73
 @patch
 def perimeter(self: HexRegion) -> list[MapCord]:
     """Find all vertices on the perimeter using vertex counting."""
@@ -1725,7 +1763,7 @@ def perimeter(self: HexRegion) -> list[MapCord]:
     return perimeter_vertices
 
 
-# %% ../nbs/02_primitives.ipynb 76
+# %% ../nbs/02_primitives.ipynb 78
 @patch
 def trace_perimeter(self: HexRegion, debug=False, 
                    style=StyleCSS("perimeter_path", fill="none", 
@@ -1800,7 +1838,7 @@ def trace_perimeter(self: HexRegion, debug=False,
     return paths  # Return paths and empty gaps list
 
 
-# %% ../nbs/02_primitives.ipynb 78
+# %% ../nbs/02_primitives.ipynb 80
 @patch
 def __lt__(self: MapCord, other: MapCord) -> bool:
     """Less than comparison: first by x, then by y."""
@@ -1809,7 +1847,7 @@ def __lt__(self: MapCord, other: MapCord) -> bool:
     return self.y < other.y
 
 
-# %% ../nbs/02_primitives.ipynb 81
+# %% ../nbs/02_primitives.ipynb 83
 @patch
 def update(self:HexGrid,wrapper:HexWrapper = HexWrapper(),layer_name="hexes"):
 
@@ -1833,13 +1871,13 @@ def update(self:HexGrid,wrapper:HexWrapper = HexWrapper(),layer_name="hexes"):
         self.builder.adjust(layer_name,testBody)
 
 
-# %% ../nbs/02_primitives.ipynb 82
+# %% ../nbs/02_primitives.ipynb 84
 @patch
 def demoDrawGrid(self:PrimitiveDemo):
     mySize = MapSize(120,120)
     myBounds = MapRect(MapCord(0,0), mySize)
     baseStyle = StyleCSS.elevations()[3]
-    aGrid = HexGrid(bounds=myBounds,style=baseStyle)
+    aGrid = HexGrid.from_bounds(bounds=myBounds,style=baseStyle)
     
     hexText = StyleCSS("hex-text",fill="red",font_size="14px",font_weight="600",font_family="sans-serif",text_anchor="middle",dominant_baseline="middle",cursor="pointer")
 
@@ -1871,7 +1909,7 @@ def demoDrawGrid(self:PrimitiveDemo):
 
 
 
-# %% ../nbs/02_primitives.ipynb 86
+# %% ../nbs/02_primitives.ipynb 89
 class LinearGradient(Generatable):
 
     def __init__(self,grid:HexGrid,startHex:Int,endHex:Int,startColor:str,endColor:str,):
@@ -1920,7 +1958,7 @@ class LinearGradient(Generatable):
         svg += '</linearGradient>\n'
         return svg
 
-# %% ../nbs/02_primitives.ipynb 87
+# %% ../nbs/02_primitives.ipynb 90
 @patch
 def radial_gradient(self: HexGrid, lookup: dict= {5:"#007fff",6:"#07ff66ff",10:"#ff005dff]"} ):
     """Use overlapping radial gradients for smoother blending."""
@@ -1944,7 +1982,7 @@ def radial_gradient(self: HexGrid, lookup: dict= {5:"#007fff",6:"#07ff66ff",10:"
     
     return testBody
 
-# %% ../nbs/02_primitives.ipynb 88
+# %% ../nbs/02_primitives.ipynb 91
 @patch
 def gradient(self:HexGrid,lookup = {5:"#007fff",6:"#07ff66ff",10:"#ff005dff]"} ):
     testBody = ""
@@ -1967,13 +2005,13 @@ def gradient(self:HexGrid,lookup = {5:"#007fff",6:"#07ff66ff",10:"#ff005dff]"} )
 
     return testBody
 
-# %% ../nbs/02_primitives.ipynb 89
+# %% ../nbs/02_primitives.ipynb 92
 @patch
 def demoGradienGrid(self:PrimitiveDemo):
     mySize = MapSize(120,120)
     myBounds = MapRect(MapCord(0,0), mySize)
     baseStyle = StyleCSS.elevations()[3]
-    aGrid = HexGrid(bounds=myBounds,style=baseStyle)
+    aGrid = HexGrid.from_bounds(bounds=myBounds,style=baseStyle)
     
     hexText = StyleCSS("hex-text",fill="red",font_size="14px",font_weight="600",font_family="sans-serif",text_anchor="middle",dominant_baseline="middle",cursor="pointer")
 

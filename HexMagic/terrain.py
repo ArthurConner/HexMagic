@@ -36,12 +36,12 @@ from .styles import StyleCSS, SVGBuilder,SVGLayer, SVGPatternLoader, preview, ap
 
 from .primitives import MapCord, MapSize, MapRect, MapPath, Hex, HexGrid, HexRegion, HexWrapper, HexPosition, PrimitiveDemo, hexBackground
 
-# %% ../nbs/03_terrain.ipynb 9
+# %% ../nbs/03_terrain.ipynb 10
 class TerraDemo:
     def __init__(self):
         self.help = ""
 
-# %% ../nbs/03_terrain.ipynb 11
+# %% ../nbs/03_terrain.ipynb 12
 @dataclass
 class GeoBounds:
     """Geographic bounds in lat/lon."""
@@ -66,7 +66,7 @@ class GeoBounds:
     def lon_span(self):
         return self.lon_max - self.lon_min
 
-# %% ../nbs/03_terrain.ipynb 12
+# %% ../nbs/03_terrain.ipynb 13
 @dataclass
 class ClimatePreset:
     """Preset parameters for different climate zones."""
@@ -148,7 +148,7 @@ class ClimatePreset:
         )
 
 
-# %% ../nbs/03_terrain.ipynb 14
+# %% ../nbs/03_terrain.ipynb 15
 class Terrain:
 
     def __init__(self,
@@ -166,7 +166,7 @@ class Terrain:
     ):
         self.colorLevels = colorLevels
         self.seaLevel = seaLevel
-        self.hexGrid = HexGrid(bounds,seaLevel,radius=radius)
+        self.hexGrid = HexGrid.from_bounds(bounds, radius=radius, style=seaLevel)
         self.hexGrid.builder.add_style(seaLevel)
         self.path = path
         self.climate = climate
@@ -343,7 +343,7 @@ class Terrain:
 
 
 
-# %% ../nbs/03_terrain.ipynb 15
+# %% ../nbs/03_terrain.ipynb 16
 @patch
 def elevationLevel(self: Terrain, idx):
     """Return the elevation level (integer) for a hex by dividing by elevationDelta."""
@@ -368,7 +368,7 @@ def ring(self:Terrain,center,radius=1):
     ring_indices = [self.hexGrid.hexposition_to_index(hp, center) for hp in ring_hexpositions]
     return [i for i in ring_indices if i >= 0]  # Filter out-of-bounds
 
-# %% ../nbs/03_terrain.ipynb 16
+# %% ../nbs/03_terrain.ipynb 17
 @patch
 def sanFran(self:TerraDemo):
     with open("data/templates/san_francisco.txt", "r") as f:
@@ -381,7 +381,7 @@ def agincourt(self:TerraDemo):
         myGrid = Terrain.decode(f.read())
     return myGrid
 
-# %% ../nbs/03_terrain.ipynb 18
+# %% ../nbs/03_terrain.ipynb 20
 @patch
 def demoSanFran(self:TerraDemo):
     sampleMap = self.agincourt()
@@ -400,7 +400,7 @@ def demoSanFran(self:TerraDemo):
 
 
 
-# %% ../nbs/03_terrain.ipynb 20
+# %% ../nbs/03_terrain.ipynb 22
 @patch
 def elevation_borders(self: Terrain)->str:
     """Draw hex borders with stroke color/width based on elevation."""
@@ -440,7 +440,7 @@ def elevation_borders(self: Terrain)->str:
 
     return border_svg
 
-# %% ../nbs/03_terrain.ipynb 21
+# %% ../nbs/03_terrain.ipynb 23
 @patch
 def add_elevation_borders(self: Terrain, layer_name="elevation_borders"):
     """Draw hex borders with stroke color/width based on elevation."""
@@ -450,7 +450,7 @@ def add_elevation_borders(self: Terrain, layer_name="elevation_borders"):
     self.hexGrid.builder.adjust(layer_name, border_svg)
     return self
 
-# %% ../nbs/03_terrain.ipynb 24
+# %% ../nbs/03_terrain.ipynb 26
 @patch
 def tiny(self:TerraDemo):
     mySize = MapSize(120,120)
@@ -472,7 +472,7 @@ def tiny(self:TerraDemo):
     sampleMap.elevations += adjustments
     return sampleMap
 
-# %% ../nbs/03_terrain.ipynb 25
+# %% ../nbs/03_terrain.ipynb 27
 @patch
 def demoTiny(self:TerraDemo):
     
@@ -499,7 +499,7 @@ def demoTiny(self:TerraDemo):
 
 
 
-# %% ../nbs/03_terrain.ipynb 29
+# %% ../nbs/03_terrain.ipynb 31
 @patch
 def colorRegions(self:Terrain,regions:[HexRegion],fills:[str])->str:
     testBody = ""
@@ -525,7 +525,7 @@ def colorRegions(self:Terrain,regions:[HexRegion],fills:[str])->str:
 
     return testBody
 
-# %% ../nbs/03_terrain.ipynb 30
+# %% ../nbs/03_terrain.ipynb 32
 @patch
 def styleRegion(self:Terrain,region:HexRegion,style:StyleCSS)->str:
     testBody = ""
@@ -543,7 +543,7 @@ def styleRegion(self:Terrain,region:HexRegion,style:StyleCSS)->str:
 
     return testBody
 
-# %% ../nbs/03_terrain.ipynb 33
+# %% ../nbs/03_terrain.ipynb 35
 @patch
 def cone(self:Terrain, center, adjusted, num_rings, variability=0.0):
     """Create a volcano-like elevation pattern.
@@ -594,7 +594,7 @@ def cone(self:Terrain, center, adjusted, num_rings, variability=0.0):
     return adjustments
 
 
-# %% ../nbs/03_terrain.ipynb 34
+# %% ../nbs/03_terrain.ipynb 36
 @patch
 def volcano(self:Terrain, center, adjusted, num_rings, variability=0.0, initial_threshold=0.8):
     """Create a volcano-like elevation pattern with threshold-based coastlines.
@@ -653,7 +653,7 @@ def volcano(self:Terrain, center, adjusted, num_rings, variability=0.0, initial_
     return adjustments
 
 
-# %% ../nbs/03_terrain.ipynb 35
+# %% ../nbs/03_terrain.ipynb 37
 @patch
 def demoVolcano(self:TerraDemo):
 
@@ -668,7 +668,7 @@ def demoVolcano(self:TerraDemo):
     return sampleMap.hexGrid.builder.show()
 
 
-# %% ../nbs/03_terrain.ipynb 37
+# %% ../nbs/03_terrain.ipynb 39
 @patch
 def find_peaks(self:Terrain, k, min_height, exclusion_radius=1):
     """Find k largest peaks above min_height with exclusion zones.
@@ -711,7 +711,7 @@ def find_peaks(self:Terrain, k, min_height, exclusion_radius=1):
     return peaks
 
 
-# %% ../nbs/03_terrain.ipynb 38
+# %% ../nbs/03_terrain.ipynb 40
 @patch
 def demoPeakSan(self:TerraDemo):
     sampleMap = self.sanFran()
@@ -728,7 +728,7 @@ def demoPeakSan(self:TerraDemo):
 
 
 
-# %% ../nbs/03_terrain.ipynb 40
+# %% ../nbs/03_terrain.ipynb 42
 @patch
 def lowest_neighbor(self:Terrain, idx):
     """Find the lowest neighbor of idx, or None if idx is a local minimum."""
@@ -745,7 +745,7 @@ def lowest_neighbor(self:Terrain, idx):
     
     return lowest_idx
 
-# %% ../nbs/03_terrain.ipynb 42
+# %% ../nbs/03_terrain.ipynb 44
 @patch
 def dot(self:Terrain, 
     points:[MapCord],
@@ -765,7 +765,7 @@ def dot(self:Terrain,
     
     
 
-# %% ../nbs/03_terrain.ipynb 43
+# %% ../nbs/03_terrain.ipynb 45
 @patch
 def fillRegion(self:Terrain, region:HexRegion):
     """Fill a region with a style."""
@@ -787,7 +787,7 @@ def fillRegion(self:Terrain, region:HexRegion):
     self.makeOverlay(flowData, patterns)
     
 
-# %% ../nbs/03_terrain.ipynb 44
+# %% ../nbs/03_terrain.ipynb 46
 @patch
 def colorRegions(self:Terrain,regions:[HexRegion],fills:[str])->str:
     testBody = ""
@@ -813,7 +813,7 @@ def colorRegions(self:Terrain,regions:[HexRegion],fills:[str])->str:
 
     return testBody
 
-# %% ../nbs/03_terrain.ipynb 47
+# %% ../nbs/03_terrain.ipynb 49
 @patch
 def demoRegion(self:TerraDemo):
     """Practice building up coord."""
@@ -860,72 +860,75 @@ def demoRegion(self:TerraDemo):
 
 
 
-# %% ../nbs/03_terrain.ipynb 50
+# %% ../nbs/03_terrain.ipynb 52
 @patch
-def downsample_field(self: Terrain, field_array, sample_radius=2, method='weighted_avg'):
-    """Downsample any field array using hex ring sampling.
+def _sample_indexes(self:Terrain, rows, cols, fraction):
+    new_rows = int(rows * fraction)
+    new_cols = int(cols * fraction)
+    arr = np.arange(rows*cols)
+    
+    # Create new array filled with large values
+    new_arr = np.full(new_rows * new_cols, np.inf)
+    
+    # Map each original element to new position
+    for r in range(rows):
+        for c in range(cols):
+            new_r = int(r * fraction)
+            new_c = int(c * fraction)
+            if new_r < new_rows and new_c < new_cols:
+                idx = new_r * new_cols + new_c
+                new_arr[idx] = int(min(new_arr[idx], arr[r * cols + c]))
+    
+    return new_arr, new_rows, new_cols
+
+# %% ../nbs/03_terrain.ipynb 53
+@patch
+def convolution(self: Terrain, field, shape:[HexPosition], fraction, weights = None, method='weighted_avg'):
+    """sample any field array using hex ring sampling.
     
     Args:
-        field_array: numpy array of values to downsample (same length as hexes)
-        sample_radius: How many rings to sample
+        field: numpy array of values to downsample (same length as hexes)
+        shape: List of HexPosition offsets defining the sampling pattern (e.g., from ring() or spiral())
+        new_grid: HexGrid for the downsampled result
+        weights: Optional weights for each position in shape
         method: 'weighted_avg', 'max', 'min', or 'mode' (for categorical)
     
     Returns:
-        Downsampled array matching new grid size
+        Downsampled array matching new_grid size
     """
-    old_grid = self.hexGrid
-    factor = sample_radius + 1
-    new_rows = old_grid.nRows // factor
-    new_cols = old_grid.nCols // factor
     
-    if new_rows < 2 or new_cols < 2:
-        print("Warning: sample_radius too large")
-        return field_array
-    
+    grid = self.hexGrid
+    destIndex, new_rows, new_cols = self._sample_indexes( self.hexGrid.nRows, self.hexGrid.nCols, fraction)
     # Calculate new grid size
     new_size = new_rows * new_cols
     new_field = np.zeros(new_size)
     
-    for new_idx in range(new_size):
-        new_row = new_idx // new_cols
-        new_col = new_idx % new_cols
-        
-        old_row = new_row * factor
-        old_col = new_col * factor
-        
-        if old_row >= old_grid.nRows or old_col >= old_grid.nCols:
-            continue
-            
-        center_idx = old_row * old_grid.nCols + old_col
-        
-        # Collect values from rings
+    # Default weights if none provided
+    if weights is None:
+        weights = np.ones(len(shape))
+    
+    # Iterate through new grid
+    for new_idx, sampling_index in enumerate(destIndex):
         values = []
-        weights = []
+        valid_weights = []
+
+        for i, offset in enumerate(shape):
+            old_idx = self.hexGrid.hexposition_to_index(offset, int(sampling_index))
+            if 0 <= old_idx < len(field):
+                values.append(field[old_idx])
+                valid_weights.append(weights[i])
         
-        for ring_num in range(sample_radius + 1):
-            weight = 1.0 / (ring_num + 1)
-            
-            if ring_num == 0:
-                ring_hexes = [center_idx]
-            else:
-                ring_positions = HexPosition(0, 0, 0).ring(ring_num)
-                ring_hexes = [old_grid.hexposition_to_index(hp, center_idx) 
-                             for hp in ring_positions]
-                ring_hexes = [h for h in ring_hexes if h >= 0]
-            
-            for hex_idx in ring_hexes:
-                values.append(field_array[hex_idx])
-                weights.append(weight)
-        
-        if not values:
+        # If no valid samples, use 0
+        if len(values) == 0:
+            new_field[new_idx] = 0
             continue
             
         values = np.array(values)
-        weights = np.array(weights)
+        valid_weights = np.array(valid_weights)
         
         # Apply aggregation method
         if method == 'weighted_avg':
-            new_field[new_idx] = np.average(values, weights=weights)
+            new_field[new_idx] = np.average(values, weights=valid_weights)
         elif method == 'max':
             new_field[new_idx] = np.max(values)
         elif method == 'min':
@@ -936,65 +939,60 @@ def downsample_field(self: Terrain, field_array, sample_radius=2, method='weight
             best_val = unique_vals[0]
             best_weight = 0
             for val in unique_vals:
-                val_weight = np.sum(weights[values == val])
+                val_weight = np.sum(valid_weights[values == val])
                 if val_weight > best_weight:
                     best_weight = val_weight
                     best_val = val
             new_field[new_idx] = best_val
     
-    return new_field
-
-
-# %% ../nbs/03_terrain.ipynb 51
-@patch
-def downsample_ring(self: Terrain, sample_radius=2, method='weighted_avg'):
-    """Downsample terrain using hex ring sampling.
-    
-    Args:
-        sample_radius: How many rings to sample (higher = more smoothing)
-        method: 'weighted_avg', 'max', 'min', or 'mode' (for categorical)
-    
-    Returns:
-        New Terrain with fewer hexes covering same area
-    """
-    old_grid = self.hexGrid
-    
-    # Calculate new grid dimensions
-    factor = sample_radius + 1
-    new_rows = old_grid.nRows // factor
-    new_cols = old_grid.nCols // factor
-    
-    if new_rows < 2 or new_cols < 2:
-        print("Warning: sample_radius too large for this terrain")
-        return self
-    
-    # Keep same bounds, just use larger hex radius
-    new_radius = old_grid.radius * factor
-    
-    # Create new terrain with same bounds but larger hexes
-    new_terrain = Terrain(old_grid.bounds, radius=new_radius)
-    
-    # Copy style properties
-    new_terrain.colorLevels = self.colorLevels.copy() if self.colorLevels else None
-    new_terrain.elevationDelta = self.elevationDelta
-    new_terrain.seaLevel = self.seaLevel
-    
-    # Use the downsample_field method to sample elevations
-    new_terrain.elevations = self.downsample_field(
-        self.elevations, 
-        sample_radius=sample_radius, 
-        method=method
-    )
-    
-    # Add color styles
-    if new_terrain.colorLevels:
-        for color in new_terrain.colorLevels:
-            new_terrain.hexGrid.builder.add_style(color)
-    
-    return new_terrain
-
+    return new_field, new_rows, new_cols
 
 # %% ../nbs/03_terrain.ipynb 57
+@patch
+def scaled(self: Terrain, scale: float):
+    """Create a scaled terrain that maintains proportional grid dimensions"""
+    radius = self.hexGrid.radius 
+
+    def hexes_in_range(n):
+        """ finding all hexes within distance N from origin: """
+        results = []
+        for q in range(-n, n + 1):
+            for r in range(max(-n, -q - n), min(n, -q + n) + 1):
+                s = -q - r
+                results.append(HexPosition(q, r, s))
+        return results
+
+
+
+    ring_pattern = hexes_in_range(1)
+
+    nextEl , nRows, nCols  = self.convolution( self.elevations, ring_pattern, scale)
+
+    grid =  HexGrid (
+        nRows = nRows,
+        nCols = nCols,
+        radius = radius,
+        style = self.hexGrid.style)
+
+    mySize = MapSize(400, 400) #we are droping these
+    myBounds = MapRect(MapCord(0,0), mySize)
+    sampleMap = Terrain(myBounds, radius=15)
+    sampleMap.hexGrid = grid
+
+    sampleMap.elevations = nextEl
+
+    # Copy style properties
+    sampleMap.colorLevels = self.colorLevels.copy() if self.colorLevels else None
+    sampleMap.elevationDelta = self.elevationDelta
+    sampleMap.seaLevel = self.seaLevel
+
+# Use the downsample_field meth
+
+    return sampleMap
+
+    
+
+# %% ../nbs/03_terrain.ipynb 63
 @patch
 def growFromHex(self: Terrain, center_idx, origin=0):
     """Grow a region from center hex at same elevation level."""
@@ -1022,7 +1020,7 @@ def growFromHex(self: Terrain, center_idx, origin=0):
     
     return HexRegion(hexes=hex_set, hex_grid=self.hexGrid)
 
-# %% ../nbs/03_terrain.ipynb 58
+# %% ../nbs/03_terrain.ipynb 64
 @patch
 def find_region_at_level(self:Terrain, center_idx):
     """Find all connected hexes within tolerance of center_idx's elevation.
@@ -1040,7 +1038,7 @@ def find_region_at_level(self:Terrain, center_idx):
     return set(levels)
 
 
-# %% ../nbs/03_terrain.ipynb 59
+# %% ../nbs/03_terrain.ipynb 65
 @patch
 def demoRegion(self:TerraDemo):
     """Practice building up coord."""
@@ -1076,7 +1074,7 @@ def demoRegion(self:TerraDemo):
     return sampleMap.hexGrid.builder.show()
 
 
-# %% ../nbs/03_terrain.ipynb 60
+# %% ../nbs/03_terrain.ipynb 66
 @patch
 def demoRegion(self:TerraDemo):
     """Practice building up coord."""
@@ -1120,7 +1118,7 @@ def demoRegion(self:TerraDemo):
  
 
 
-# %% ../nbs/03_terrain.ipynb 62
+# %% ../nbs/03_terrain.ipynb 68
 @patch
 def coastline_svg(self:Terrain,pathstyle=StyleCSS("coastPath",fill="none",stroke="#917910ff",stroke_width=3)):
     """Add a coast to the terrain."""
@@ -1146,7 +1144,7 @@ def coastline_svg(self:Terrain,pathstyle=StyleCSS("coastPath",fill="none",stroke
         
     return pathLayer
 
-# %% ../nbs/03_terrain.ipynb 63
+# %% ../nbs/03_terrain.ipynb 69
 @patch
 def addCoast(self:Terrain,pathstyle=StyleCSS("coastPath",fill="none",stroke="#917910ff",stroke_width=3)):
     """Add a coast to the terrain."""
@@ -1160,7 +1158,7 @@ def addCoast(self:Terrain,pathstyle=StyleCSS("coastPath",fill="none",stroke="#91
 
     
 
-# %% ../nbs/03_terrain.ipynb 64
+# %% ../nbs/03_terrain.ipynb 70
 @patch
 def demoCoast(self:TerraDemo):
     """Practice building up coord."""
