@@ -25,6 +25,8 @@ import seaborn as sns
 import matplotlib.pyplot as plt
 
 
+from IPython.display import SVG, HTML
+
 # %% ../nbs/01_styles.ipynb 7
 class StyleDemo:
     def __init__(self):
@@ -593,7 +595,7 @@ class SVGBuilder(Generatable):
    
 
 
-# %% ../nbs/01_styles.ipynb 31
+# %% ../nbs/01_styles.ipynb 32
 @patch
 def updateLayers(self:SVGBuilder,layers:[str]):
     for index, layer in enumerate(layers):
@@ -614,7 +616,7 @@ def adjust(self:SVGBuilder,name:str,body:str):
     self.layers.append(aLayer)
 
 
-# %% ../nbs/01_styles.ipynb 32
+# %% ../nbs/01_styles.ipynb 33
 @patch
 def _header(self: SVGBuilder) -> str:
      
@@ -662,13 +664,13 @@ def generate(self: SVGBuilder) -> str:
     
     return ret
 
-# %% ../nbs/01_styles.ipynb 33
+# %% ../nbs/01_styles.ipynb 34
 @patch
 def get_easing(self: SVGBuilder, easing_name: str) -> str:
     """Get easing function, with preset support."""
     return EASING_PRESETS.get(easing_name, easing_name)
 
-# %% ../nbs/01_styles.ipynb 34
+# %% ../nbs/01_styles.ipynb 35
 @patch
 def _generate_animation_css(self: SVGBuilder) -> str:
     """Generate CSS animations for all animated layers."""
@@ -754,7 +756,7 @@ def _generate_animation_rule(self: SVGBuilder, layer_name: str,
     opacity: {anim.start_opacity};
 }}"""
 
-# %% ../nbs/01_styles.ipynb 35
+# %% ../nbs/01_styles.ipynb 36
 @patch
 def animate_group(self: SVGBuilder,
                  layer_names: list[str],
@@ -786,7 +788,7 @@ def animate_group(self: SVGBuilder,
     
     return self
 
-# %% ../nbs/01_styles.ipynb 36
+# %% ../nbs/01_styles.ipynb 37
 @patch
 def animate_layer_full_cycle(self: SVGBuilder,
                              layer_name: str,
@@ -904,7 +906,7 @@ def _generate_animation_css(self: SVGBuilder) -> str:
     return "\n".join(css_parts)
 
 
-# %% ../nbs/01_styles.ipynb 37
+# %% ../nbs/01_styles.ipynb 38
 @patch
 def to_icon(self: SVGBuilder, size: int = 50) -> str:
     """Wrap SVG in fixed-size container with aspect ratio preservation."""
@@ -920,7 +922,7 @@ def to_icon(self: SVGBuilder, size: int = 50) -> str:
 {content}
 </svg>'''
 
-# %% ../nbs/01_styles.ipynb 39
+# %% ../nbs/01_styles.ipynb 40
 @patch
 def legend(self:SVGBuilder, styles:[StyleCSS],xOffset=None,yOffset=None):
     ret = ""
@@ -947,7 +949,7 @@ def legend(self:SVGBuilder, styles:[StyleCSS],xOffset=None,yOffset=None):
 
     return ret
 
-# %% ../nbs/01_styles.ipynb 42
+# %% ../nbs/01_styles.ipynb 43
 @patch
 def add_text_layer(self: SVGBuilder, name: str, text: str, x: float = None, y: float = None, 
                     class_name: str = None, text_anchor: str = "middle", **properties):
@@ -997,35 +999,36 @@ def add_centered_text(self: SVGBuilder, text: str, y_offset: float = 0, class_na
     self.adjust("centered_text", body)
     return self
 
-# %% ../nbs/01_styles.ipynb 44
+# %% ../nbs/01_styles.ipynb 45
 from fasthtml.common import *
 from fasthtml.jupyter import *
 import httpx
 
-# %% ../nbs/01_styles.ipynb 45
+# %% ../nbs/01_styles.ipynb 46
 daisy_hdrs = (
     Link(href='https://cdn.jsdelivr.net/npm/daisyui@5', rel='stylesheet', type='text/css'),
     Script(src='https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4'),
     Link(href='https://cdn.jsdelivr.net/npm/daisyui@5/themes.css', rel='stylesheet', type='text/css'),
 )
 
-# %% ../nbs/01_styles.ipynb 46
+# %% ../nbs/01_styles.ipynb 47
 app, rt = fast_app(hdrs=daisy_hdrs)
 #rt = app.route
 
-# %% ../nbs/01_styles.ipynb 48
+# %% ../nbs/01_styles.ipynb 49
 def get_preview(app):
     return partial(HTMX, app=app, host=None, port=5002)
 preview = get_preview(app)
 
-# %% ../nbs/01_styles.ipynb 50
+# %% ../nbs/01_styles.ipynb 51
 @patch
 def show(self:SVGBuilder,dim=None):
+    """Display the SVG directly in the notebook output without iframe."""
     if dim is None:
-        return preview(Div(NotStr(self.xml())))
-    return preview(Div(NotStr(self.to_icon(dim))))
+        return SVG(self.xml())
+    return SVG(self.to_icon(dim))
 
-# %% ../nbs/01_styles.ipynb 54
+# %% ../nbs/01_styles.ipynb 55
 class SVGPatternLoader:
     """Loads and converts SVG files to pattern definitions"""
     
@@ -1041,7 +1044,7 @@ class SVGPatternLoader:
         """Return list of available SVG pattern files"""
         return [f.name for f in self.patterns_dir.glob('*.svg')]
 
-# %% ../nbs/01_styles.ipynb 56
+# %% ../nbs/01_styles.ipynb 57
 @patch
 def _extract_styles(self:SVGPatternLoader, element, style_map, existing_styles, counter):
     """Recursively extract styles from element and its children"""
@@ -1086,7 +1089,7 @@ def find_css(self:SVGPatternLoader, filename: str) -> [StyleCSS]:
     return existing_styles
 
 
-# %% ../nbs/01_styles.ipynb 58
+# %% ../nbs/01_styles.ipynb 59
 @patch
 def _get_dimensions(self:SVGPatternLoader, svg_elem):
     """Get dimensions, preferring viewBox over width/height"""
@@ -1115,7 +1118,7 @@ def _get_dimensions(self:SVGPatternLoader, svg_elem):
 
 
 
-# %% ../nbs/01_styles.ipynb 60
+# %% ../nbs/01_styles.ipynb 61
 @patch
 def load_pattern(self: SVGPatternLoader, 
                 filename: str, 
@@ -1170,7 +1173,7 @@ def load_pattern(self: SVGPatternLoader,
     return builder
 
 
-# %% ../nbs/01_styles.ipynb 64
+# %% ../nbs/01_styles.ipynb 65
 @patch
 def stylizedPattern(self:SVGPatternLoader, name,colors= StyleCSS.elevations(),patName="egg",transform="scale(1)"):
     
@@ -1187,7 +1190,7 @@ def stylizedPattern(self:SVGPatternLoader, name,colors= StyleCSS.elevations(),pa
     return aPat, f"url(#{patName})"
 
 
-# %% ../nbs/01_styles.ipynb 66
+# %% ../nbs/01_styles.ipynb 67
 simpleSVG = """
 <rect class="bacon_0" height="40" id="Artboard1" width="40" x="0" y="0"/>
 <rect class="bacon_1" height="40" id="Artboard1" width="40" x="40" y="0"/>
@@ -1233,7 +1236,7 @@ def demoDrawColor(self:StyleDemo,prefix="bacon", body = simpleSVG):
 #aBuilder = StyleDemo().demoDrawColor()
 #print(aBuilder.xml())
 
-# %% ../nbs/01_styles.ipynb 71
+# %% ../nbs/01_styles.ipynb 72
 @patch
 def get_layer(self: SVGBuilder, name: str) -> SVGLayer:
     """Get layer by name"""
@@ -1254,7 +1257,7 @@ def clear_layers(self: SVGBuilder):
     self.layers = [SVGLayer("root", "")]
     return self
 
-# %% ../nbs/01_styles.ipynb 72
+# %% ../nbs/01_styles.ipynb 73
 @patch
 def animate_layer(self: SVGBuilder, 
                   layer_name: str,
@@ -1298,7 +1301,7 @@ def animate_layer(self: SVGBuilder,
     
     return self
 
-# %% ../nbs/01_styles.ipynb 73
+# %% ../nbs/01_styles.ipynb 74
 @patch
 def animate_cascade(self: SVGBuilder,
                    duration: float = 1.0,
