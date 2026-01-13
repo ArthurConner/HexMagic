@@ -1025,6 +1025,12 @@ class GosperCurve:
 
 # %% ../nbs/02_primitives.ipynb 41
 class Hex:
+
+     # Class-level constants for the 6 vertices (pointy-top orientation)
+    _ANGLES = [(i * 60 - 30) * math.pi / 180 for i in range(6)]
+    _COS = [math.cos(a) for a in _ANGLES]
+    _SIN = [math.sin(a) for a in _ANGLES]
+
     radius: float
     center: MapCord
     style: StyleCSS
@@ -1049,8 +1055,8 @@ class Hex:
         v2 = vertices[i2]
         
         # Convert to ints and normalize
-        x1, y1 = int(v1.x), int(v1.y)
-        x2, y2 = int(v2.x), int(v2.y)
+        x1, y1 = v1.x, v1.y
+        x2, y2 = v2.x, v2.y
         
         # Normalize so x1 < x2, or if x1 == x2 then y1 <= y2
         if x1 < x2 or (x1 == x2 and y1 <= y2):
@@ -1077,15 +1083,14 @@ class Hex:
         self.bounds = MapSize(width,self.radius * 2 )
 
         #cache the vertices
-        vertices = []
-                
-        for i in range(6):
-            angle = (i * 60 - 30) * math.pi / 180  # Start at top vertex
-            x = round(self.center.x + self.radius * math.cos(angle),2)
-            y = round(self.center.y + self.radius* math.sin(angle),2)
-            
-            vertices.append(MapCord(x, y))
-        self.v = vertices
+        # Cache vertices using precomputed trig
+        self.v = [
+            MapCord(
+                int(self.center.x + self.radius * Hex._COS[i]),
+                int(self.center.y + self.radius * Hex._SIN[i])
+            )
+            for i in range(6)
+        ]
       
     
     def vertices(self) -> List[MapCord]:
@@ -1117,7 +1122,7 @@ class Hex:
         center = MapCord(self.center.x + self.bounds.width, self.center.y)
         return Hex(self.radius,center,self.style)
 
-# %% ../nbs/02_primitives.ipynb 43
+# %% ../nbs/02_primitives.ipynb 44
 @patch
 def edges(self: Hex) -> set[tuple[int, int, int, int]]:
     """Return the edges of the hexagon as a set of normalized tuples (x1, y1, x2, y2).
@@ -1133,7 +1138,7 @@ def edges(self: Hex) -> set[tuple[int, int, int, int]]:
     return edges
 
 
-# %% ../nbs/02_primitives.ipynb 44
+# %% ../nbs/02_primitives.ipynb 45
 @patch
 def verticalStretch(self: Hex, size: MapSize, attrs=None) -> str:
     
@@ -1161,7 +1166,7 @@ def verticalStretch(self: Hex, size: MapSize, attrs=None) -> str:
     ret += "/>"
     return ret
 
-# %% ../nbs/02_primitives.ipynb 45
+# %% ../nbs/02_primitives.ipynb 46
 def hexSVG(size:MapSize,levels = 2, pad=5, fill="#f4edb2ff",eles=StyleCSS.elevations()):
     myStyles = []
     radius = size.width/2
@@ -1210,7 +1215,7 @@ def hexSVG(size:MapSize,levels = 2, pad=5, fill="#f4edb2ff",eles=StyleCSS.elevat
 
 
 
-# %% ../nbs/02_primitives.ipynb 48
+# %% ../nbs/02_primitives.ipynb 49
 def hexBackground( content=None,levels = 2, pad=5,fill="#f4edb2ff",size=MapSize(300,300)):
      return Div(
         hexSVG(size,levels,pad,fill),
@@ -1227,14 +1232,14 @@ def hexBackground( content=None,levels = 2, pad=5,fill="#f4edb2ff",size=MapSize(
      )
 
 
-# %% ../nbs/02_primitives.ipynb 49
+# %% ../nbs/02_primitives.ipynb 50
 @patch
 def demoHexBackground(self:PrimitiveDemo):
     a = hexBackground(P("hi"),size=MapSize(300,700))
     return a
 
 
-# %% ../nbs/02_primitives.ipynb 52
+# %% ../nbs/02_primitives.ipynb 53
 @patch
 def hexIcon(self: SVGBuilder, size: int) -> str:
     """Generate hex-shaped icon cropped from center of SVG."""
@@ -1273,7 +1278,7 @@ def hexIcon(self: SVGBuilder, size: int) -> str:
 </g>
 </svg>'''
 
-# %% ../nbs/02_primitives.ipynb 55
+# %% ../nbs/02_primitives.ipynb 56
 class HexGrid:
     """Hexagonal grid with cube coordinate support."""
 
@@ -1427,7 +1432,7 @@ class HexGrid:
         return int(len(self.hexes)/2)
 
 
-# %% ../nbs/02_primitives.ipynb 59
+# %% ../nbs/02_primitives.ipynb 60
 @patch
 def index_to_row_col(self: HexGrid, index: int) -> tuple[int, int]:
     """Convert flat grid index to (row, col)."""
@@ -1489,7 +1494,7 @@ def hexposition_to_index(self: HexGrid, hexpos: HexPosition, origin_index:int = 
     # Convert to index and check bounds
     return self.row_col_to_index(row, col)
 
-# %% ../nbs/02_primitives.ipynb 60
+# %% ../nbs/02_primitives.ipynb 61
 @patch
 def neighborsOf(self: HexGrid, index: int,ring=1) -> list[int]:
     """Get all valid neighbor indices using HexPosition."""
@@ -1497,7 +1502,7 @@ def neighborsOf(self: HexGrid, index: int,ring=1) -> list[int]:
     neighbor_indices = [self.hexposition_to_index(hp, index) for hp in ring_hexpositions]
     return [i for i in neighbor_indices if i >= 0]  # Filter out-of-bounds
 
-# %% ../nbs/02_primitives.ipynb 62
+# %% ../nbs/02_primitives.ipynb 63
 @patch
 def arrow(self: HexGrid, start:int, end:int, style = StyleCSS("arrow", stroke="black",stroke_width=1)) -> str:
     self.builder.add_style(style)
@@ -1531,7 +1536,7 @@ def arrow(self: HexGrid, start:int, end:int, style = StyleCSS("arrow", stroke="b
     path = MapPath(points, style)
     return path.with_arrowhead()
 
-# %% ../nbs/02_primitives.ipynb 65
+# %% ../nbs/02_primitives.ipynb 66
 class HexWrapper:
     """This class stores svg configuration. """
     def __init__(self,
@@ -1550,14 +1555,14 @@ class HexWrapper:
         "hx-target": f"{target}" # the element we need to update
     }
 
-# %% ../nbs/02_primitives.ipynb 66
+# %% ../nbs/02_primitives.ipynb 67
 @patch
 def commonEdge(self: HexGrid, i: int, j: int) -> tuple[int, int, int, int] | None:
     """Get the shared edge between two hex indices, or None if not adjacent."""
     pos = self.index_to_hexposition(j, i)  # j's position relative to i
     return self.hexes[i].edgeFrom(pos)
 
-# %% ../nbs/02_primitives.ipynb 69
+# %% ../nbs/02_primitives.ipynb 70
 @dataclass
 class HexRegion:
     """A set of adjacent hexes with computed perimeter boundaries."""
@@ -1646,7 +1651,7 @@ class HexRegion:
         return cls(hexes=adds, hex_grid=grid)
 
 
-# %% ../nbs/02_primitives.ipynb 70
+# %% ../nbs/02_primitives.ipynb 71
 @patch
 def __or__(self: HexRegion, other: 'HexRegion') -> 'HexRegion':
     """Union: region1 | region2"""
@@ -1683,7 +1688,7 @@ def __iter__(self: HexRegion):
     return iter(self.hexes)
 
 
-# %% ../nbs/02_primitives.ipynb 71
+# %% ../nbs/02_primitives.ipynb 72
 @patch
 def outside(self:HexRegion,ring=1):
     m = set()
@@ -1721,14 +1726,14 @@ def shift(self:HexRegion,direction:HexPosition):
             m.add(neighbor)
     return HexRegion(m,grid)
 
-# %% ../nbs/02_primitives.ipynb 72
+# %% ../nbs/02_primitives.ipynb 73
 @patch
 def inside(self:HexRegion,ring=1):
     out = self.outside().outside()
     m = self.hexes - out.hexes
     return HexRegion(m,self.hex_grid) # Filter out-of-bounds
 
-# %% ../nbs/02_primitives.ipynb 73
+# %% ../nbs/02_primitives.ipynb 74
 @patch
 def perimeter(self: HexRegion) -> list[MapCord]:
     """Find all vertices on the perimeter using vertex counting."""
@@ -1760,7 +1765,7 @@ def perimeter(self: HexRegion) -> list[MapCord]:
     return perimeter_vertices
 
 
-# %% ../nbs/02_primitives.ipynb 78
+# %% ../nbs/02_primitives.ipynb 79
 @patch
 def trace_perimeter(self: HexRegion, debug=False, 
                    style=StyleCSS("perimeter_path", fill="none", 
@@ -1835,7 +1840,7 @@ def trace_perimeter(self: HexRegion, debug=False,
     return paths  # Return paths and empty gaps list
 
 
-# %% ../nbs/02_primitives.ipynb 80
+# %% ../nbs/02_primitives.ipynb 81
 @patch
 def __lt__(self: MapCord, other: MapCord) -> bool:
     """Less than comparison: first by x, then by y."""
@@ -1844,7 +1849,7 @@ def __lt__(self: MapCord, other: MapCord) -> bool:
     return self.y < other.y
 
 
-# %% ../nbs/02_primitives.ipynb 83
+# %% ../nbs/02_primitives.ipynb 84
 @patch
 def update(self:HexGrid,wrapper:HexWrapper = HexWrapper(),layer_name="hexes"):
 
@@ -1868,7 +1873,7 @@ def update(self:HexGrid,wrapper:HexWrapper = HexWrapper(),layer_name="hexes"):
         self.builder.adjust(layer_name,testBody)
 
 
-# %% ../nbs/02_primitives.ipynb 84
+# %% ../nbs/02_primitives.ipynb 85
 @patch
 def demoDrawGrid(self:PrimitiveDemo):
     mySize = MapSize(120,120)
@@ -1906,7 +1911,7 @@ def demoDrawGrid(self:PrimitiveDemo):
 
 
 
-# %% ../nbs/02_primitives.ipynb 89
+# %% ../nbs/02_primitives.ipynb 90
 class LinearGradient(Generatable):
 
     def __init__(self,grid:HexGrid,startHex:Int,endHex:Int,startColor:str,endColor:str,):
@@ -1955,7 +1960,7 @@ class LinearGradient(Generatable):
         svg += '</linearGradient>\n'
         return svg
 
-# %% ../nbs/02_primitives.ipynb 90
+# %% ../nbs/02_primitives.ipynb 91
 @patch
 def radial_gradient(self: HexGrid, lookup: dict= {5:"#007fff",6:"#07ff66ff",10:"#ff005dff]"} ):
     """Use overlapping radial gradients for smoother blending."""
@@ -1979,7 +1984,7 @@ def radial_gradient(self: HexGrid, lookup: dict= {5:"#007fff",6:"#07ff66ff",10:"
     
     return testBody
 
-# %% ../nbs/02_primitives.ipynb 91
+# %% ../nbs/02_primitives.ipynb 92
 @patch
 def gradient(self:HexGrid,lookup = {5:"#007fff",6:"#07ff66ff",10:"#ff005dff]"} ):
     testBody = ""
@@ -2002,7 +2007,7 @@ def gradient(self:HexGrid,lookup = {5:"#007fff",6:"#07ff66ff",10:"#ff005dff]"} )
 
     return testBody
 
-# %% ../nbs/02_primitives.ipynb 92
+# %% ../nbs/02_primitives.ipynb 93
 @patch
 def demoGradienGrid(self:PrimitiveDemo):
     mySize = MapSize(120,120)
