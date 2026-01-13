@@ -5,6 +5,12 @@
 # %% auto 0
 __all__ = []
 
+# %% ../nbs/00_core.ipynb 5
+#import nbdev; nbdev.nbdev_export()
+import sys
+import math
+from fastcore.basics import patch
+
 # %% ../nbs/00_core.ipynb 8
 from .primitives import Hex, MapCord 
 
