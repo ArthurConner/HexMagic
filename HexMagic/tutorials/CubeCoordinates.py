@@ -443,11 +443,11 @@ def demo_region_erosion():
         current_region = current_region.inside()
         stage += 1
    
-    return grid.builder.show()
+    return grid.builder
 
-demo_region_erosion()
+demo_region_erosion().show()
 
-# %% ../../nbs/tutorials/math.ipynb 53
+# %% ../../nbs/tutorials/math.ipynb 55
 def demo_region_erosion():
     """Demo showing a region eroding from outside in"""
     grid = sampleGrid(4, fill="lightgray")
@@ -508,7 +508,7 @@ def demo_region_erosion():
 demo_region_erosion()
 
 
-# %% ../../nbs/tutorials/math.ipynb 56
+# %% ../../nbs/tutorials/math.ipynb 58
 def demo_voronoi_growth_simple():
     """Simpler Voronoi growth using HexRegion list"""
     grid = sampleGrid(5, fill="lightgray")
