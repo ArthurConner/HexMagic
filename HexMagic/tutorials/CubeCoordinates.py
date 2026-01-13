@@ -447,68 +447,7 @@ def demo_region_erosion():
 
 demo_region_erosion().show()
 
-# %% ../../nbs/tutorials/math.ipynb 55
-def demo_region_erosion():
-    """Demo showing a region eroding from outside in"""
-    grid = sampleGrid(4, fill="lightgray")
-    grid.update()
-
-    stages = [
-        StyleCSS(f"erode{i}", fill=color, stroke="blue", stroke_width=2)
-        for i, color in enumerate(["#2c3e50", "#34495e", "#7f8c8d", "#95a5a6", "#bdc3c7"])
-    ]
-    
-    for style in stages:
-        grid.builder.add_style(style)
-    
-    center = grid.midpoint
-    large_region = HexRegion(
-        set(grid.hexposition_to_index(pos, center) 
-            for pos in HexPosition.origin().spiral(3)
-            if grid.hexposition_to_index(pos, center) >= 0),
-        grid
-    )
-    
-    # Timing configuration
-    fade_in, stagger, hold, fade_out = 0.6, 0.4, 1.0, 0.5
-    
-    # Build up rings from outside in using set subtraction
-    rings = []
-    outer = large_region
-    for i, style in enumerate(stages):
-        inner = outer.inside()
-        ring = outer - inner  # The ring at this level!
-        if len(ring) == 0:
-            break
-        rings.append((f"stage{i}", ring, style, i))
-        outer = inner
-    
-    # If there's a center left, add it as the last ring
-    if len(outer) > 0 and len(rings) < len(stages):
-        rings.append((f"stage{len(rings)}", outer, stages[len(rings)], len(rings)))
-    
-    # Draw and animate each ring
-    for layerId, ring, style, stage_idx in rings:
-        boundaries = ring.trace_perimeter(style=style)
-        grid.builder.adjust(layerId, "\n".join([x.drawPloy() for x in boundaries]))
-        
-        is_last = (stage_idx == len(rings) - 1)
-        grid.builder.animate_layer_full_cycle(
-            layerId,
-            fade_in_duration=fade_in,
-            hold_duration=hold + (len(rings) - 1 - stage_idx) * stagger,
-            fade_out_duration=fade_out if not is_last else 0,
-            delay=stage_idx * stagger,
-            easing="ease-out",
-            loop=True
-        )
-    
-    return grid.builder.show()
-
-demo_region_erosion()
-
-
-# %% ../../nbs/tutorials/math.ipynb 58
+# %% ../../nbs/tutorials/math.ipynb 59
 def demo_voronoi_growth_simple():
     """Simpler Voronoi growth using HexRegion list"""
     grid = sampleGrid(5, fill="lightgray")
