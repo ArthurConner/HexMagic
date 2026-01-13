@@ -451,6 +451,7 @@ demo_region_erosion().show()
 def demo_voronoi_growth_simple():
     """Simpler Voronoi growth using HexRegion list"""
     grid = sampleGrid(5, fill="lightgray")
+    grid.update()
     
     colors = [
         StyleCSS("region0", fill="#ff6b6b", stroke="darkred", stroke_width=0),
@@ -458,6 +459,7 @@ def demo_voronoi_growth_simple():
         StyleCSS("region2", fill="#95e1d3", stroke="darkgreen", stroke_width=0),
         StyleCSS("region3", fill="#f38181", stroke="darkorange", stroke_width=0),
     ]
+    layer_names = []
     
     perimeter_style = StyleCSS("perimeter_path", fill="none", stroke="#333", stroke_width=3)
     arrow_style = StyleCSS("growth_arrow", stroke="#333333", stroke_width=2, fill="none")
@@ -480,10 +482,11 @@ def demo_voronoi_growth_simple():
     
     claimed = set(seeds)
     total = grid.nRows * grid.nCols
-    arrow_layer = ""
+    
     
     # Grow until everything is claimed
     for round_num in range(30):
+        arrow_layer = ""
         if len(claimed) >= total:
             break
         
@@ -526,9 +529,14 @@ def demo_voronoi_growth_simple():
         for region in regions:
             paths = region.trace_perimeter(style=perimeter_style)
             boundary_layer += "".join([x.make_windy(iterations=2, offset_factor=0.2).svg() for x in paths])
-    
+        arrowName = f"arrows_{round_num}"
+        grid.builder.adjust(arrowName, arrow_layer)
+        layer_names.append(arrowName)
     grid.update()
-    grid.builder.adjust("arrows", arrow_layer)
+
+    anim = LoopingLayerAnimation(layer_names, visible_count=2, step_duration=0.5, fade_duration=0.1, dim_opacity=0)
+    apply_looping_animation( builder,anim)
+    
     grid.builder.adjust("boundaries", boundary_layer)
     return grid.builder.show()
 
