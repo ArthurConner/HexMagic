@@ -1765,7 +1765,48 @@ def perimeter(self: HexRegion) -> list[MapCord]:
     return perimeter_vertices
 
 
-# %% ../nbs/02_primitives.ipynb 79
+# %% ../nbs/02_primitives.ipynb 75
+@patch
+def demoRegionFromPath(self: PrimitiveDemo):
+    # Create a simple grid
+    mySize = MapSize(200, 200)
+    myBounds = MapRect(MapCord(0, 0), mySize)
+    baseStyle = StyleCSS.elevations()[3]
+    aGrid = HexGrid.from_bounds(bounds=myBounds, style=baseStyle, radius=20)
+    
+    print(f"Grid has {aGrid.nRows} rows, {aGrid.nCols} cols = {len(aGrid.hexes)} hexes")
+    
+    # Define a path through the grid
+    # Let's try a simple diagonal path
+    path = [0, 5, 10, 15]  # Should go diagonally down-right
+    
+    print(f"\nPath indices: {path}")
+    print("Path hex positions:")
+    for idx in path:
+        row, col = aGrid.index_to_row_col(idx)
+        print(f"  Index {idx}: row={row}, col={col}, center={aGrid.hexes[idx].center}")
+    
+    # Try to create the region
+    try:
+        region = HexRegion.fromPath(aGrid, path)
+        print(f"\nRegion created with {len(region.hexes)} hexes")
+        print(f"Region hexes: {sorted(region.hexes)}")
+        
+        # Check perimeter
+        perimeter = region.perimeter()
+        print(f"Perimeter has {len(perimeter)} vertices")
+        
+        return region
+    except Exception as e:
+        print(f"\nError creating region: {e}")
+        import traceback
+        traceback.print_exc()
+        return None
+
+
+
+
+# %% ../nbs/02_primitives.ipynb 80
 @patch
 def trace_perimeter(self: HexRegion, debug=False, 
                    style=StyleCSS("perimeter_path", fill="none", 
@@ -1840,7 +1881,7 @@ def trace_perimeter(self: HexRegion, debug=False,
     return paths  # Return paths and empty gaps list
 
 
-# %% ../nbs/02_primitives.ipynb 81
+# %% ../nbs/02_primitives.ipynb 82
 @patch
 def __lt__(self: MapCord, other: MapCord) -> bool:
     """Less than comparison: first by x, then by y."""
@@ -1849,7 +1890,7 @@ def __lt__(self: MapCord, other: MapCord) -> bool:
     return self.y < other.y
 
 
-# %% ../nbs/02_primitives.ipynb 84
+# %% ../nbs/02_primitives.ipynb 85
 @patch
 def update(self:HexGrid,wrapper:HexWrapper = HexWrapper(),layer_name="hexes"):
 
@@ -1873,7 +1914,7 @@ def update(self:HexGrid,wrapper:HexWrapper = HexWrapper(),layer_name="hexes"):
         self.builder.adjust(layer_name,testBody)
 
 
-# %% ../nbs/02_primitives.ipynb 85
+# %% ../nbs/02_primitives.ipynb 86
 @patch
 def demoDrawGrid(self:PrimitiveDemo):
     mySize = MapSize(120,120)
@@ -1911,7 +1952,7 @@ def demoDrawGrid(self:PrimitiveDemo):
 
 
 
-# %% ../nbs/02_primitives.ipynb 90
+# %% ../nbs/02_primitives.ipynb 91
 class LinearGradient(Generatable):
 
     def __init__(self,grid:HexGrid,startHex:Int,endHex:Int,startColor:str,endColor:str,):
@@ -1960,7 +2001,7 @@ class LinearGradient(Generatable):
         svg += '</linearGradient>\n'
         return svg
 
-# %% ../nbs/02_primitives.ipynb 91
+# %% ../nbs/02_primitives.ipynb 92
 @patch
 def radial_gradient(self: HexGrid, lookup: dict= {5:"#007fff",6:"#07ff66ff",10:"#ff005dff]"} ):
     """Use overlapping radial gradients for smoother blending."""
@@ -1984,7 +2025,7 @@ def radial_gradient(self: HexGrid, lookup: dict= {5:"#007fff",6:"#07ff66ff",10:"
     
     return testBody
 
-# %% ../nbs/02_primitives.ipynb 92
+# %% ../nbs/02_primitives.ipynb 93
 @patch
 def gradient(self:HexGrid,lookup = {5:"#007fff",6:"#07ff66ff",10:"#ff005dff]"} ):
     testBody = ""
@@ -2007,7 +2048,7 @@ def gradient(self:HexGrid,lookup = {5:"#007fff",6:"#07ff66ff",10:"#ff005dff]"} )
 
     return testBody
 
-# %% ../nbs/02_primitives.ipynb 93
+# %% ../nbs/02_primitives.ipynb 94
 @patch
 def demoGradienGrid(self:PrimitiveDemo):
     mySize = MapSize(120,120)
