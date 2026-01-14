@@ -428,7 +428,7 @@ def make_windy_variable(self: MapPath, iterations: int = 1,
             new_points.append(mid_point)
             new_points.append(p2)
         
-        points = new_pointsb
+        points = new_points
     
     return MapPath(points, self.style)
 

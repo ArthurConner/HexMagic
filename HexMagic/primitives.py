@@ -3,7 +3,7 @@
 # %% auto 0
 __all__ = []
 
-# %% ../nbs/02_primitives.ipynb 5
+# %% ../nbs/02_primitives.ipynb 4
 import numpy as np
 import math
 
@@ -18,15 +18,13 @@ from fasthtml.common import *
 from fasthtml.jupyter import *
 import httpx
 
-# %% ../nbs/02_primitives.ipynb 6
-#| export
 
 
-# %% ../nbs/02_primitives.ipynb 7
+# %% ../nbs/02_primitives.ipynb 5
 # Import from plot modules (single source of truth)
 from .plot.primitives import PrimitiveDemo, MapCord, MapSize, MapRect, MakeCord, MakeSize, MapPath
 from .plot.hex import Hex, hexSVG, hexBackground, HexGrid, HexWrapper, LinearGradient
 from .plot.cube import HexPosition, GosperCurve
 
 # %% ../nbs/02_primitives.ipynb 8
-from .plot.region import HexRegion
+from .plot.region import HexRegion, windy_edge, variable_windy_edge

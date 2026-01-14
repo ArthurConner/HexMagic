@@ -20,7 +20,7 @@ from .styles import StyleCSS,  SVGBuilder
 
 # %% ../nbs/00_core.ipynb 8
 from .primitives import MapPath, MapSize, MapRect, MapCord 
-from .primitives import HexGrid, HexPosition ,  HexRegion, GosperCurve
+from .primitives import HexGrid, HexPosition ,  HexRegion, GosperCurve, windy_edge
 
 import numpy as np
 
