@@ -5,20 +5,20 @@
 # %% auto 0
 __all__ = []
 
-# %% ../nbs/00_core.ipynb 6
+# %% ../nbs/00_core.ipynb 4
 #import nbdev; nbdev.nbdev_export()
 import sys
 import math
 from fastcore.basics import patch
 
-# %% ../nbs/00_core.ipynb 9
+# %% ../nbs/00_core.ipynb 7
 from .plot.primitives import  MapCord , PrimitiveDemo
 from .plot.hex import Hex
 
 
 from .styles import StyleCSS,  SVGBuilder
 
-# %% ../nbs/00_core.ipynb 10
+# %% ../nbs/00_core.ipynb 8
 from .primitives import MapPath, MapSize, MapRect, MapCord 
 from .primitives import HexGrid, HexPosition ,  HexRegion, GosperCurve
 
