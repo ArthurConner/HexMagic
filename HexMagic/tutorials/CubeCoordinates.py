@@ -4,7 +4,7 @@
 
 # %% auto 0
 __all__ = ['sampleHex', 'hexStyle', 'canvas', 'grid', 'arrowLayer', 'eastDir', 'start', 'perimeter_style', 'region', 'paths',
-           'overlay', 'sampleGrid', 'showEast', 'showRing', 'flip', 'roll', 'hexes_in_range', 'line_demo', 'range_demo',
+           'overlay', 'showEast', 'showRing', 'flip', 'roll', 'hexes_in_range', 'line_demo', 'range_demo',
            'rotation_demo', 'demo_region_spiral_with_arrows', 'demo_region_erosion', 'demo_voronoi_growth_simple']
 
 # %% ../../nbs/tutorials/math.ipynb 5
@@ -14,18 +14,19 @@ import math
 from fastcore.basics import patch
 
 # %% ../../nbs/tutorials/math.ipynb 8
-from ..primitives import Hex, MapCord 
+from ..plot.math import  MapCord 
+from ..plot.Hex import Hex
 
 
-# %% ../../nbs/tutorials/math.ipynb 9
+# %% ../../nbs/tutorials/math.ipynb 10
 sampleHex = Hex(radius=50,center=MapCord(100,100))
 
 sampleHex.vertices(), "\n-- We round edges so we can compare --\n", sampleHex.edges()
 
-# %% ../../nbs/tutorials/math.ipynb 10
+# %% ../../nbs/tutorials/math.ipynb 11
 from ..styles import StyleCSS,  SVGBuilder
 
-# %% ../../nbs/tutorials/math.ipynb 11
+# %% ../../nbs/tutorials/math.ipynb 12
 #some drawing setup 
 hexStyle = StyleCSS("HexStyle",fill="yellow",stroke="blue",stroke_width=2)
 canvas = SVGBuilder()
@@ -43,49 +44,13 @@ canvas.adjust("main",sampleHex.svg())
 #show our work
 canvas.show()
 
-# %% ../../nbs/tutorials/math.ipynb 13
-from ..primitives import HexGrid
-
-def sampleGrid(numRings = 2, fill = "#ff7b00ff"):
-    #drawing set up
-    hexStyle = StyleCSS("HexStyle",fill=fill,stroke="blue",stroke_width=2)
-
-    #Our new class
-    grid = HexGrid.centered(numRings,radius=30,style=hexStyle)
-
-    #make sure we are ready to draw
-    grid.update()
-    return grid
-
-sampleGrid().builder.show()
-
-# %% ../../nbs/tutorials/math.ipynb 16
-def sampleGrid(hexDim = 2, fill = "white",makeLabels = False):
-
-    #drawing set up
-    hexStyle = StyleCSS("HexStyle",fill=fill,stroke="blue",stroke_width=2)
-    labelStyle = StyleCSS("labelStyle",fill=fill,stroke="black",stroke_width=1)
-    
-    grid = HexGrid.centered(hexDim,radius=40,style=hexStyle)
-
-    #Need to add styles as we go along
-    grid.builder.add_style(labelStyle)
-
-    #itterate through the hexes
-    for i in range(len(grid.hexes)):
-        if makeLabels:
-            grid.hexes[i].label = str(i) 
-        grid.hexes[i].labelStyle = labelStyle.name
-
-    grid.update()
-    return grid
-    
-
+# %% ../../nbs/tutorials/math.ipynb 17
 grid = sampleGrid(makeLabels=True)
 grid.builder.show()
 
-# %% ../../nbs/tutorials/math.ipynb 18
-from ..primitives import HexPosition , MapPath
+# %% ../../nbs/tutorials/math.ipynb 19
+from ..plot.HexPosition import HexPosition 
+from ..plot.math import MapPath
 grid = sampleGrid()
 
 #mark the treasure
@@ -107,11 +72,11 @@ grid.builder.adjust("arrows",arrowLayer)
 
 grid.builder.show()
 
-# %% ../../nbs/tutorials/math.ipynb 19
+# %% ../../nbs/tutorials/math.ipynb 20
 eastDir = HexPosition.E
 eastDir,  2 * eastDir
 
-# %% ../../nbs/tutorials/math.ipynb 20
+# %% ../../nbs/tutorials/math.ipynb 21
 def showEast(middleIndex=12):
     grid = sampleGrid()
 
@@ -141,10 +106,10 @@ def showEast(middleIndex=12):
 showEast(12)
 
 
-# %% ../../nbs/tutorials/math.ipynb 22
+# %% ../../nbs/tutorials/math.ipynb 23
 showEast(6)
 
-# %% ../../nbs/tutorials/math.ipynb 24
+# %% ../../nbs/tutorials/math.ipynb 25
 def showRing(middleIndex=12,ring=1):
     grid = sampleGrid()
     
@@ -181,17 +146,17 @@ def showRing(middleIndex=12,ring=1):
     
 showRing(12)
 
-# %% ../../nbs/tutorials/math.ipynb 25
+# %% ../../nbs/tutorials/math.ipynb 26
 showRing(12,ring=2)
 
-# %% ../../nbs/tutorials/math.ipynb 31
+# %% ../../nbs/tutorials/math.ipynb 32
 def flip(h):
     return (-HexPosition.direction(h)).desc()
 
 
 flip("E")
 
-# %% ../../nbs/tutorials/math.ipynb 33
+# %% ../../nbs/tutorials/math.ipynb 34
 def roll(h):
     """ Geometric meaning**: Rotation by 60° counter-clockwise around the origin."""
     pos = -HexPosition.direction(h)
@@ -207,7 +172,7 @@ for I in range(6):
 #**Algebraic significance**: Roll generates **rotational symmetry**, the six-fold symmetry that makes hexagons special.
 
 
-# %% ../../nbs/tutorials/math.ipynb 39
+# %% ../../nbs/tutorials/math.ipynb 40
 def hexes_in_range(n):
     """ finding all hexes within distance N from origin: """
     results = []
@@ -219,7 +184,7 @@ def hexes_in_range(n):
 
 hexes_in_range(3)
 
-# %% ../../nbs/tutorials/math.ipynb 41
+# %% ../../nbs/tutorials/math.ipynb 42
 def line_demo(start_idx=20, end_idx=8):
     """Demo showing line drawing between two hexes using cube coordinates"""
     grid = sampleGrid()
@@ -261,7 +226,7 @@ def line_demo(start_idx=20, end_idx=8):
 line_demo(20, 8)
 
 
-# %% ../../nbs/tutorials/math.ipynb 42
+# %% ../../nbs/tutorials/math.ipynb 43
 def range_demo( max_distance=2):
     """Demo showing all hexes within a certain distance"""
     
@@ -299,7 +264,7 @@ def range_demo( max_distance=2):
 range_demo(3)
 
 
-# %% ../../nbs/tutorials/math.ipynb 43
+# %% ../../nbs/tutorials/math.ipynb 44
 def rotation_demo(center_idx=12):
     """Demo showing rotation around a center hex"""
     grid = sampleGrid()
@@ -336,7 +301,7 @@ def rotation_demo(center_idx=12):
 rotation_demo(12)
 
 
-# %% ../../nbs/tutorials/math.ipynb 44
+# %% ../../nbs/tutorials/math.ipynb 45
 def demo_region_spiral_with_arrows():
     """Demo showing a region growing in a spiral pattern with arrows"""
     grid = sampleGrid(4, fill="lightgray")
@@ -376,13 +341,13 @@ def demo_region_spiral_with_arrows():
 
 
 
-# %% ../../nbs/tutorials/math.ipynb 45
+# %% ../../nbs/tutorials/math.ipynb 46
 demo_region_spiral_with_arrows()
 
-# %% ../../nbs/tutorials/math.ipynb 47
-from ..primitives import HexRegion
-
 # %% ../../nbs/tutorials/math.ipynb 48
+from ..region import HexRegion
+
+# %% ../../nbs/tutorials/math.ipynb 51
 grid = sampleGrid(3, fill="lightgray")
 perimeter_style=StyleCSS("perimeter_path", fill="red",  stroke="#ba3ca3ff", stroke_width=3)
 
@@ -394,7 +359,7 @@ overlay = "" + "".join([x.drawPloy() for x in paths])
 grid.builder.adjust("regionBorder",overlay)
 grid.builder.show()
 
-# %% ../../nbs/tutorials/math.ipynb 49
+# %% ../../nbs/tutorials/math.ipynb 52
 grid = sampleGrid(3, fill="lightgray")
 perimeter_style=StyleCSS("perimeter_path", fill="red",  stroke="#ba3ca3ff", stroke_width=3)
 
@@ -406,7 +371,7 @@ overlay = "" + "".join([x.drawPloy() for x in paths])
 grid.builder.adjust("regionBorder",overlay)
 grid.builder.show()
 
-# %% ../../nbs/tutorials/math.ipynb 51
+# %% ../../nbs/tutorials/math.ipynb 54
 def demo_region_erosion():
     """Demo showing a region eroding from outside in"""
     grid = sampleGrid(4, fill="lightgray")
@@ -447,7 +412,7 @@ def demo_region_erosion():
 
 demo_region_erosion().show()
 
-# %% ../../nbs/tutorials/math.ipynb 59
+# %% ../../nbs/tutorials/math.ipynb 62
 def demo_voronoi_growth_simple():
     """Simpler Voronoi growth using HexRegion list"""
     grid = sampleGrid(5, fill="lightgray")
@@ -535,7 +500,7 @@ def demo_voronoi_growth_simple():
     grid.update()
 
     anim = LoopingLayerAnimation(layer_names, visible_count=2, step_duration=0.5, fade_duration=0.1, dim_opacity=0)
-    apply_looping_animation( builder,anim)
+    apply_looping_animation( grid.builder,anim)
     
     grid.builder.adjust("boundaries", boundary_layer)
     return grid.builder.show()
