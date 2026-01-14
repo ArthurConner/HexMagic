@@ -19,14 +19,14 @@ import numpy as np
 
 from fastcore.basics import patch
 
-# %% ../nbs/04_voronoi.ipynb 5
-from .primitives import Hex, MapCord , HexPosition,  MapSize, MapRect, MapCord, MapPath ,HexGrid, HexRegion
-
-
 # %% ../nbs/04_voronoi.ipynb 6
+from .primitives import  MapCord , HexPosition,  MapSize, MapRect, MapCord, MapPath ,HexGrid, HexRegion, Hex
+
+
+# %% ../nbs/04_voronoi.ipynb 7
 from .styles import StyleCSS,  SVGBuilder
 
-# %% ../nbs/04_voronoi.ipynb 17
+# %% ../nbs/04_voronoi.ipynb 18
 def voronoi_seeds(rows, cols, num_seeds, elimination_rate=0.3, max_offset=3, s=None,debug=False):
     """
     Generate evenly-spaced seeds with randomization for Voronoi diagram.
@@ -59,12 +59,14 @@ def voronoi_seeds(rows, cols, num_seeds, elimination_rate=0.3, max_offset=3, s=N
     rr, cc = np.meshgrid(row_coords, col_coords)
     seeds = np.column_stack([rr.ravel(), cc.ravel()])
     
-    print(f"Initial seeds: {len(seeds)} (spacing={spacing})")
+    if debug:
+        print(f"Initial seeds: {len(seeds)} (spacing={spacing})")
     
     # Elimination step
     keep_mask = np.random.random(len(seeds)) > elimination_rate
     seeds = seeds[keep_mask]
-    print(f"After elimination: {len(seeds)}")
+    if debug:
+        print(f"After elimination: {len(seeds)}")
     
     # Offset step
     offsets = np.random.uniform(-max_offset, max_offset, size=seeds.shape)
@@ -77,7 +79,8 @@ def voronoi_seeds(rows, cols, num_seeds, elimination_rate=0.3, max_offset=3, s=N
     
     # Remove duplicates
     seeds = np.unique(seeds, axis=0)
-    print(f"Final unique seeds: {len(seeds)}")
+    if debug:
+        print(f"Final unique seeds: {len(seeds)}")
     
     # Convert to 1D indexes
     indexes = seeds[:, 0] * cols + seeds[:, 1]
@@ -87,7 +90,7 @@ def voronoi_seeds(rows, cols, num_seeds, elimination_rate=0.3, max_offset=3, s=N
 
 
 
-# %% ../nbs/04_voronoi.ipynb 19
+# %% ../nbs/04_voronoi.ipynb 20
 class PlateKind(Enum):
     oceanic = 0        # Ocean/sea
     continental = 1    # Lakes/rivers
@@ -196,7 +199,7 @@ class Plate:
                     plate.hexes.add(add)
         return plates
 
-# %% ../nbs/04_voronoi.ipynb 26
+# %% ../nbs/04_voronoi.ipynb 27
 def mark_oceanic_plates(plates, ocean_fraction=0.4, seed=None):
     """
     Randomly mark some plates as oceanic.
@@ -228,7 +231,7 @@ def mark_oceanic_plates(plates, ocean_fraction=0.4, seed=None):
 
 
 
-# %% ../nbs/04_voronoi.ipynb 27
+# %% ../nbs/04_voronoi.ipynb 28
 def calculate_distances_from_ocean(plates, grid):
     """
     Calculate distance from each plate to nearest oceanic plate centroid.
@@ -254,10 +257,10 @@ def calculate_distances_from_ocean(plates, grid):
    
 
 
-# %% ../nbs/04_voronoi.ipynb 31
+# %% ../nbs/04_voronoi.ipynb 32
 from .terrain import Terrain
 
-# %% ../nbs/04_voronoi.ipynb 32
+# %% ../nbs/04_voronoi.ipynb 33
 def generate_plate_terrain(bounds, radius=20, num_plates=10, ocean_fraction=0.4, seed=None):
     """
     Generate terrain based on tectonic plates using Voronoi regions.
