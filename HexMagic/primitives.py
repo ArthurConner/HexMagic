@@ -27,4 +27,4 @@ from .plot.hex import Hex, hexSVG, hexBackground, HexGrid, HexWrapper, LinearGra
 from .plot.cube import HexPosition, GosperCurve
 
 # %% ../nbs/02_primitives.ipynb 8
-from .plot.region import HexRegion, windy_edge, variable_windy_edge
+from .plot.region import HexRegion, windy_edge, variable_windy_edge,unique_windy_edge

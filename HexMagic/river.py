@@ -30,7 +30,7 @@ import heapq
 
 # %% ../nbs/06_river.ipynb 4
 from .styles import StyleCSS, SVGBuilder,SVGLayer, SVGPatternLoader, preview, app, StyleDemo
-from .primitives import MapCord, MapSize, MapRect, MapPath, Hex, HexGrid, HexWrapper, HexPosition, hexBackground
+from .primitives import MapCord, MapSize, MapRect, MapPath, Hex, HexGrid, HexWrapper, HexPosition, hexBackground,windy_edge
 from .terrain import  TerraDemo, Terrain
 from .terrainpatterns import TerrainPatterns
 

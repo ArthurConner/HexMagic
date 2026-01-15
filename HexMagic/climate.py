@@ -29,7 +29,7 @@ import copy
 import colorsys
 
 from .styles import StyleCSS, SVGBuilder, SVGLayer, SVGPatternLoader, preview, app, StyleDemo, LayerAnimation
-from .primitives import MapCord, MapSize, MapRect, MapPath, Hex, HexGrid, HexWrapper, HexPosition, hexBackground, HexRegion
+from .primitives import MapCord, MapSize, MapRect, MapPath, Hex, HexGrid, HexWrapper, HexPosition, hexBackground, HexRegion, windy_edge
 from .terrain import  TerraDemo, Terrain, GeoBounds, ClimatePreset
 #from terrainpattern import TerrainPatterns
 #from river import River
@@ -272,7 +272,7 @@ def visualize_precipitation(self: Terrain, layer_name="precipitation"):
     
     return self
 
-# %% ../nbs/07_climate.ipynb 19
+# %% ../nbs/07_climate.ipynb 20
 @patch
 def field_summary(self: Terrain, field_name):
     """Compact statistical summary of a field."""
@@ -366,7 +366,7 @@ def climate_distribution(self: Terrain):
         print(f"{name:12s}: {bar} {count:4d} ({pct:5.1f}%)")
 
 
-# %% ../nbs/07_climate.ipynb 20
+# %% ../nbs/07_climate.ipynb 21
 @patch
 def mauiMap(self:TerraDemo,debug = False):
     """Load Maui terrain with proper geographic bounds."""
@@ -408,7 +408,7 @@ def maui(self:TerraDemo,debug=False):
     return len(terrain.hexGrid.builder.xml())
 
 
-# %% ../nbs/07_climate.ipynb 23
+# %% ../nbs/07_climate.ipynb 24
 @patch
 def compute_distance_from_coast(self: Terrain):
     """Calculate distance from coast for each hex using BFS."""
@@ -444,7 +444,7 @@ def compute_distance_from_coast(self: Terrain):
 
 
 
-# %% ../nbs/07_climate.ipynb 24
+# %% ../nbs/07_climate.ipynb 25
 @patch
 def compute_temperature(self: Terrain,
                         base_temp_south=20.0,    # Southern coast 
@@ -471,7 +471,7 @@ def compute_temperature(self: Terrain,
     return temp
 
 
-# %% ../nbs/07_climate.ipynb 28
+# %% ../nbs/07_climate.ipynb 29
 @patch
 def validate_coastal_temps(self: Terrain):
     """Check that coastal areas aren't getting tundra temperatures."""
@@ -508,7 +508,7 @@ def validate_coastal_temps(self: Terrain):
         print(f"  Temp range: {high_temps.min():.1f}°C to {high_temps.max():.1f}°C")
 
 
-# %% ../nbs/07_climate.ipynb 29
+# %% ../nbs/07_climate.ipynb 30
 @patch
 def caliRain(demo:TerraDemo):
 
@@ -540,7 +540,7 @@ def caliRain(demo:TerraDemo):
     terrain.validate_coastal_temps()
 
 
-# %% ../nbs/07_climate.ipynb 31
+# %% ../nbs/07_climate.ipynb 32
 @patch
 def maui(self:TerraDemo,debug=True):
     terrain = self.mauiMap(debug=debug)
@@ -557,7 +557,7 @@ def maui(self:TerraDemo,debug=True):
         terrain.compare_fields('precipitation', 'temperature')
         terrain.validate_coastal_temps()
 
-# %% ../nbs/07_climate.ipynb 34
+# %% ../nbs/07_climate.ipynb 35
 from enum import Enum
 
 class Climate(Enum):
@@ -575,7 +575,7 @@ class Climate(Enum):
 
 
 
-# %% ../nbs/07_climate.ipynb 35
+# %% ../nbs/07_climate.ipynb 36
 @patch
 def configure(preset:ClimatePreset,terrain: Terrain, force_recompute: bool = False,debug=False):
     """
@@ -627,7 +627,7 @@ def configure(preset:ClimatePreset,terrain: Terrain, force_recompute: bool = Fal
             terrain.summarize_climate()
 
 
-# %% ../nbs/07_climate.ipynb 36
+# %% ../nbs/07_climate.ipynb 37
 @patch
 def summarize_climate(self: Terrain):
     """Print summary statistics of climate distribution."""
@@ -656,7 +656,7 @@ def summarize_climate(self: Terrain):
         print(f"Precipitation: {p.min():.0f}mm to {p.max():.0f}mm (mean: {p.mean():.0f}mm)")
 
 
-# %% ../nbs/07_climate.ipynb 37
+# %% ../nbs/07_climate.ipynb 38
 ## pass 2
 @patch
 def compute_climate(self: Terrain):
@@ -709,7 +709,7 @@ def compute_climate(self: Terrain):
     return climate
 
 
-# %% ../nbs/07_climate.ipynb 38
+# %% ../nbs/07_climate.ipynb 39
 @patch
 def add_climate_overlay(self: Terrain, layer_name="climate"):
     """Visualize climate zones with appropriate colors."""
@@ -745,7 +745,7 @@ def add_climate_overlay(self: Terrain, layer_name="climate"):
     self.builder.adjust(layer_name, overlay)
 
 
-# %% ../nbs/07_climate.ipynb 40
+# %% ../nbs/07_climate.ipynb 41
 @patch
 def downsample_climate(self: Terrain, scale=0.5,sample_radius=1):
     """Downsample terrain with all climate data preserved.
@@ -824,7 +824,7 @@ def downsample_climate(self: Terrain, scale=0.5,sample_radius=1):
     return new_terrain
 
 
-# %% ../nbs/07_climate.ipynb 45
+# %% ../nbs/07_climate.ipynb 46
 class WeatherColor:
     """Color scheme for weather map."""
 
@@ -990,7 +990,7 @@ def render_icon_temperature(self: Terrain, ocean_color: str = "#2c5f8d") -> str:
     
     return overlay
 
-# %% ../nbs/07_climate.ipynb 46
+# %% ../nbs/07_climate.ipynb 47
 @patch
 def gradient_temperature(self: Terrain, ocean_color: str = "#2c5f8d") -> str:
     """Render hexes with inline fill based on temperature gradient.
@@ -1038,7 +1038,7 @@ def gradient_temperature(self: Terrain, ocean_color: str = "#2c5f8d") -> str:
     return overlay
 
 
-# %% ../nbs/07_climate.ipynb 47
+# %% ../nbs/07_climate.ipynb 48
 @patch
 def makeClimateOverlay(self: Terrain, climate_data, precip_data, all_patterns: list[SVGBuilder]) -> str:
     """
@@ -1089,7 +1089,7 @@ def makeClimateOverlay(self: Terrain, climate_data, precip_data, all_patterns: l
     
     return testBody
 
-# %% ../nbs/07_climate.ipynb 48
+# %% ../nbs/07_climate.ipynb 49
 @patch
 def dottedClimate(self: Terrain, 
                   flow_levels: int = 5,
@@ -1199,7 +1199,7 @@ def dottedClimate(self: Terrain,
     return overlay
 
 
-# %% ../nbs/07_climate.ipynb 49
+# %% ../nbs/07_climate.ipynb 50
 @patch
 def add_climate_overlay(self: Terrain, layer_name="climate_precip",debug=False):
     """Combine climate colors with precipitation-based dot density."""
@@ -1209,7 +1209,7 @@ def add_climate_overlay(self: Terrain, layer_name="climate_precip",debug=False):
     
     return self
 
-# %% ../nbs/07_climate.ipynb 58
+# %% ../nbs/07_climate.ipynb 59
 @patch  
 def show(self: River, builder: SVGBuilder, layer: str = "river", 
          style: dict = None):
@@ -1250,7 +1250,7 @@ def show(self: River, builder: SVGBuilder, layer: str = "river",
     builder.adjust(layer, svg_content)
 
 
-# %% ../nbs/07_climate.ipynb 62
+# %% ../nbs/07_climate.ipynb 63
 class TerrainFactory:
     """Factory for creating terrains with realistic climate parameters."""
     
@@ -1495,5 +1495,5 @@ class TerrainFactory:
             print()
 
 
-# %% ../nbs/07_climate.ipynb 63
+# %% ../nbs/07_climate.ipynb 64
 from .voronoi import generate_plate_terrain

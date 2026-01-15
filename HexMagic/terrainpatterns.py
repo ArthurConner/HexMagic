@@ -27,10 +27,13 @@ import httpx
 # unique
 from treelib import Tree
 import heapq
+from .voronoi import generate_plate_terrain
+
+Terrain.fromSeeds = generate_plate_terrain
 
 # %% ../nbs/05_terrainpatterns.ipynb 5
 from .styles import StyleCSS, SVGBuilder,SVGLayer, SVGPatternLoader, preview, app, StyleDemo, Generatable
-from .primitives import MapCord, MapSize, MapRect, MapPath, Hex, HexGrid, HexRegion, HexWrapper, HexPosition, PrimitiveDemo, hexBackground
+from .primitives import MapCord, MapSize, MapRect, MapPath, Hex, HexGrid, HexRegion, HexWrapper, HexPosition, PrimitiveDemo, hexBackground, windy_edge
 
 # %% ../nbs/05_terrainpatterns.ipynb 6
 from .terrain import Terrain, TerraDemo
@@ -194,6 +197,42 @@ def makeOverlay(self:Terrain,data,patterns:[SVGBuilder])->str:
         
 
 # %% ../nbs/05_terrainpatterns.ipynb 15
+@patch
+def overlayRegions(self: HexGrid, regions: list[HexRegion], 
+                   patterns: list[SVGBuilder], f=None):
+    """Apply patterns to regions. Each region gets one pattern applied to all its paths.
+    
+    Args:
+        regions: List of HexRegion objects
+        patterns: List of SVGBuilder patterns (one per region)
+        f: Optional edge transform function (e.g., windy_edge())
+    
+    Returns:
+        SVG string for the overlay layer
+    """
+    retLayer = ""
+    borders = {}  # Shared cache across all regions
+    
+    # Add all pattern definitions
+    for pattern in patterns:
+        self.builder.add_definition(pattern)
+    
+    for region, pattern in zip(regions, patterns):
+        patName = pattern.attributes['id']
+        fill = f"url(#{patName})"
+        
+        # Create a style with this pattern as fill
+        style = StyleCSS(f"overlay_{patName}", fill=fill, stroke="black",stroke_width=0.5)
+        self.builder.add_style(style)
+        
+        # Get all paths for this region (handles non-contiguous)
+        for path in region.trace_perimeter_cached(borders, f, style):
+            retLayer += path.drawClosed()
+    
+    return retLayer
+
+
+# %% ../nbs/05_terrainpatterns.ipynb 21
 # Create a terrain
 @patch
 def circusDemo(self:TerraDemo):
@@ -215,21 +254,23 @@ def circusDemo(self:TerraDemo):
 
     # Get pattern indices
     pattern_indices = rainfall_selector_np(rainfall_data)
+    regions = sampleMap.hexGrid.regions_by_value(pattern_indices)
 
     # Create patterns and overlay
     patternGen = TerrainPatterns(sampleMap)
     patterns = patternGen.ballScale(len(pattern_indices),fills=["#007fff","#d4ff00ff","#ee00ffff","#ff0099ff","#00ff1eff"])  # 5 levels
-    patot = sampleMap.makeOverlay(pattern_indices, patterns)
-    sampleMap.hexGrid.builder.adjust("rainfall",patot)
+    patot = sampleMap.hexGrid.overlayRegions(regions, patterns)
+    #print(patot)
+    sampleMap.hexGrid.builder.adjust("regionfall",patot)
     #sampleMap.colorMap()
     #sampleMap.hexGrid.update()
 
     # View it
-    #print(sampleMap.hexGrid.builder.xml())
+    #print(sampleMap.hexGrid.builder._header())
     return sampleMap.hexGrid.builder.show()
 
 
-# %% ../nbs/05_terrainpatterns.ipynb 17
+# %% ../nbs/05_terrainpatterns.ipynb 26
 @patch
 def fillPattern(self:HexRegion,pattern:SVGBuilder,smooth=False):
     """Fill a region with a style.
@@ -288,7 +329,7 @@ def fillPattern(self:HexRegion,pattern:SVGBuilder,smooth=False):
     patterns = patternGen.ballDensity(3,fills=fills)  # 5 levels
     self.makeOverlay(flowData, patterns)
 
-# %% ../nbs/05_terrainpatterns.ipynb 21
+# %% ../nbs/05_terrainpatterns.ipynb 31
 class SVGMask(Generatable):
     """SVG mask definition that can be added to SVGBuilder definitions"""
     
@@ -321,7 +362,7 @@ class SVGMask(Generatable):
         return ret
 
 
-# %% ../nbs/05_terrainpatterns.ipynb 22
+# %% ../nbs/05_terrainpatterns.ipynb 32
 @patch
 def fillPatternInverted(self: HexRegion, pattern: SVGBuilder, smooth: bool = False):
     """Fill OUTSIDE a region with a pattern using a mask."""
@@ -356,7 +397,7 @@ def fillPatternInverted(self: HexRegion, pattern: SVGBuilder, smooth: bool = Fal
     return f'<rect x="0" y="0" width="10000" height="10000" fill="{fill}" mask="url(#{mask_id})"/>'
 
 
-# %% ../nbs/05_terrainpatterns.ipynb 23
+# %% ../nbs/05_terrainpatterns.ipynb 33
 @patch
 def hatchLines(self: TerrainPatterns, angle: float = 45, spacing: float = 8, 
                stroke_width: float = 1.5, color: str = "#3d9fc0ff") -> SVGBuilder:
@@ -389,7 +430,7 @@ def hatchLines(self: TerrainPatterns, angle: float = 45, spacing: float = 8,
     
     return aBuilder
 
-# %% ../nbs/05_terrainpatterns.ipynb 25
+# %% ../nbs/05_terrainpatterns.ipynb 36
 @patch
 def island(self:TerraDemo):
     mySize = MapSize(480,480)
@@ -428,7 +469,7 @@ def demoAquatic(self:TerraDemo):
 
     return sampleMap.hexGrid.builder.show()
 
-# %% ../nbs/05_terrainpatterns.ipynb 28
+# %% ../nbs/05_terrainpatterns.ipynb 39
 @patch
 def mapElement(sampleMap:Terrain,bounds:MapCord,name="compass_1",prefix="merright",style=StyleCSS("base", 
                         fill="#27ae60",  # Green
