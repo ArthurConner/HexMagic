@@ -28,7 +28,16 @@ import httpx
 import inspect
 import copy
 
-# %% ../nbs/09_terraform.ipynb 5
+# %% ../nbs/09_terraform.ipynb 3
+from .primitives import MapPath, MapSize, MapRect, MapCord 
+from .primitives import HexGrid, HexPosition ,  HexRegion , HexWrapper, unique_windy_edge
+from .terrain import Terrain , TerraDemo
+from .terrainpatterns import TerrainPatterns
+from .climate import TerrainFactory, ClimatePreset
+from .hydrology import DrainageBasins
+from .styles import  StyleCSS 
+
+# %% ../nbs/09_terraform.ipynb 6
 @dataclass
 class SeismicEvent:
     kind: str  # e.g., "volcano", "erosion", "glacier", "meteor"
@@ -109,7 +118,7 @@ class SeismicEvent:
             caller = caller
         )
 
-# %% ../nbs/09_terraform.ipynb 6
+# %% ../nbs/09_terraform.ipynb 7
 @dataclass
 class ClimateRenderConfig:
     mode: str = "climate_zones"
@@ -130,7 +139,7 @@ class ClimateRenderConfig:
     
     debug: bool = False
 
-# %% ../nbs/09_terraform.ipynb 7
+# %% ../nbs/09_terraform.ipynb 8
 @dataclass
 class MapRenderConfig:
     show_hexes: bool = True
@@ -146,7 +155,7 @@ class MapRenderConfig:
     scale:int = 10 # out of 10
     compass:str = None
 
-# %% ../nbs/09_terraform.ipynb 8
+# %% ../nbs/09_terraform.ipynb 9
 @dataclass
 class VolcanoSettings:
     height: int = 300
@@ -154,7 +163,7 @@ class VolcanoSettings:
     variability= 80
     initial_threshold=0.4
 
-# %% ../nbs/09_terraform.ipynb 9
+# %% ../nbs/09_terraform.ipynb 10
 #This currently is under development
 
 @dataclass
@@ -165,7 +174,7 @@ class LegendLabel:
     tip: str = ""
     group:int = 0
 
-# %% ../nbs/09_terraform.ipynb 11
+# %% ../nbs/09_terraform.ipynb 12
 class Terraform:
     def __init__(self, terrain: Terrain,config:MapRenderConfig=None):
         self.terrain = terrain
@@ -274,7 +283,7 @@ class Terraform:
         terraform.plates = [Plate.decode(x,terrain.hexGrid) for x in plates]
         return terraform
 
-# %% ../nbs/09_terraform.ipynb 12
+# %% ../nbs/09_terraform.ipynb 13
 @patch
 def encode(self: Terraform) -> str:
     """Encode the Terraform to a string format."""
@@ -304,7 +313,7 @@ def encode(self: Terraform) -> str:
     
     return ret
 
-# %% ../nbs/09_terraform.ipynb 17
+# %% ../nbs/09_terraform.ipynb 18
 @patch
 def add_event(self:Terraform, kind: str,  adjustment: np.ndarray,name: str=None, properties: dict={}):
     order_id = len(self.events)  # or use actual timestamp
@@ -314,7 +323,7 @@ def add_event(self:Terraform, kind: str,  adjustment: np.ndarray,name: str=None,
     event = SeismicEvent(kind, name, order_id, properties, adjustment,caller_name)
     self.events.append(event)
 
-# %% ../nbs/09_terraform.ipynb 19
+# %% ../nbs/09_terraform.ipynb 20
 @patch
 def starterWorld(demo:TerraDemo,createNew = False, debug = False):
     """Create a tropical island with three volcanoes and downsampled rivers."""
@@ -352,7 +361,7 @@ def starterWorld(demo:TerraDemo,createNew = False, debug = False):
 
 
 
-# %% ../nbs/09_terraform.ipynb 21
+# %% ../nbs/09_terraform.ipynb 22
 @patch
 def terrainFromEvents(self:Terraform,index=None,prior=None,debug=True):
     if index is None:
@@ -373,7 +382,7 @@ def terrainFromEvents(self:Terraform,index=None,prior=None,debug=True):
             
             prior.elevations += event.adjustment
     else:
-        event = self.events[i]
+        event = self.events[index]
         if debug:
                 print(f"now on {index} {event.name}")
         prior.elevations += event.adjustment
@@ -530,3 +539,184 @@ def render_climate(self: Terraform,terrain, event_index: int) -> tuple[str, str]
     legend_svg = self.generate_legend(legend, config)
     
     return ret, legend_svg
+
+# %% ../nbs/09_terraform.ipynb 39
+@patch
+def render_layer(self: Terraform, event_index: int, prior = None,  debug=False) -> (str, Terrain):
+    """Render complete layer content based on terrain state and config.
+    
+    Args:
+        event_index: Which event we're rendering (-1 for base, 0+ for events)
+        config: Rendering configuration
+    
+    Returns:
+        Complete layer content as string
+    """
+    config = self.config
+    layer_content = ""
+
+    currentTerrain = self.terrainFromEvents(index=event_index,prior=prior)
+    currentTerrain.colorMap()
+    currentTerrain.hexGrid.update()
+
+        # Ensure climate data is computed
+    if not hasattr(currentTerrain, 'climate') or currentTerrain.climate is None:
+        raise ValueError("Terrain must have climate configured")
+    
+    currentTerrain.climate.configure(currentTerrain,force_recompute=True)
+    if debug:
+        print(" --- render_layer ---")
+        print(config)
+    
+    smaller = currentTerrain # we will revisit scaling down
+    if config.scale < 10:
+        smaller = smaller.downsample_climate(config.scale/10)
+        smaller.hexGrid._build_hexes()
+    
+    if debug:
+        print(" --- render_layer ---")
+        print(config)
+    
+    
+    # Add hexes if requested
+    if config.show_hexes:
+
+        if debug:
+            print("Showing hexes")
+        smaller.colorMap()
+        layer_content += smaller.hexGrid.styledHexes()
+
+    
+    # Add coastline if requested
+    if config.show_coastline:
+        if debug:
+            print("Showing show_coastline")
+        # Find all land hexes (elevation > 0)
+        land_hexes = set()
+        for i, elevation in enumerate(smaller.elevations):
+            if elevation > 0:
+                land_hexes.add(i)
+        
+        if land_hexes:
+            region = HexRegion(hexes=land_hexes, hex_grid=smaller.hexGrid,debug=True)
+            coastline_style = StyleCSS(
+                "coastline", 
+                fill="none", 
+                stroke="#2c5f2d", 
+                stroke_width=3
+            )
+            paths = region.trace_perimeter(style=coastline_style)
+            
+            self.builder.add_style(coastline_style)
+            for path in paths:
+                if path.points[0].distance(path.points[-1]) < 40:
+                    cl = path.closed()
+                else:
+                    cl = path
+                curved = cl.make_windy(iterations=1, offset_factor=0.1, seed=42)
+                smooth = curved.smooth(iterations=1)
+                layer_content += "\t" + smooth.svg() + "\n"
+    
+    # Add rivers if requested (placeholder for now)
+    if config.climate is not None:
+        
+        layer, legend = self.render_climate(smaller, event_index)
+        if debug:
+            print(f"Showing climats size {len(layer)}")
+        layer_content += layer
+    
+    return layer_content, smaller
+
+# %% ../nbs/09_terraform.ipynb 44
+@patch
+def animatedEvents(self:Terraform)->Terrain:
+    workTerr = self.terrain.clone()
+    overlays = []
+    displayTerr = workTerr
+    for i in range(len(self.events)):
+        mapLayer, sTerra = self.render_layer(i,prior =workTerr)
+        overlays.append(mapLayer)
+        displayTerr = sTerra
+
+    layer_names = []
+    displayTerr.layers= []
+
+    for i , overlay in enumerate(overlays):
+        name = f"Event_layer_{i}"
+        layer_names.append(name)
+        displayTerr.builder.adjust(name,overlay)
+    
+
+    anim = LoopingLayerAnimation(layer_names, visible_count=2, step_duration=2, fade_duration=0.1, dim_opacity=0)
+    apply_looping_animation( displayTerr.hexGrid.builder,anim)
+
+    return displayTerr
+
+        
+
+# %% ../nbs/09_terraform.ipynb 47
+@patch
+def render(self: Terraform,  wrapper: HexWrapper = None):
+    """Render terraform based on RingMenuState configuration."""
+
+    
+    if self.config.animate:
+        self.animation_loop(wrapper=wrapper)
+    else:
+
+        saveOrg = self.terrain.elevations.copy()
+        self.terrain.colorMap()
+        for i, event in enumerate(self.events):
+            self.terrain.elevations += event.adjustment
+        self.terrain.climate.configure(self.terrain)
+        climateTex = self.render_layer(0)
+        self.builder.adjust("climate",climateTex)
+        if wrapper is not None:
+            self.terrain.colorMap()
+            self.terrain.hexGrid.update(wrapper)
+            self.terrain.hexGrid.builder.layers[-1].set_opacity(0.2)
+            #self.builder.adjust("touch",tex)
+            #print(f"text {tex}")
+
+        self.terrain.elevations = saveOrg
+
+    # Add title and subtitle
+    title_elements = ""
+    config = self.config
+    if self.config.title:
+        title_text = config.title 
+        title_style = StyleCSS(
+            "map-title",
+            fill="#2c3e50",
+            font_size="24px",
+            font_weight="bold",
+            font_family="serif",
+            text_anchor="middle"
+        )
+        self.builder.add_style(title_style)
+        
+        # Position title at top center
+        title_x = self.builder.width / 2
+        title_y = 30
+        title_elements += f'<text x="{title_x}" y="{title_y}" class="map-title">{title_text}</text>\n'
+    
+    if self.config.subtitle:
+        subtitle_text = self.config.subtitle
+        subtitle_style = StyleCSS(
+            "map-subtitle",
+            fill="#7f8c8d",
+            font_size="16px",
+            font_style="italic",
+            font_family="serif",
+            text_anchor="middle"
+        )
+        self.builder.add_style(subtitle_style)
+        
+        # Position subtitle below title
+        subtitle_x = self.builder.width / 2
+        subtitle_y = 55
+        title_elements += f'<text x="{subtitle_x}" y="{subtitle_y}" class="map-subtitle">{subtitle_text}</text>\n'
+  
+    self.builder.adjust("title_l",title_elements)
+
+    return

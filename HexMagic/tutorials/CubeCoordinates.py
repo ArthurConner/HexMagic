@@ -14,8 +14,8 @@ import math
 from fastcore.basics import patch
 
 # %% ../../nbs/tutorials/math.ipynb 8
-from ..plot.math import  MapCord 
-from ..plot.Hex import Hex
+from ..primitives import  MapCord 
+from ..primitives import Hex
 
 
 # %% ../../nbs/tutorials/math.ipynb 10
@@ -45,13 +45,12 @@ canvas.adjust("main",sampleHex.svg())
 canvas.show()
 
 # %% ../../nbs/tutorials/math.ipynb 17
-grid = sampleGrid(makeLabels=True)
+grid = PrimitiveDemo().sampleGrid(makeLabels=True)
 grid.builder.show()
 
 # %% ../../nbs/tutorials/math.ipynb 19
-from ..plot.HexPosition import HexPosition 
-from ..plot.math import MapPath
-grid = sampleGrid()
+from ..primitives import HexPosition, MapPath
+grid = PrimitiveDemo().sampleGrid()
 
 #mark the treasure
 grid.hexes[grid.midpoint].label = "X"
@@ -78,7 +77,7 @@ eastDir,  2 * eastDir
 
 # %% ../../nbs/tutorials/math.ipynb 21
 def showEast(middleIndex=12):
-    grid = sampleGrid()
+    grid = PrimitiveDemo().sampleGrid()
 
     #lets have a directions layer
     arrowLayer = ""
@@ -111,7 +110,7 @@ showEast(6)
 
 # %% ../../nbs/tutorials/math.ipynb 25
 def showRing(middleIndex=12,ring=1):
-    grid = sampleGrid()
+    grid = PrimitiveDemo().sampleGrid()
     
     grid.hexes[middleIndex].label = "X"
 
@@ -187,7 +186,7 @@ hexes_in_range(3)
 # %% ../../nbs/tutorials/math.ipynb 42
 def line_demo(start_idx=20, end_idx=8):
     """Demo showing line drawing between two hexes using cube coordinates"""
-    grid = sampleGrid()
+    grid = PrimitiveDemo().sampleGrid()
     # Clear the axis arrows from sampleGrid
     grid.builder.adjust("axis", "")
     
@@ -230,7 +229,7 @@ line_demo(20, 8)
 def range_demo( max_distance=2):
     """Demo showing all hexes within a certain distance"""
     
-    grid = sampleGrid(3, fill="lightgray")
+    grid = PrimitiveDemo().sampleGrid(3, fill="lightgray")
     center_idx = grid.midpoint
 
     # Mark center
@@ -267,7 +266,7 @@ range_demo(3)
 # %% ../../nbs/tutorials/math.ipynb 44
 def rotation_demo(center_idx=12):
     """Demo showing rotation around a center hex"""
-    grid = sampleGrid()
+    grid = PrimitiveDemo().sampleGrid()
     # Clear the axis arrows from sampleGrid
     grid.builder.adjust("axis", "")
     
@@ -304,7 +303,7 @@ rotation_demo(12)
 # %% ../../nbs/tutorials/math.ipynb 45
 def demo_region_spiral_with_arrows():
     """Demo showing a region growing in a spiral pattern with arrows"""
-    grid = sampleGrid(4, fill="lightgray")
+    grid = PrimitiveDemo().sampleGrid(4, fill="lightgray")
     
     # Create gradient of colors
     colors = StyleCSS.seaborn("BuGn",37)
@@ -348,33 +347,33 @@ demo_region_spiral_with_arrows()
 from ..primitives import HexRegion
 
 # %% ../../nbs/tutorials/math.ipynb 50
-grid = sampleGrid(3, fill="lightgray")
+grid = PrimitiveDemo().sampleGrid(3, fill="lightgray")
 perimeter_style=StyleCSS("perimeter_path", fill="red",  stroke="#ba3ca3ff", stroke_width=3)
 
 region = HexRegion(set([grid.midpoint,grid.midpoint+1]), grid) 
 
 paths = region.trace_perimeter(style=perimeter_style)
 grid.builder.add_style(perimeter_style)
-overlay = "" + "".join([x.drawPloy() for x in paths])
+overlay = "" + "".join([x.drawClosed() for x in paths])
 grid.builder.adjust("regionBorder",overlay)
 grid.builder.show()
 
 # %% ../../nbs/tutorials/math.ipynb 51
-grid = sampleGrid(3, fill="lightgray")
+grid = PrimitiveDemo().sampleGrid(3, fill="lightgray")
 perimeter_style=StyleCSS("perimeter_path", fill="red",  stroke="#ba3ca3ff", stroke_width=3)
 
 region = HexRegion(set([grid.midpoint,grid.midpoint+1,grid.midpoint//2]), grid) 
 
 paths = region.trace_perimeter(style=perimeter_style)
 grid.builder.add_style(perimeter_style)
-overlay = "" + "".join([x.drawPloy() for x in paths])
+overlay = "" + "".join([x.drawClosed() for x in paths])
 grid.builder.adjust("regionBorder",overlay)
 grid.builder.show()
 
 # %% ../../nbs/tutorials/math.ipynb 53
 def demo_region_erosion():
     """Demo showing a region eroding from outside in"""
-    grid = sampleGrid(4, fill="lightgray")
+    grid = PrimitiveDemo().sampleGrid(4, fill="lightgray")
 
     # We can do this first because we are going to add layers on top of it
     grid.update()
@@ -404,7 +403,7 @@ def demo_region_erosion():
     while len(current_region.hexes) > 0 and stage < len(stages):
         boundaries = current_region.trace_perimeter(style=stages[stage])
         layerId = f"stage{stage}"
-        grid.builder.adjust(layerId, "\n".join([x.drawPloy() for x in boundaries]))
+        grid.builder.adjust(layerId, "\n".join([x.drawClosed() for x in boundaries]))
         current_region = current_region.inside()
         stage += 1
    
