@@ -29,14 +29,15 @@ from treelib import Tree
 import heapq
 from .voronoi import generate_plate_terrain
 
-Terrain.fromSeeds = generate_plate_terrain
+
 
 # %% ../nbs/05_terrainpatterns.ipynb 5
 from .styles import StyleCSS, SVGBuilder,SVGLayer, SVGPatternLoader, preview, app, StyleDemo, Generatable
-from .primitives import MapCord, MapSize, MapRect, MapPath, Hex, HexGrid, HexRegion, HexWrapper, HexPosition, PrimitiveDemo, hexBackground, windy_edge
+from .primitives import MapCord, MapSize, MapRect, MapPath, Hex, HexGrid, HexRegion, HexWrapper, HexPosition, PrimitiveDemo, hexBackground, windy_edge, unique_windy_edge
 
 # %% ../nbs/05_terrainpatterns.ipynb 6
 from .terrain import Terrain, TerraDemo
+Terrain.fromSeeds = generate_plate_terrain
 
 # %% ../nbs/05_terrainpatterns.ipynb 9
 class TerrainPatterns:

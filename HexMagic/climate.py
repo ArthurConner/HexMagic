@@ -266,7 +266,7 @@ def visualize_precipitation(self: Terrain, layer_name="precipitation"):
     patternGen = TerrainPatterns(self)
     patterns = patternGen.ballDensity(len(colors), fills=colors, prefix="precip")
     
-    # Generate overlay
+
     overlay = self.makeOverlay(precip_indices, patterns)
     self.builder.adjust(layer_name, overlay)
     
