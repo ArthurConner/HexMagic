@@ -449,8 +449,10 @@ def _middle_hex_natural_position(self:HexGrid) -> MapCord:
     
     return MapCord(x, y)
 
+
+# %% ../../nbs/plots/02c_hex.ipynb 21
 @patch
-def adjustRadius(self:HexGrid, new_radius: float):
+def adjustRadius(self:HexGrid, new_radius: float,keepMiddle=False):
     """Adjust radius while keeping middle hex at same pixel position."""
     if not self.hexes:
         self.radius = new_radius
@@ -466,16 +468,19 @@ def adjustRadius(self:HexGrid, new_radius: float):
     # Calculate where middle would be with zero offset
     natural_middle = self._middle_hex_natural_position()
     
-    # Offset to keep middle at same pixel position
-    self.offset = MapCord(
-        old_middle_pos.x - natural_middle.x + self.offset.x,
-        old_middle_pos.y - natural_middle.y + self.offset.y
-    )
+    if keepMiddle:
+        # Offset to keep middle at same pixel position
+        self.offset = MapCord(
+            old_middle_pos.x - natural_middle.x + self.offset.x,
+            old_middle_pos.y - natural_middle.y + self.offset.y
+        )
+    else:
+        self.offset = MapCord(-self.radius,-self.radius)
     
     # Rebuild hexes with new radius and offset
     self._build_hexes()
 
-# %% ../../nbs/plots/02c_hex.ipynb 22
+# %% ../../nbs/plots/02c_hex.ipynb 23
 @patch
 def index_to_hexposition(self: HexGrid, index: int, origin_index: int = None) -> HexPosition:
     """Convert grid index to HexPosition relative to origin_index."""
@@ -524,11 +529,11 @@ def hexposition_to_index(self: HexGrid, hexpos: HexPosition, origin_index:int = 
     return self.row_col_to_index(row, col)
 
 
-# %% ../../nbs/plots/02c_hex.ipynb 23
+# %% ../../nbs/plots/02c_hex.ipynb 24
 HexGrid.i2hp = index_to_hexposition
 HexGrid.hp2i = hexposition_to_index
 
-# %% ../../nbs/plots/02c_hex.ipynb 24
+# %% ../../nbs/plots/02c_hex.ipynb 25
 @patch
 def index_to_row_col(self: HexGrid, index: int) -> tuple[int, int]:
     """Convert flat grid index to (row, col)."""
@@ -543,7 +548,7 @@ def row_col_to_index(self: HexGrid, row: int, col: int) -> int:
         return -1
     return row * self.nCols + col
 
-# %% ../../nbs/plots/02c_hex.ipynb 25
+# %% ../../nbs/plots/02c_hex.ipynb 26
 @patch
 def neighborsOf(self: HexGrid, index: int,ring=1) -> list[int]:
     """Get all valid neighbor indices using HexPosition."""
@@ -552,7 +557,7 @@ def neighborsOf(self: HexGrid, index: int,ring=1) -> list[int]:
     return [i for i in neighbor_indices if i >= 0]  # Filter out-of-bounds
 
 
-# %% ../../nbs/plots/02c_hex.ipynb 27
+# %% ../../nbs/plots/02c_hex.ipynb 28
 @patch
 def direction_index(self: HexPosition) -> int | None:
     """Return direction index (0-5) if this is a unit direction, else None."""
@@ -573,9 +578,9 @@ def commonEdge(self: HexGrid, i: int, j: int) -> tuple[int, int, int, int] | Non
 
 
 
-# %% ../../nbs/plots/02c_hex.ipynb 29
+# %% ../../nbs/plots/02c_hex.ipynb 31
 @patch
-def update(self:HexGrid,wrapper:HexWrapper = HexWrapper(),layer_name="hexes"):
+def styledHexes(self:HexGrid,wrapper:HexWrapper = HexWrapper()):
 
         testBody = ""
         hexWrap = wrapper.callBack
@@ -594,11 +599,17 @@ def update(self:HexGrid,wrapper:HexWrapper = HexWrapper(),layer_name="hexes"):
                 
                 testBody += f">{hex.label}</text>\n"
         
+        return testBody
+
+@patch
+def update(self:HexGrid,wrapper:HexWrapper = HexWrapper(),layer_name="hexes"):
+
+        testBody = self.styledHexes(wrapper=wrapper)
         self.builder.adjust(layer_name,testBody)
 
 
 
-# %% ../../nbs/plots/02c_hex.ipynb 30
+# %% ../../nbs/plots/02c_hex.ipynb 32
 @patch
 def sampleGrid(self:PrimitiveDemo,hexDim = 2, fill = "white",makeLabels = False):
 
@@ -622,7 +633,7 @@ def sampleGrid(self:PrimitiveDemo,hexDim = 2, fill = "white",makeLabels = False)
     
 
 
-# %% ../../nbs/plots/02c_hex.ipynb 32
+# %% ../../nbs/plots/02c_hex.ipynb 34
 @patch
 def arrow(self: HexGrid, start:int, end:int, style = StyleCSS("arrow", stroke="black",stroke_width=1)) -> str:
     self.builder.add_style(style)
@@ -656,7 +667,7 @@ def arrow(self: HexGrid, start:int, end:int, style = StyleCSS("arrow", stroke="b
     path = MapPath(points, style)
     return path.with_arrowhead()
 
-# %% ../../nbs/plots/02c_hex.ipynb 35
+# %% ../../nbs/plots/02c_hex.ipynb 37
 class LinearGradient(Generatable):
 
     def __init__(self,grid:HexGrid,startHex:int,endHex:int,startColor:str,endColor:str,):
@@ -704,7 +715,7 @@ class LinearGradient(Generatable):
         svg += '</linearGradient>\n'
         return svg
 
-# %% ../../nbs/plots/02c_hex.ipynb 36
+# %% ../../nbs/plots/02c_hex.ipynb 38
 @patch
 def radial_gradient(self: HexGrid, lookup: dict= {5:"#007fff",6:"#07ff66ff",10:"#ff005dff]"} ):
     """Use overlapping radial gradients for smoother blending."""
@@ -728,7 +739,7 @@ def radial_gradient(self: HexGrid, lookup: dict= {5:"#007fff",6:"#07ff66ff",10:"
     
     return testBody
 
-# %% ../../nbs/plots/02c_hex.ipynb 37
+# %% ../../nbs/plots/02c_hex.ipynb 39
 @patch
 def gradient(self:HexGrid,lookup = {5:"#007fff",6:"#07ff66ff",10:"#ff005dff]"} ):
     testBody = ""

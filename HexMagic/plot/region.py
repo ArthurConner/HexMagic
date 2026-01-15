@@ -444,25 +444,35 @@ def trace_perimeter_cached(self: HexRegion, borders: dict, f=None,
 
 # %% ../../nbs/plots/02d_HexRegion.ipynb 33
 @patch
+def __lt__(self: MapPath, other: MapPath) -> bool:
+    """Less than comparison: first by x, then by y."""
+    return len(self.points) < len(other.points)
+
+# %% ../../nbs/plots/02d_HexRegion.ipynb 34
+@patch
 def styleLayer(self: HexGrid, f=None,smooth=False):
     """Generate style layer with shared borders between regions."""
     retLayer = ""
     regions = self.styleRegions()
     borders = {}  # Shared cache across all regions
+    allPaths = []
     
     for styleName, region in regions.items():
         style = self.builder.styles[styleName]
-        for path in region.trace_perimeter_cached(borders, f, style):
-            if smooth:
-                #path = path.smooth()
-                retLayer += path.svg()
-            else:
-                retLayer += path.drawClosed()
+        allPaths.extend( region.trace_perimeter_cached(borders, f, style))
+            
+    allPaths = reversed(sorted(allPaths))
+    for path in allPaths:
+        if smooth:
+            #path = path.smooth()
+            retLayer += path.svg()
+        else:
+            retLayer += path.drawClosed()
     
     return retLayer
 
 
-# %% ../../nbs/plots/02d_HexRegion.ipynb 35
+# %% ../../nbs/plots/02d_HexRegion.ipynb 36
 def windy_edge(iterations=2, offset_factor=0.15, seed=None):
     """Factory for windy edge transform function."""
     def transform(p1: MapCord, p2: MapCord) -> list[MapCord]:
@@ -487,7 +497,7 @@ def variable_windy_edge(iterations=2, offset_min=0.05, offset_max=0.2, seed=None
     return transform
 
 
-# %% ../../nbs/plots/02d_HexRegion.ipynb 36
+# %% ../../nbs/plots/02d_HexRegion.ipynb 37
 def unique_windy_edge(iterations=2, offset_min=0.05, offset_max=0.2):
     def transform(p1: MapCord, p2: MapCord) -> list[MapCord]:
         edge_seed = hash((round(p1.x,1), round(p1.y,1), round(p2.x,1), round(p2.y,1))) % (2**31)

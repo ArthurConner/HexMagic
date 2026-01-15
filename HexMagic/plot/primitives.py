@@ -84,6 +84,14 @@ class MapCord:
         return MapCord (mid.x + Ux * distance, mid.y + Uy * distance)
 
 # %% ../../nbs/plots/02a_primitives.ipynb 5
+@patch
+def __lt__(self: MapCord, other: MapCord) -> bool:
+    """Less than comparison: first by x, then by y."""
+    if self.x != other.x:
+        return self.x < other.x
+    return self.y < other.y
+
+# %% ../../nbs/plots/02a_primitives.ipynb 6
 @dataclass(frozen=True)
 class MapSize:
     width: float
@@ -98,7 +106,7 @@ class MapSize:
         vals = s.split('^')
         return MapSize(width=float(vals[0]), height=float(vals[1]))
 
-# %% ../../nbs/plots/02a_primitives.ipynb 6
+# %% ../../nbs/plots/02a_primitives.ipynb 7
 @dataclass(frozen=True)
 class MapRect:
     origin: MapCord
@@ -125,14 +133,14 @@ class MapRect:
         return  MapRect(origin=MapCord.from_csv(vals[0]),dimensons=MapSize.from_csv(vals[1]))
 
 
-# %% ../../nbs/plots/02a_primitives.ipynb 7
+# %% ../../nbs/plots/02a_primitives.ipynb 8
 def MakeCord(x):
     return MapCord(x[0],x[1])
     
 def MakeSize(x):
     return MapSize(x[0],x[1])
 
-# %% ../../nbs/plots/02a_primitives.ipynb 10
+# %% ../../nbs/plots/02a_primitives.ipynb 11
 class MapPath:
     def __init__(self,points,style = StyleCSS("blank")):
 
@@ -220,7 +228,7 @@ class MapPath:
         
         return path_data
 
-# %% ../../nbs/plots/02a_primitives.ipynb 12
+# %% ../../nbs/plots/02a_primitives.ipynb 13
 @patch
 def length(self: MapPath) -> float:
     """Calculate total path length"""
@@ -234,7 +242,7 @@ def reverse(self: MapPath) -> MapPath:
     """Return reversed path"""
     return MapPath(list(reversed(self.points)), self.style)
 
-# %% ../../nbs/plots/02a_primitives.ipynb 13
+# %% ../../nbs/plots/02a_primitives.ipynb 14
 @patch
 def subsample(self: MapPath, num_points: int) -> MapPath:
     """Resample path to have specific number of points"""
@@ -263,7 +271,7 @@ def subsample(self: MapPath, num_points: int) -> MapPath:
     new_points.append(self.points[-1])
     return MapPath(new_points[:num_points], self.style)
 
-# %% ../../nbs/plots/02a_primitives.ipynb 14
+# %% ../../nbs/plots/02a_primitives.ipynb 15
 @patch
 def closed(self: MapPath) -> MapPath:
     """Return closed version of path (adds first point to end if not already closed)"""
@@ -271,7 +279,7 @@ def closed(self: MapPath) -> MapPath:
         return self
     return MapPath(self.points + [self.points[0]], self.style)
 
-# %% ../../nbs/plots/02a_primitives.ipynb 15
+# %% ../../nbs/plots/02a_primitives.ipynb 16
 @patch
 def smooth(self: MapPath, iterations: int = 1) -> MapPath:
     """Smooth path using average of neighbors"""
@@ -290,7 +298,7 @@ def smooth(self: MapPath, iterations: int = 1) -> MapPath:
     
     return MapPath(points, self.style)
 
-# %% ../../nbs/plots/02a_primitives.ipynb 16
+# %% ../../nbs/plots/02a_primitives.ipynb 17
 @patch
 def add_noise(self: MapPath, amount: float, seed: int = None) -> MapPath:
     """Add random noise to path for organic appearance"""
@@ -305,7 +313,7 @@ def add_noise(self: MapPath, amount: float, seed: int = None) -> MapPath:
     
     return MapPath(new_points, self.style)
 
-# %% ../../nbs/plots/02a_primitives.ipynb 17
+# %% ../../nbs/plots/02a_primitives.ipynb 18
 @patch
 def make_windy(self: MapPath, iterations: int = 1, offset_factor: float = 0.15, 
                seed: int = None, vary_direction: bool = True) -> MapPath:
@@ -380,7 +388,7 @@ def make_windy(self: MapPath, iterations: int = 1, offset_factor: float = 0.15,
     
     return MapPath(points, self.style)
 
-# %% ../../nbs/plots/02a_primitives.ipynb 18
+# %% ../../nbs/plots/02a_primitives.ipynb 19
 @patch
 def make_windy_variable(self: MapPath, iterations: int = 1, 
                          offset_min: float = 0.05, offset_max: float = 0.25,
@@ -432,7 +440,7 @@ def make_windy_variable(self: MapPath, iterations: int = 1,
     
     return MapPath(points, self.style)
 
-# %% ../../nbs/plots/02a_primitives.ipynb 19
+# %% ../../nbs/plots/02a_primitives.ipynb 20
 @patch
 def drawClosed(self: MapPath, adds: str = "") -> str:
     """Draw closed polygon"""
@@ -446,7 +454,7 @@ def drawClosed(self: MapPath, adds: str = "") -> str:
     path_data += f"\" class=\"{self.style.name}\" {adds} />\n"
     return path_data
 
-# %% ../../nbs/plots/02a_primitives.ipynb 20
+# %% ../../nbs/plots/02a_primitives.ipynb 21
 @patch
 def bounds(self: MapPath) -> MapRect:
     """Get bounding rectangle of path"""
@@ -463,7 +471,7 @@ def bounds(self: MapPath) -> MapRect:
         MapSize(max_x - min_x, max_y - min_y)
     )
 
-# %% ../../nbs/plots/02a_primitives.ipynb 21
+# %% ../../nbs/plots/02a_primitives.ipynb 22
 @patch
 def with_arrowhead(self: MapPath, arrow_size: float = 10, arrow_angle: float = 25, shouldFill = True) -> str:
     """Draw path with an arrowhead at the end.
@@ -518,16 +526,14 @@ def with_arrowhead(self: MapPath, arrow_size: float = 10, arrow_angle: float = 2
     
     return result
 
-# %% ../../nbs/plots/02a_primitives.ipynb 22
-@patch
-def __lt__(self: MapCord, other: MapCord) -> bool:
-    """Less than comparison: first by x, then by y."""
-    if self.x != other.x:
-        return self.x < other.x
-    return self.y < other.y
-
-
 # %% ../../nbs/plots/02a_primitives.ipynb 23
+@patch
+def __lt__(self: MapPath, other: MapPath) -> bool:
+    """Less than comparison: first by x, then by y."""
+    return len(self.points) < len(other.points)
+
+
+# %% ../../nbs/plots/02a_primitives.ipynb 24
 @patch
 def demoLine(self:PrimitiveDemo):
  

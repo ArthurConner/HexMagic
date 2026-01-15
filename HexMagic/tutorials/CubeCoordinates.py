@@ -345,9 +345,9 @@ def demo_region_spiral_with_arrows():
 demo_region_spiral_with_arrows()
 
 # %% ../../nbs/tutorials/math.ipynb 48
-from ..region import HexRegion
+from ..primitives import HexRegion
 
-# %% ../../nbs/tutorials/math.ipynb 51
+# %% ../../nbs/tutorials/math.ipynb 50
 grid = sampleGrid(3, fill="lightgray")
 perimeter_style=StyleCSS("perimeter_path", fill="red",  stroke="#ba3ca3ff", stroke_width=3)
 
@@ -359,7 +359,7 @@ overlay = "" + "".join([x.drawPloy() for x in paths])
 grid.builder.adjust("regionBorder",overlay)
 grid.builder.show()
 
-# %% ../../nbs/tutorials/math.ipynb 52
+# %% ../../nbs/tutorials/math.ipynb 51
 grid = sampleGrid(3, fill="lightgray")
 perimeter_style=StyleCSS("perimeter_path", fill="red",  stroke="#ba3ca3ff", stroke_width=3)
 
@@ -371,7 +371,7 @@ overlay = "" + "".join([x.drawPloy() for x in paths])
 grid.builder.adjust("regionBorder",overlay)
 grid.builder.show()
 
-# %% ../../nbs/tutorials/math.ipynb 54
+# %% ../../nbs/tutorials/math.ipynb 53
 def demo_region_erosion():
     """Demo showing a region eroding from outside in"""
     grid = sampleGrid(4, fill="lightgray")
@@ -412,7 +412,7 @@ def demo_region_erosion():
 
 demo_region_erosion().show()
 
-# %% ../../nbs/tutorials/math.ipynb 62
+# %% ../../nbs/tutorials/math.ipynb 61
 def demo_voronoi_growth_simple():
     """Simpler Voronoi growth using HexRegion list"""
     grid = sampleGrid(5, fill="lightgray")

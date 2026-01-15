@@ -143,7 +143,7 @@ class MapRenderConfig:
     icon:str = ""
     background_color: str = "#81b1e1ff"
     climate: ClimateRenderConfig = None
-    shrink:int = 1  # was 'skrink'
+    scale:int = 10 # out of 10
     compass:str = None
 
 # %% ../nbs/09_terraform.ipynb 8
@@ -177,6 +177,7 @@ class Terraform:
             self.config = MapRenderConfig(climate=rCofig)
         else:
             self.config = config
+        
 
     @property
     def grid(self):
@@ -303,7 +304,7 @@ def encode(self: Terraform) -> str:
     
     return ret
 
-# %% ../nbs/09_terraform.ipynb 14
+# %% ../nbs/09_terraform.ipynb 17
 @patch
 def add_event(self:Terraform, kind: str,  adjustment: np.ndarray,name: str=None, properties: dict={}):
     order_id = len(self.events)  # or use actual timestamp
@@ -313,64 +314,39 @@ def add_event(self:Terraform, kind: str,  adjustment: np.ndarray,name: str=None,
     event = SeismicEvent(kind, name, order_id, properties, adjustment,caller_name)
     self.events.append(event)
 
-# %% ../nbs/09_terraform.ipynb 15
-@patch
-def flatten(self: Terraform):
-    """Flatten all events into a single terrain state."""
-    # Start with initial terrain
-    adjustment = np.zeros(len(self.terrain.elevations))
-    
-    # Apply all adjustments
-    for event in self.events:
-        adjustment += event.adjustment
-    
-    self.events = [SeismicEvent("flatten", "flatten", 0, {}, adjustment, "flatten()")]
-    
-    
-    return self.terrain
-
-# %% ../nbs/09_terraform.ipynb 16
-@patch
-def final(self: Terraform):
-    """Flatten all events into a single terrain state."""
-
-    for i, event in enumerate(self.events):
-        self.terrain.elevations += event.adjustment
-        self.terrain.colorMap()
-        self.grid.update()
-        
-        hex_layer_body = self.builder.layers[0].body
-        layer_name = f"event_{i}_{event.name}"
-        self.builder.adjust(layer_name, hex_layer_body)
-
-    self.builder.adjust("root","")
-    return self.builder
-
 # %% ../nbs/09_terraform.ipynb 19
 @patch
-def starterTerrain(demo:TerraDemo,debug = False):
+def starterWorld(demo:TerraDemo,createNew = False, debug = False):
     """Create a tropical island with three volcanoes and downsampled rivers."""
     
     # 1. Create blank ocean world with tropical preset
     bounds = MapRect(MapCord(0, 0), MapSize(800, 800))
-    terrain , plates = TerrainFactory.create_ocean_world(
-        bounds=bounds,
-        preset='tropical',
-        radius=15,
-        lon_span=5.0,
-        num_plates=16,
-        ocean_fraction=0.6,
-        debug = debug
-    )
+    if createNew:
+        terrain , plates = TerrainFactory.create_ocean_world(
+            bounds=bounds,
+            preset='tropical',
+            radius=15,
+            lon_span=5.0,
+            num_plates=16,
+            ocean_fraction=0.6,
+            debug = debug
+        )
+    else:
+        terrain = TerraDemo().bayAreaMap()
 
-    mountains = terrain.find_peaks(15,4)
+    terra = Terraform(terrain)
+
+    mountains = terrain.find_peaks(7,0,exclusion_radius=9)
     for i , epicenter in enumerate(mountains):
-        terrain.elevations += terrain.volcano(center=epicenter, adjusted=20+ ((i+1)*30), num_rings=5)
+        terra.add_event("volcano",
+        adjustment = terrain.volcano(center=epicenter, adjusted=200+ ((i+1)*30), num_rings=6),
+        name = f"starter_{epicenter}"
+        )
 
     if debug:
         print("\n=== COMPUTING CLIMATE ===")
     terrain.climate.configure(terrain,debug=debug)
-    return Terraform(terrain)
+    return  terra
     
     
 
@@ -378,15 +354,45 @@ def starterTerrain(demo:TerraDemo,debug = False):
 
 # %% ../nbs/09_terraform.ipynb 21
 @patch
+def terrainFromEvents(self:Terraform,index=None,prior=None,debug=True):
+    if index is None:
+        index = len(self.events) -1
+
+    if index < 0 or index >= len(self.events):
+        if debug:
+            print(f"no events for index {index}")
+        return self.terrain.clone()
+
+    if prior is None:
+        prior = self.terrain.clone()
+
+        for i in range(index):
+            event = self.events[i]
+            if debug:
+                print(f"appling {i} {event.name} {np.count_nonzero(event.adjustment)}")
+            
+            prior.elevations += event.adjustment
+    else:
+        event = self.events[i]
+        if debug:
+                print(f"now on {index} {event.name}")
+        prior.elevations += event.adjustment
+    prior.hexGrid.layers = []
+
+    return prior
+
+
+# %% ../nbs/09_terraform.ipynb 30
+@patch
 def generate_legend(self: Terraform, labels:[LegendLabel], config: ClimateRenderConfig):
     return ""
 
-# %% ../nbs/09_terraform.ipynb 22
+# %% ../nbs/09_terraform.ipynb 31
 @patch
 def generate_climate_legend(self: Terrain , config: ClimateRenderConfig)->[LegendLabel]:
     return []
 
-# %% ../nbs/09_terraform.ipynb 23
+# %% ../nbs/09_terraform.ipynb 32
 @patch
 def render_climate_zones(self: Terrain, config: ClimateRenderConfig) -> tuple[str, [LegendLabel]]:
     """
@@ -421,7 +427,7 @@ def render_climate_zones(self: Terrain, config: ClimateRenderConfig) -> tuple[st
     
     return layer_svg, legend
 
-# %% ../nbs/09_terraform.ipynb 25
+# %% ../nbs/09_terraform.ipynb 34
 @patch
 def render_hydration(self: Terrain, config: ClimateRenderConfig) -> tuple[str, list[LegendLabel]]:
     """
@@ -453,7 +459,7 @@ def render_hydration(self: Terrain, config: ClimateRenderConfig) -> tuple[str, l
     
     return layer_svg, legend
 
-# %% ../nbs/09_terraform.ipynb 27
+# %% ../nbs/09_terraform.ipynb 36
 @patch
 def render_weather(self: Terrain, config: ClimateRenderConfig) -> tuple[str, list[LegendLabel]]:
     """
@@ -478,7 +484,7 @@ def render_weather(self: Terrain, config: ClimateRenderConfig) -> tuple[str, lis
     
     return layer_svg, legend
 
-# %% ../nbs/09_terraform.ipynb 29
+# %% ../nbs/09_terraform.ipynb 38
 @patch
 def render_climate(self: Terraform,terrain, event_index: int) -> tuple[str, str]:
     """Render climate-based visualization including rivers."""

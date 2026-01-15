@@ -16,6 +16,7 @@ from collections import namedtuple
 from dataclasses import dataclass,  field, asdict
 from typing import List
 from enum import Enum
+import copy
 
 #Jeremy
 from dialoghelper import * 
@@ -342,6 +343,46 @@ class Terrain:
 
 # %% ../nbs/03_terrain.ipynb 16
 @patch
+def clone(self: Terrain) -> 'Terrain':
+    """Create a deep copy of this terrain."""
+   
+    
+    # Create new terrain with same basic params
+    bounds = MapRect(MapCord(0, 0), MapSize(
+        self.hexGrid.nRows * self.hexGrid.radius,
+        self.hexGrid.nCols * self.hexGrid.radius
+    ))
+    
+    new_terrain = Terrain(
+        bounds=bounds,
+        path=self.path,
+        radius=self.hexGrid.radius,
+        fields=list(self.fields.keys()),
+        colorLevels=self.colorLevels,  # These are shared (immutable styles)
+        seaLevel=self.seaLevel,
+        elevationDelta=self.elevationDelta,
+        geo=copy.deepcopy(self.geo) if self.geo else None,
+        climate=copy.deepcopy(self.climate) if self.climate else None
+    )
+    
+    # Match grid dimensions
+    new_terrain.hexGrid.nRows = self.hexGrid.nRows
+    new_terrain.hexGrid.nCols = self.hexGrid.nCols
+    new_terrain.hexGrid.adjustRadius(self.hexGrid.radius)
+    
+    # Deep copy numpy arrays
+    new_terrain.elevations = self.elevations.copy()
+    new_terrain.fields = {k: v.copy() for k, v in self.fields.items()}
+    
+    # Copy hex styles
+    for i, hex in enumerate(self.hexGrid.hexes):
+        new_terrain.hexGrid.hexes[i].style = hex.style
+    
+    return new_terrain
+
+
+# %% ../nbs/03_terrain.ipynb 17
+@patch
 def elevationLevel(self: Terrain, idx):
     """Return the elevation level (integer) for a hex by dividing by elevationDelta."""
     if self.elevations[idx] > 0:
@@ -365,7 +406,7 @@ def ring(self:Terrain,center,radius=1):
     ring_indices = [self.hexGrid.hexposition_to_index(hp, center) for hp in ring_hexpositions]
     return [i for i in ring_indices if i >= 0]  # Filter out-of-bounds
 
-# %% ../nbs/03_terrain.ipynb 17
+# %% ../nbs/03_terrain.ipynb 18
 @patch
 def sanFran(self:TerraDemo):
     with open("data/templates/san_francisco.txt", "r") as f:
@@ -378,7 +419,7 @@ def agincourt(self:TerraDemo):
         myGrid = Terrain.decode(f.read())
     return myGrid
 
-# %% ../nbs/03_terrain.ipynb 20
+# %% ../nbs/03_terrain.ipynb 21
 @patch
 def demoSanFran(self:TerraDemo):
     sampleMap = self.agincourt()
@@ -397,7 +438,7 @@ def demoSanFran(self:TerraDemo):
 
 
 
-# %% ../nbs/03_terrain.ipynb 22
+# %% ../nbs/03_terrain.ipynb 23
 @patch
 def elevation_borders(self: Terrain)->str:
     """Draw hex borders with stroke color/width based on elevation."""
@@ -437,7 +478,7 @@ def elevation_borders(self: Terrain)->str:
 
     return border_svg
 
-# %% ../nbs/03_terrain.ipynb 23
+# %% ../nbs/03_terrain.ipynb 24
 @patch
 def add_elevation_borders(self: Terrain, layer_name="elevation_borders"):
     """Draw hex borders with stroke color/width based on elevation."""
@@ -447,7 +488,7 @@ def add_elevation_borders(self: Terrain, layer_name="elevation_borders"):
     self.hexGrid.builder.adjust(layer_name, border_svg)
     return self
 
-# %% ../nbs/03_terrain.ipynb 26
+# %% ../nbs/03_terrain.ipynb 27
 @patch
 def tiny(self:TerraDemo):
     mySize = MapSize(120,120)
@@ -469,7 +510,7 @@ def tiny(self:TerraDemo):
     sampleMap.elevations += adjustments
     return sampleMap
 
-# %% ../nbs/03_terrain.ipynb 27
+# %% ../nbs/03_terrain.ipynb 28
 @patch
 def demoTiny(self:TerraDemo):
     
@@ -496,7 +537,7 @@ def demoTiny(self:TerraDemo):
 
 
 
-# %% ../nbs/03_terrain.ipynb 31
+# %% ../nbs/03_terrain.ipynb 32
 @patch
 def colorRegions(self:Terrain,regions:[HexRegion],fills:[str])->str:
     testBody = ""
@@ -522,7 +563,7 @@ def colorRegions(self:Terrain,regions:[HexRegion],fills:[str])->str:
 
     return testBody
 
-# %% ../nbs/03_terrain.ipynb 32
+# %% ../nbs/03_terrain.ipynb 33
 @patch
 def styleRegion(self:Terrain,region:HexRegion,style:StyleCSS)->str:
     testBody = ""
@@ -540,7 +581,7 @@ def styleRegion(self:Terrain,region:HexRegion,style:StyleCSS)->str:
 
     return testBody
 
-# %% ../nbs/03_terrain.ipynb 35
+# %% ../nbs/03_terrain.ipynb 36
 @patch
 def cone(self:Terrain, center, adjusted, num_rings, variability=0.0):
     """Create a volcano-like elevation pattern.
@@ -591,7 +632,7 @@ def cone(self:Terrain, center, adjusted, num_rings, variability=0.0):
     return adjustments
 
 
-# %% ../nbs/03_terrain.ipynb 36
+# %% ../nbs/03_terrain.ipynb 37
 @patch
 def volcano(self:Terrain, center, adjusted, num_rings, variability=0.0, initial_threshold=0.8):
     """Create a volcano-like elevation pattern with threshold-based coastlines.
@@ -650,7 +691,7 @@ def volcano(self:Terrain, center, adjusted, num_rings, variability=0.0, initial_
     return adjustments
 
 
-# %% ../nbs/03_terrain.ipynb 37
+# %% ../nbs/03_terrain.ipynb 38
 @patch
 def demoVolcano(self:TerraDemo):
 
@@ -665,7 +706,7 @@ def demoVolcano(self:TerraDemo):
     return sampleMap.hexGrid.builder.show()
 
 
-# %% ../nbs/03_terrain.ipynb 39
+# %% ../nbs/03_terrain.ipynb 40
 @patch
 def find_peaks(self:Terrain, k, min_height, exclusion_radius=1):
     """Find k largest peaks above min_height with exclusion zones.
@@ -708,7 +749,7 @@ def find_peaks(self:Terrain, k, min_height, exclusion_radius=1):
     return peaks
 
 
-# %% ../nbs/03_terrain.ipynb 40
+# %% ../nbs/03_terrain.ipynb 41
 @patch
 def demoPeakSan(self:TerraDemo):
     sampleMap = self.sanFran()
@@ -725,7 +766,7 @@ def demoPeakSan(self:TerraDemo):
 
 
 
-# %% ../nbs/03_terrain.ipynb 42
+# %% ../nbs/03_terrain.ipynb 43
 @patch
 def lowest_neighbor(self:Terrain, idx):
     """Find the lowest neighbor of idx, or None if idx is a local minimum."""
@@ -989,7 +1030,7 @@ def scaled(self: Terrain, scale: float):
 
     
 
-# %% ../nbs/03_terrain.ipynb 60
+# %% ../nbs/03_terrain.ipynb 58
 @patch
 def growFromHex(self: Terrain, center_idx, origin=0):
     """Grow a region from center hex at same elevation level."""
@@ -1017,7 +1058,7 @@ def growFromHex(self: Terrain, center_idx, origin=0):
     
     return HexRegion(hexes=hex_set, hex_grid=self.hexGrid)
 
-# %% ../nbs/03_terrain.ipynb 61
+# %% ../nbs/03_terrain.ipynb 59
 @patch
 def find_region_at_level(self:Terrain, center_idx):
     """Find all connected hexes within tolerance of center_idx's elevation.
@@ -1035,43 +1076,7 @@ def find_region_at_level(self:Terrain, center_idx):
     return set(levels)
 
 
-# %% ../nbs/03_terrain.ipynb 62
-@patch
-def demoRegion(self:TerraDemo):
-    """Practice building up coord."""
-    
-    sampleMap = self.sanFran()
-    peaks = sampleMap.find_peaks(7,0)
-    start =  0 # peaks[0]
-    region = sampleMap.growFromHex(start)
-    
-
-    # Show the base terrain
-    sampleMap.colorMap()
-    sampleMap.hexGrid.update()
-    #sampleMap.dot(region.perimeter())
-    #sampleMap.fillRegion(region)
-
-    pathstyle=StyleCSS("boundaryPath",fill="none",stroke="#ba3ca3ff",stroke_width=3)
-    paths, gaps = region.trace_perimeter(style=pathstyle)
-    sampleMap.builder.add_style(pathstyle)
-    
-    
-    pathLayer = ""
-    for path in paths:
-        cl = path.closed()
-        w = cl.make_windy(iterations=2, offset_factor=0.2)
-        pathLayer += w.svg()
-        
-    sampleMap.builder.adjust("perimeter_path", pathLayer)
-    
-    #sampleMap.builder.adjust("root","")
-    #print(sampleMap.builder.xml())
-    
-    return sampleMap.hexGrid.builder.show()
-
-
-# %% ../nbs/03_terrain.ipynb 63
+# %% ../nbs/03_terrain.ipynb 60
 @patch
 def demoRegion(self:TerraDemo):
     """Practice building up coord."""
@@ -1115,7 +1120,7 @@ def demoRegion(self:TerraDemo):
  
 
 
-# %% ../nbs/03_terrain.ipynb 65
+# %% ../nbs/03_terrain.ipynb 62
 @patch
 def coastline_svg(self:Terrain,pathstyle=StyleCSS("coastPath",fill="none",stroke="#917910ff",stroke_width=3)):
     """Add a coast to the terrain."""
@@ -1141,7 +1146,7 @@ def coastline_svg(self:Terrain,pathstyle=StyleCSS("coastPath",fill="none",stroke
         
     return pathLayer
 
-# %% ../nbs/03_terrain.ipynb 66
+# %% ../nbs/03_terrain.ipynb 63
 @patch
 def addCoast(self:Terrain,pathstyle=StyleCSS("coastPath",fill="none",stroke="#917910ff",stroke_width=3)):
     """Add a coast to the terrain."""
@@ -1156,7 +1161,7 @@ def addCoast(self:Terrain,pathstyle=StyleCSS("coastPath",fill="none",stroke="#91
 
     
 
-# %% ../nbs/03_terrain.ipynb 67
+# %% ../nbs/03_terrain.ipynb 64
 @patch
 def demoCoast(self:TerraDemo):
     """Practice building up coord."""
