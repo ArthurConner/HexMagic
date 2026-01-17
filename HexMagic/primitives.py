@@ -25,6 +25,4 @@ import httpx
 from .plot.primitives import PrimitiveDemo, MapCord, MapSize, MapRect, MakeCord, MakeSize, MapPath
 from .plot.hex import Hex, hexSVG, hexBackground, HexGrid, HexWrapper, LinearGradient
 from .plot.cube import HexPosition, GosperCurve
-
-# %% ../nbs/02_primitives.ipynb 8
 from .plot.region import HexRegion, windy_edge, variable_windy_edge,unique_windy_edge

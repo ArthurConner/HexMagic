@@ -26,7 +26,10 @@ from .primitives import  MapCord , HexPosition,  MapSize, MapRect, MapCord, MapP
 # %% ../nbs/04_voronoi.ipynb 7
 from .styles import StyleCSS,  SVGBuilder
 
-# %% ../nbs/04_voronoi.ipynb 18
+# %% ../nbs/04_voronoi.ipynb 8
+from sklearn.cluster import KMeans
+
+# %% ../nbs/04_voronoi.ipynb 19
 def voronoi_seeds(rows, cols, num_seeds, elimination_rate=0.3, max_offset=3, s=None,debug=False):
     """
     Generate evenly-spaced seeds with randomization for Voronoi diagram.
@@ -90,7 +93,7 @@ def voronoi_seeds(rows, cols, num_seeds, elimination_rate=0.3, max_offset=3, s=N
 
 
 
-# %% ../nbs/04_voronoi.ipynb 20
+# %% ../nbs/04_voronoi.ipynb 21
 class PlateKind(Enum):
     oceanic = 0        # Ocean/sea
     continental = 1    # Lakes/rivers
@@ -257,11 +260,95 @@ def calculate_distances_from_ocean(plates, grid):
    
 
 
-# %% ../nbs/04_voronoi.ipynb 33
+# %% ../nbs/04_voronoi.ipynb 32
+def _merge_plates(voronoi_plates: List['Plate'], 
+                 hex_grid: 'HexGrid',
+                 target_count: int = 3,
+                 debug: bool = False) -> List['Plate']:
+    """Merge small voronoi plates into larger tectonic plates using k-means."""
+    
+    # Separate by kind
+    oceanic = [p for p in voronoi_plates if p.kind == PlateKind.oceanic]
+    continental = [p for p in voronoi_plates if p.kind == PlateKind.continental]
+    
+    if debug:
+        print(f"\n=== MERGING PLATES ===")
+        print(f"Input: {len(oceanic)} oceanic + {len(continental)} continental = {len(voronoi_plates)} total")
+        print(f"Target: {target_count} plates")
+    
+    # Decide split between oceanic and continental
+    total = len(voronoi_plates)
+    n_oceanic = max(1, round(target_count * len(oceanic) / total))
+    n_continental = max(1, target_count - n_oceanic)
+    
+    if debug:
+        print(f"Splitting: {n_oceanic} oceanic + {n_continental} continental")
+    
+    merged = []
+    
+    def cluster_plates(plates, k):
+        if len(plates) <= k:
+            return [[p] for p in plates]
+        
+        # Get centroids as (x, y) coordinates
+        centroids = []
+        for plate in plates:
+            center_idx = plate.region.centroid_hex()
+            center_hex = hex_grid.hexes[center_idx]
+            centroids.append((center_hex.center.x, center_hex.center.y))
+        
+        centroids = np.array(centroids)
+        
+        kmeans = KMeans(n_clusters=k, random_state=42, n_init=10)
+        labels = kmeans.fit_predict(centroids)
+        
+        clusters = defaultdict(list)
+        for plate, label in zip(plates, labels):
+            clusters[label].append(plate)
+        
+        return list(clusters.values())
+    
+    # Cluster and merge oceanic plates
+    if oceanic:
+        oceanic_clusters = cluster_plates(oceanic, n_oceanic)
+        for cluster in oceanic_clusters:
+            all_hexes = set()
+            for plate in cluster:
+                all_hexes.update(plate.hexes)
+            
+            region = HexRegion(hexes=all_hexes, hex_grid=hex_grid)
+            merged_plate = Plate(region, symbol="🌊")
+            merged_plate.kind = PlateKind.oceanic
+            merged.append(merged_plate)
+    
+    # Cluster and merge continental plates
+    if continental:
+        continental_clusters = cluster_plates(continental, n_continental)
+        for cluster in continental_clusters:
+            all_hexes = set()
+            for plate in cluster:
+                all_hexes.update(plate.hexes)
+            
+            region = HexRegion(hexes=all_hexes, hex_grid=hex_grid)
+            merged_plate = Plate(region, symbol="🏔️")
+            merged_plate.kind = PlateKind.continental
+            merged.append(merged_plate)
+    
+    if debug:
+        print(f"\nOutput: {len(merged)} merged plates")
+        for i, plate in enumerate(merged):
+            print(f"  Plate {i} ({plate.kind.name}): {len(plate.hexes)} hexes")
+    
+    return merged
+
+
+
+
+# %% ../nbs/04_voronoi.ipynb 35
 from .terrain import Terrain
 
-# %% ../nbs/04_voronoi.ipynb 34
-def generate_plate_terrain(bounds, radius=20, num_plates=10, ocean_fraction=0.4, seed=None):
+# %% ../nbs/04_voronoi.ipynb 36
+def generate_plate_terrain(bounds, radius=20, num_plates=10, final_plates=4, slope=20,variation=40, ocean_fraction=0.4, seed=None):
     """
     Generate terrain based on tectonic plates using Voronoi regions.
     
@@ -302,8 +389,8 @@ def generate_plate_terrain(bounds, radius=20, num_plates=10, ocean_fraction=0.4,
         else:
             # Continental plates elevation based on distance from ocean
             # Farther from ocean = higher elevation
-            base_elevation = 50 + (plate.oceanDistance * 20)
-            variation = 40
+            base_elevation = 50 + (plate.oceanDistance * slope)
+            
         
         # Add random variation to each hex in the plate
         for hex_idx in plate.hexes:
@@ -322,8 +409,10 @@ def generate_plate_terrain(bounds, radius=20, num_plates=10, ocean_fraction=0.4,
     
     terrain.elevations = smoothed
     terrain.colorMap()
+    if final_plates is not None:
+        plates = _merge_plates(plates,grid, target_count=final_plates)
     
-    return terrain, plates
+    return terrain, plates 
 
 
 
