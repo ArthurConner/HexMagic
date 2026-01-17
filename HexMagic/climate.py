@@ -1375,6 +1375,7 @@ class TerrainFactory:
                           custom_params: dict = None,
                           num_plates=None, 
                           ocean_fraction=0.4,
+                          num_lakes=5,
                           
                           debug = False) -> Terrain:
         """
@@ -1408,7 +1409,9 @@ class TerrainFactory:
             plates = []
         else:
             terrain, plates = generate_plate_terrain(bounds, radius=radius, num_plates=num_plates, ocean_fraction=ocean_fraction)
-        
+        if num_lakes is not None:
+            terrain.carve_to_ocean(num_lakes)
+            
         # Set geographic bounds
         terrain.geo = GeoBounds(
             lat_min=lat_min,
