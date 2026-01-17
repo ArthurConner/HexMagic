@@ -363,7 +363,7 @@ def starterWorld(demo:TerraDemo,createNew = False, debug = False):
 
 # %% ../nbs/09_terraform.ipynb 22
 @patch
-def terrainFromEvents(self:Terraform,index=None,prior=None,debug=True):
+def terrainFromEvents(self:Terraform,index=None,prior=None,debug=False):
     if index is None:
         index = len(self.events) -1
 

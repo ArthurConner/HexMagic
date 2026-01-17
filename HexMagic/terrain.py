@@ -1030,7 +1030,63 @@ def scaled(self: Terrain, scale: float):
 
     
 
-# %% ../nbs/03_terrain.ipynb 58
+# %% ../nbs/03_terrain.ipynb 55
+@patch
+def field_summary(self: Terrain, field_name):
+    """Compact statistical summary of a field."""
+    if field_name == "elevations":
+        data = self.elevations
+    else:
+        if field_name not in self.fields:
+            return f"Field '{field_name}' not found"
+        
+        data = self.fields[field_name]
+    
+    print(f"\n=== {field_name.upper()} ===")
+    print(f"Range:  {data.min():.1f} to {data.max():.1f}")
+    print(f"Mean:   {data.mean():.1f}")
+    print(f"Median: {np.median(data):.1f}")
+    print(f"StdDev: {data.std():.1f}")
+    
+    # Percentiles
+    p10, p25, p75, p90 = np.percentile(data, [10, 25, 75, 90])
+    print(f"Percentiles: 10%={p10:.1f}, 25%={p25:.1f}, 75%={p75:.1f}, 90%={p90:.1f}")
+    
+    # Histogram bins
+    print(f"\nDistribution:")
+    hist, bins = np.histogram(data, bins=8)
+    for i in range(len(hist)):
+        bar = '█' * int(40 * hist[i] / hist.max())
+        print(f"  {bins[i]:7.1f} - {bins[i+1]:7.1f}: {bar} ({hist[i]})")
+
+
+@patch
+def compare_fields(self: Terrain, field1, field2, bins=10):
+    """Show correlation between two fields."""
+    if field1 not in self.fields or field2 not in self.fields:
+        return f"Missing field"
+    
+    data1 = self.fields[field1]
+    data2 = self.fields[field2]
+    
+    # Correlation
+    corr = np.corrcoef(data1, data2)[0, 1]
+    
+    print(f"\n=== {field1} vs {field2} ===")
+    print(f"Correlation: {corr:.3f}")
+    
+    # Binned comparison
+    data1_bins = np.percentile(data1, np.linspace(0, 100, bins+1))
+    
+    print(f"\n{field1:>12s} | {field2:>12s} (mean)")
+    print("-" * 30)
+    for i in range(bins):
+        mask = (data1 >= data1_bins[i]) & (data1 < data1_bins[i+1])
+        if mask.sum() > 0:
+            mean2 = data2[mask].mean()
+            print(f"{data1_bins[i]:12.1f} | {mean2:12.1f}")
+
+# %% ../nbs/03_terrain.ipynb 61
 @patch
 def growFromHex(self: Terrain, center_idx, origin=0):
     """Grow a region from center hex at same elevation level."""
@@ -1058,7 +1114,7 @@ def growFromHex(self: Terrain, center_idx, origin=0):
     
     return HexRegion(hexes=hex_set, hex_grid=self.hexGrid)
 
-# %% ../nbs/03_terrain.ipynb 59
+# %% ../nbs/03_terrain.ipynb 62
 @patch
 def find_region_at_level(self:Terrain, center_idx):
     """Find all connected hexes within tolerance of center_idx's elevation.
@@ -1076,7 +1132,7 @@ def find_region_at_level(self:Terrain, center_idx):
     return set(levels)
 
 
-# %% ../nbs/03_terrain.ipynb 60
+# %% ../nbs/03_terrain.ipynb 63
 @patch
 def demoRegion(self:TerraDemo):
     """Practice building up coord."""
@@ -1120,7 +1176,7 @@ def demoRegion(self:TerraDemo):
  
 
 
-# %% ../nbs/03_terrain.ipynb 62
+# %% ../nbs/03_terrain.ipynb 65
 @patch
 def coastline_svg(self:Terrain,pathstyle=StyleCSS("coastPath",fill="none",stroke="#917910ff",stroke_width=3)):
     """Add a coast to the terrain."""
@@ -1146,7 +1202,7 @@ def coastline_svg(self:Terrain,pathstyle=StyleCSS("coastPath",fill="none",stroke
         
     return pathLayer
 
-# %% ../nbs/03_terrain.ipynb 63
+# %% ../nbs/03_terrain.ipynb 66
 @patch
 def addCoast(self:Terrain,pathstyle=StyleCSS("coastPath",fill="none",stroke="#917910ff",stroke_width=3)):
     """Add a coast to the terrain."""
@@ -1161,7 +1217,7 @@ def addCoast(self:Terrain,pathstyle=StyleCSS("coastPath",fill="none",stroke="#91
 
     
 
-# %% ../nbs/03_terrain.ipynb 64
+# %% ../nbs/03_terrain.ipynb 67
 @patch
 def demoCoast(self:TerraDemo):
     """Practice building up coord."""

@@ -28,30 +28,6 @@ class HexRegion:
     hexes: set[int]  # Set of hex indices
     hex_grid: 'HexGrid'  # Reference to get hex objects
 
-    def centroid_hex(self) -> int:
-        """Return the hex index closest to the geometric center."""
-        if not self.hexes:
-            return None
-        
-        # Calculate centroid of all hex centers
-        cx, cy = 0, 0
-        for idx in self.hexes:
-            h = self.hex_grid.hexes[idx]
-            cx += h.center.x
-            cy += h.center.y
-        cx /= len(self.hexes)
-        cy /= len(self.hexes)
-        
-        # Find hex closest to centroid
-        closest = None
-        min_dist = float('inf')
-        for idx in self.hexes:
-            h = self.hex_grid.hexes[idx]
-            dist = (h.center.x - cx)**2 + (h.center.y - cy)**2
-            if dist < min_dist:
-                min_dist = dist
-                closest = idx
-        return closest
   
     @classmethod
     def fromPath(cls, grid: HexGrid, path: list[int]):
@@ -86,6 +62,24 @@ class HexRegion:
 
 
 # %% ../../nbs/plots/02d_HexRegion.ipynb 6
+@patch
+def centroid_hex(self:HexRegion) -> int:
+    """Return the hex index closest to the geometric center."""
+    if not self.hexes:
+        return None
+    
+    # Use first hex as reference for conversions
+    ref = min(self.hexes)
+    
+    # Convert all hexes to positions and average
+    positions = [self.hex_grid.index_to_hexposition(idx, ref) for idx in self.hexes]
+    centroid_pos = HexPosition.average(positions)
+    
+    # Convert back to index
+    return self.hex_grid.hexposition_to_index(centroid_pos, ref)
+
+
+# %% ../../nbs/plots/02d_HexRegion.ipynb 11
 @patch
 def __or__(self: HexRegion, other: 'HexRegion') -> 'HexRegion':
     """Union: region1 | region2"""
@@ -122,7 +116,7 @@ def __iter__(self: HexRegion):
     return iter(self.hexes)
 
 
-# %% ../../nbs/plots/02d_HexRegion.ipynb 7
+# %% ../../nbs/plots/02d_HexRegion.ipynb 12
 @patch
 def outside(self:HexRegion,ring=1):
     m = set()
@@ -160,20 +154,20 @@ def shift(self:HexRegion,direction:HexPosition):
             m.add(neighbor)
     return HexRegion(m,grid)
 
-# %% ../../nbs/plots/02d_HexRegion.ipynb 8
+# %% ../../nbs/plots/02d_HexRegion.ipynb 13
 @patch
 def inside(self:HexRegion,ring=1):
     out = self.outside().outside()
     m = self.hexes - out.hexes
     return HexRegion(m,self.hex_grid) # Filter out-of-bounds
 
-# %% ../../nbs/plots/02d_HexRegion.ipynb 9
+# %% ../../nbs/plots/02d_HexRegion.ipynb 14
 @patch
 def styleHexes(self:HexRegion,style=StyleCSS):
     for h in self.hexes:
         self.hex_grid.hexes[h].style = style
 
-# %% ../../nbs/plots/02d_HexRegion.ipynb 16
+# %% ../../nbs/plots/02d_HexRegion.ipynb 21
 @patch
 def regions_by_value(grid: HexGrid, data: np.ndarray) -> list[HexRegion]:
     """Convert data array into list of HexRegions, one per unique value.
@@ -188,7 +182,7 @@ def regions_by_value(grid: HexGrid, data: np.ndarray) -> list[HexRegion]:
     return regions
 
 
-# %% ../../nbs/plots/02d_HexRegion.ipynb 17
+# %% ../../nbs/plots/02d_HexRegion.ipynb 22
 @patch
 def styleRegions(self:HexGrid):
     ret = {}
@@ -198,7 +192,7 @@ def styleRegions(self:HexGrid):
         ret[h.style.name] = region
     return ret
 
-# %% ../../nbs/plots/02d_HexRegion.ipynb 20
+# %% ../../nbs/plots/02d_HexRegion.ipynb 25
 @patch
 def contiguous(self: HexRegion) -> list[HexRegion]:
     """Split region into contiguous sub-regions."""
@@ -231,11 +225,11 @@ def contiguous(self: HexRegion) -> list[HexRegion]:
     return regions
 
 
-# %% ../../nbs/plots/02d_HexRegion.ipynb 22
+# %% ../../nbs/plots/02d_HexRegion.ipynb 27
 BoundaryPoint = namedtuple('BoundaryPoint', ['hex_idx', 'vertex'])
 
 
-# %% ../../nbs/plots/02d_HexRegion.ipynb 23
+# %% ../../nbs/plots/02d_HexRegion.ipynb 28
 @patch
 def trace_boundary(self: HexRegion, verbose=False) -> list[BoundaryPoint]:
     """Trace boundary with debug output."""
@@ -319,7 +313,7 @@ def trace_boundary(self: HexRegion, verbose=False) -> list[BoundaryPoint]:
     return path
 
 
-# %% ../../nbs/plots/02d_HexRegion.ipynb 24
+# %% ../../nbs/plots/02d_HexRegion.ipynb 29
 @patch
 def boundary_to_coords(self: HexRegion, path: list[BoundaryPoint]) -> list[MapCord]:
     """Convert (hex_index, vertex_index) path to MapCord list."""
@@ -336,7 +330,7 @@ def boundary_path(self: HexRegion, style=None) -> MapPath:
     return MapPath(coords, style).closed()
 
 
-# %% ../../nbs/plots/02d_HexRegion.ipynb 26
+# %% ../../nbs/plots/02d_HexRegion.ipynb 31
 @patch
 def trace_perimeter(self: HexRegion, debug=False, 
                    style=StyleCSS("perimeter_path", fill="none", 
@@ -352,7 +346,7 @@ def trace_perimeter(self: HexRegion, debug=False,
     return paths  # Return paths and empty gaps list
 
 
-# %% ../../nbs/plots/02d_HexRegion.ipynb 27
+# %% ../../nbs/plots/02d_HexRegion.ipynb 32
 @patch
 def cloudLayer(self:HexGrid):
     retLayer = ""
@@ -364,7 +358,7 @@ def cloudLayer(self:HexGrid):
             retLayer += text
     return retLayer
 
-# %% ../../nbs/plots/02d_HexRegion.ipynb 30
+# %% ../../nbs/plots/02d_HexRegion.ipynb 35
 def _edge_key(p1: MapCord, p2: MapCord) -> tuple:
     """Canonical key for an edge - always ordered the same way."""
     if (p1.x, p1.y) < (p2.x, p2.y):
@@ -376,7 +370,7 @@ def _edge_is_forward(p1: MapCord, p2: MapCord) -> bool:
     return (p1.x, p1.y) < (p2.x, p2.y)
 
 
-# %% ../../nbs/plots/02d_HexRegion.ipynb 31
+# %% ../../nbs/plots/02d_HexRegion.ipynb 36
 @patch
 def trace_boundary_with_cache(self: HexRegion, borders: dict, f=None, style=None) -> MapPath:
     """Trace boundary using shared edge cache.
@@ -429,7 +423,7 @@ def trace_boundary_with_cache(self: HexRegion, borders: dict, f=None, style=None
     return MapPath(all_coords, style).closed()
 
 
-# %% ../../nbs/plots/02d_HexRegion.ipynb 32
+# %% ../../nbs/plots/02d_HexRegion.ipynb 37
 @patch
 def trace_perimeter_cached(self: HexRegion, borders: dict, f=None, 
                            style=StyleCSS("perimeter_path", fill="none", 
@@ -442,13 +436,13 @@ def trace_perimeter_cached(self: HexRegion, borders: dict, f=None,
     return paths
 
 
-# %% ../../nbs/plots/02d_HexRegion.ipynb 33
+# %% ../../nbs/plots/02d_HexRegion.ipynb 38
 @patch
 def __lt__(self: MapPath, other: MapPath) -> bool:
     """Less than comparison: first by x, then by y."""
     return len(self.points) < len(other.points)
 
-# %% ../../nbs/plots/02d_HexRegion.ipynb 34
+# %% ../../nbs/plots/02d_HexRegion.ipynb 39
 @patch
 def styleLayer(self: HexGrid, f=None,smooth=False):
     """Generate style layer with shared borders between regions."""
@@ -472,7 +466,7 @@ def styleLayer(self: HexGrid, f=None,smooth=False):
     return retLayer
 
 
-# %% ../../nbs/plots/02d_HexRegion.ipynb 36
+# %% ../../nbs/plots/02d_HexRegion.ipynb 41
 def windy_edge(iterations=2, offset_factor=0.15, seed=None):
     """Factory for windy edge transform function."""
     def transform(p1: MapCord, p2: MapCord) -> list[MapCord]:
@@ -497,7 +491,7 @@ def variable_windy_edge(iterations=2, offset_min=0.05, offset_max=0.2, seed=None
     return transform
 
 
-# %% ../../nbs/plots/02d_HexRegion.ipynb 37
+# %% ../../nbs/plots/02d_HexRegion.ipynb 42
 def unique_windy_edge(iterations=2, offset_min=0.05, offset_max=0.2):
     def transform(p1: MapCord, p2: MapCord) -> list[MapCord]:
         edge_seed = hash((round(p1.x,1), round(p1.y,1), round(p2.x,1), round(p2.y,1))) % (2**31)

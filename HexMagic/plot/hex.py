@@ -635,7 +635,7 @@ def sampleGrid(self:PrimitiveDemo,hexDim = 2, fill = "white",makeLabels = False)
 
 # %% ../../nbs/plots/02c_hex.ipynb 34
 @patch
-def arrow(self: HexGrid, start:int, end:int, style = StyleCSS("arrow", stroke="black",stroke_width=1)) -> str:
+def arrow(self: HexGrid, start:int, end:int, style = StyleCSS("arrow", stroke="black",stroke_width=1),fromMiddle=False) -> str:
     self.builder.add_style(style)
     
     

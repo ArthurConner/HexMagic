@@ -199,7 +199,7 @@ class Plate:
                     plate.hexes.add(add)
         return plates
 
-# %% ../nbs/04_voronoi.ipynb 27
+# %% ../nbs/04_voronoi.ipynb 28
 def mark_oceanic_plates(plates, ocean_fraction=0.4, seed=None):
     """
     Randomly mark some plates as oceanic.
@@ -231,7 +231,7 @@ def mark_oceanic_plates(plates, ocean_fraction=0.4, seed=None):
 
 
 
-# %% ../nbs/04_voronoi.ipynb 28
+# %% ../nbs/04_voronoi.ipynb 29
 def calculate_distances_from_ocean(plates, grid):
     """
     Calculate distance from each plate to nearest oceanic plate centroid.
@@ -257,10 +257,10 @@ def calculate_distances_from_ocean(plates, grid):
    
 
 
-# %% ../nbs/04_voronoi.ipynb 32
+# %% ../nbs/04_voronoi.ipynb 33
 from .terrain import Terrain
 
-# %% ../nbs/04_voronoi.ipynb 33
+# %% ../nbs/04_voronoi.ipynb 34
 def generate_plate_terrain(bounds, radius=20, num_plates=10, ocean_fraction=0.4, seed=None):
     """
     Generate terrain based on tectonic plates using Voronoi regions.

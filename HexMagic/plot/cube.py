@@ -8,6 +8,7 @@ __all__ = ['HexPosition', 'GosperCurve']
 # %% ../../nbs/plots/02b_Position.ipynb 4
 import numpy as np
 import math
+from functools import reduce
 from dataclasses import dataclass, field
 from fastcore.basics import patch
 from ..styles import StyleCSS
@@ -107,6 +108,45 @@ class HexPosition:
             rs = -rq - rr
         
         return HexPosition(int(rq), int(rr), int(rs))
+
+    @staticmethod
+    def average(positions: list['HexPosition']) -> 'HexPosition':
+        """Calculate the average position of a list of HexPositions."""
+        if not positions:
+            return HexPosition.origin()
+        
+        total = sum(positions, HexPosition.origin())
+        return HexPosition._cube_round(total.q / len(positions), 
+                                        total.r / len(positions), 
+                                        total.s / len(positions))
+
+    @staticmethod
+    def weighted_average(positions: list['HexPosition'], weights: list[float]) -> 'HexPosition':
+        """Calculate weighted average of HexPositions.
+        
+        Args:
+            positions: List of HexPositions
+            weights: List of weights (same length as positions)
+        """
+        if not positions or not weights:
+            return HexPosition.origin()
+        
+        if len(positions) != len(weights):
+            raise ValueError("positions and weights must have same length")
+        
+
+        weighted_sum = reduce(lambda acc, pw: acc + pw[1] * pw[0], 
+                            zip(positions, weights), 
+                            HexPosition.origin())
+        
+        total_weight = sum(weights)
+        if total_weight == 0:
+            return HexPosition.origin()
+        
+        return HexPosition._cube_round(weighted_sum.q / total_weight,
+                                        weighted_sum.r / total_weight,
+                                        weighted_sum.s / total_weight)
+
 
 HexPosition._orderDirs = [HexPosition.direction(lbl) for lbl in ["SW","W","NW", "NE", "E", "SE"]]
 
@@ -334,7 +374,10 @@ def postionDemo(self: PrimitiveDemo):
         print((pos - start).desc())
         start = pos
 
-# %% ../../nbs/plots/02b_Position.ipynb 23
+    lineMiddle = HexPosition.average(path)
+    print(f"the middle of the line is {lineMiddle}")
+
+# %% ../../nbs/plots/02b_Position.ipynb 30
 @patch
 def spiral(self: HexPosition, radius: int,clockwise=True) -> list[HexPosition]:
     """Get all hexes in a true spiral pattern from center out to radius.
@@ -373,7 +416,7 @@ def spiral(self: HexPosition, radius: int,clockwise=True) -> list[HexPosition]:
     
     return results
 
-# %% ../../nbs/plots/02b_Position.ipynb 24
+# %% ../../nbs/plots/02b_Position.ipynb 32
 class GosperCurve:
     """Generate Gosper curves using L-system rules and cube coordinates."""
     
