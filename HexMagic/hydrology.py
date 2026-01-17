@@ -44,7 +44,7 @@ def simpleIsland(demo:TerraDemo,debug = False):
     bounds = MapRect(MapCord(0, 0), MapSize(800, 800))
 
 
-    terrain, plates = TerrainFactory.create_ocean_world(
+    world = TerrainFactory.create_ocean_world(
         bounds=bounds,
         preset='monsoon',
         radius=15,
@@ -53,6 +53,8 @@ def simpleIsland(demo:TerraDemo,debug = False):
         ocean_fraction=0.6,
         debug= debug
     )
+
+    terrain = world.terrain
 
     terrain.climate.configure(terrain,debug=debug)
 

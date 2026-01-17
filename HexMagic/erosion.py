@@ -93,11 +93,12 @@ class ErrDemo:
         """Demo: Create island, let it erode over time."""
         
         # Create terrain with climate
-        terrain = TerrainFactory.create_ocean_world(
+        world = TerrainFactory.create_ocean_world(
             bounds=MapRect(MapCord(0,0), MapSize(500, 500)),
             preset='mediterranean',
             radius=15
         )
+        terrain = world.terrain
         terrain.hexGrid.adjustRadius(10)
         terrain.colorMap()
         
@@ -125,7 +126,7 @@ class ErrDemo:
 def simpleShow(self:ErrDemo,terra:Terraform,title="Map Example",debug=False):
         # 1. Create blank ocean world with tropical preset
     bounds = MapRect(MapCord(0, 0), MapSize(400, 400))
-    terrain , plates = TerrainFactory.create_ocean_world(
+    world = TerrainFactory.create_ocean_world(
         bounds=bounds,
         preset='tropical',
         radius=15,
@@ -134,7 +135,7 @@ def simpleShow(self:ErrDemo,terra:Terraform,title="Map Example",debug=False):
         debug = debug
     )
 
-    terra = Terraform(terrain)
+    terra = Terraform(world.terrain)
 
     # maui.add_climate_overlay(layer_name="root")
     rCong = ClimateRenderConfig()
@@ -1032,9 +1033,6 @@ def erodeRivers(self: Terrain,
             print(f"  Eroded: {eroded:.1f}m, Deposited: {deposited:.1f}m")
     
     return total_change
-
-# %% ../nbs/10_erosion.ipynb 32
-ErrDemo().example()
 
 # %% ../nbs/10_erosion.ipynb 34
 @patch
