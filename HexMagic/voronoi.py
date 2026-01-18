@@ -263,7 +263,7 @@ def mark_oceanic_by_sides(plates, grid, factor=1.5, oceanic_sides=['N', 'E', 'S'
         
         if 'N' in oceanic_sides and y <= min_y :
             edge_hexes.add(i)
-        if 'S' in oceanic_sides and y <= max_y:
+        if 'S' in oceanic_sides and y >= max_y:
             edge_hexes.add(i)
         if 'E' in oceanic_sides and x >= max_x:
             edge_hexes.add(i)
@@ -275,8 +275,7 @@ def mark_oceanic_by_sides(plates, grid, factor=1.5, oceanic_sides=['N', 'E', 'S'
         plate_hexes = set(plate.hexes)
         if plate_hexes & edge_hexes:  # intersection
             plate.kind = PlateKind.oceanic
-        else:
-            plate.kind = PlateKind.continental
+
     
     return plates
 
@@ -307,7 +306,7 @@ def calculate_distances_from_ocean(plates, grid):
    
 
 
-# %% ../nbs/04_voronoi.ipynb 34
+# %% ../nbs/04_voronoi.ipynb 37
 def _merge_plates(voronoi_plates: List['Plate'], 
                  hex_grid: 'HexGrid',
                  target_count: int = 3,
@@ -391,10 +390,10 @@ def _merge_plates(voronoi_plates: List['Plate'],
 
 
 
-# %% ../nbs/04_voronoi.ipynb 37
+# %% ../nbs/04_voronoi.ipynb 40
 from .terrain import Terrain
 
-# %% ../nbs/04_voronoi.ipynb 40
+# %% ../nbs/04_voronoi.ipynb 43
 def generate_plate_terrain(bounds, radius=20, num_plates=10, final_plates=4, slope=20,variation=40, ocean_fraction=0.4, 
 factor=1.5, oceanic_sides=[],seed=None):
     """
