@@ -1188,7 +1188,7 @@ class Geology:
             print(f"Max elev: {terrain.elevations.max():.0f}")
         
         self.model = ErosionModel(self.terrain, self.soil, age=age)
-        self.model.erode(iterations=3, base_rate=3.0)
+        #self.model.erode(iterations=3, base_rate=3.0)
         
 
 # %% ../nbs/07_climate.ipynb 64
@@ -1360,6 +1360,8 @@ class TerrainFactory:
                           ocean_fraction=0.4,
                           age = 0.25,
                           ruggedness: float = None,
+                          factor=1.5, 
+                          oceanic_sides=['N'],
                           
                           debug = False) -> Geology:
         """
@@ -1398,7 +1400,11 @@ class TerrainFactory:
             terrain.elevations = np.zeros(len(terrain.elevations))  # All ocean
             plates = []
         else:
-            terrain, plates = generate_plate_terrain(bounds, radius=radius,slope=slope,variation=variation, num_plates=num_plates, ocean_fraction=ocean_fraction)
+            terrain, plates = generate_plate_terrain(bounds, 
+            radius=radius,slope=slope,variation=variation, 
+            num_plates=num_plates, ocean_fraction=ocean_fraction,
+            factor=factor, oceanic_sides=oceanic_sides
+            )
         
         # Set geographic bounds
         terrain.geo = GeoBounds(
