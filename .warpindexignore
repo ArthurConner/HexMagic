@@ -1,0 +1,41 @@
+# Directories to exclude from Warp indexing
+tmp/
+tmp*
+_tmp*
+
+# Pattern data directories
+**/patterns/
+
+# Build and generated files
+_docs/
+_proc/
+build/
+dist/
+*.egg-info/
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# Version control
+.git/
+
+# IDE and editor files
+.vscode/
+.idea/
+*.swp
+
+# OS files
+.DS_Store
+.DS_Store?
+.Trashes
+Thumbs.db
+
+# Virtual environments
+venv/
+.venv/
+env/
+ENV/
+
+# Quarto
+.quarto/

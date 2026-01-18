@@ -1,0 +1,226 @@
+# HexMagic
+
+> Hex-based terrain generation and game system - procedural generation, real-world geography, climate modeling, multiplayer games
+
+## Quick Reference
+
+**Documentation:**
+- `docs/PROJECT_OVERVIEW.md` - Complete architecture, workflows, design patterns
+- `docs/CODE_PATTERNS.md` - Quick code reference for common operations
+- `docs/IMPLEMENTATION_CHECKLIST.md` - Development roadmap and status
+
+**Schema Documents (nbs/):**
+- `schemaMain.md` - Core library database (TerrainDB, templates, multi-scale)
+- `TerrainSchema_FastLite.md` - Web game database (multi-user, viewstate)
+- `PieceDesign.md` - Game unit/agent system
+
+## Core Architecture (4 Layers)
+
+### 1. Foundation (HexMagic/*.py)
+- `HexPosition` (q,r,s) - Universal cube coordinates
+- `HexGrid` - Grid with index↔position conversions
+- `Terrain` - Elevation + fields (temperature, precipitation, climate)
+- `Geology` - Tectonic plates, watersheds
+- Procedural: `Terrain.fromSeeds(bounds, num_plates=12)`
+- Real-world: `TerraDemo().bayArea_map()` (7+ locations)
+
+### 2. Visualization (HexMagic/plots/*.py)
+- `SVGBuilder` - Pattern-based rendering
+- `TerrainPatterns` - Dots, waves, climate patterns
+- `crop_to_centered_grid()` - Regional extraction with index mapping
+
+### 3. Game (HexMagic/game/*.py)
+- `GameBoard` - Game state
+- `Kingdom` - Civilizations
+- `Piece` - Units (movement, vision, AI)
+- FastLite database backing
+
+### 4. Web (Planned)
+- FastHTML + HTMX interface
+- Multi-user hosting
+- Per-user viewport state
+
+## Databases (2 Schemas)
+
+### Core Library (schemaMain.md)
+**Tables:** TerrainWorld, WorldTemplate, ScaleTransform, Viewport, HexData, Plate, Watershed
+
+**Key Features:**
+- Template library (Bay Area, California, Maui, etc.)
+- Regional extraction: `db.extract_region(world_id, center_q, center_r, center_s, rings=20)`
+- Multi-scale: `db.save_downsampled_world(world_id, scale=0.25)` with bidirectional region mapping
+- Print crops: `db.extract_rectangle(..., width=60, height=40, orientation='landscape')`
+
+### Web Game (TerrainSchema_FastLite.md)
+**Tables:** World, Game, User, GamePlayer, ViewState, Kingdom, Territory, Piece
+
+**Key Features:**
+- Separate world from game state
+- Per-user UI state (center, zoom, overlays)
+- Multi-player support
+
+## Coordinate Systems
+
+**HexPosition (q,r,s)** - PRIMARY for cross-grid operations
+- Cube coordinates, q+r+s=0
+- Grid-independent
+- `pos.distance(other_pos)`
+
+**Grid Index** - For array access
+- 0 to len(hexes)-1
+- Grid-specific
+
+**Row/Col** - For rectangular ops
+- Grid-specific
+
+**Conversions:**
+```python
+pos = grid.index_to_hexposition(idx, origin_index=0)
+idx = grid.hexposition_to_index(pos, origin_index=0)
+```
+
+## Key Workflows
+
+### Terrain Generation
+```python
+# Procedural
+terrain, plates = Terrain.fromSeeds(bounds, num_plates=12, seed=42)
+
+# Real-world
+terrain = TerraDemo().bayArea_map()
+
+# Climate
+terrain.compute_temperature()
+terrain.compute_precipitation()
+terrain.compute_climate()
+
+# Visualize
+terrain.colorMap()
+terrain.add_climate_overlay()
+```
+
+### Multi-Scale Analysis
+```python
+db = TerrainDB()
+
+# Create large world
+large_id = db.save_world(large_terrain, name="Continent")
+
+# Downsample for faster climate work
+small_id, transform_id = db.save_downsampled_world(large_id, scale=0.25)
+
+# Work on small version
+small_terrain, _ = db.load_world(small_id)
+small_terrain.compute_climate()
+
+# Define regions on small terrain
+tropical_hexes = set(np.where(small_terrain.fields['climate'] == 0)[0])
+
+# Map back to large terrain
+transform = db.transforms[transform_id]
+large_tropical = db.map_region_from_scale(transform, tropical_hexes, expand=True)
+```
+
+### Regional Extraction
+```python
+# Centered circular region
+detail, mapper = db.extract_region(world_id=1, center_q=10, center_r=-5, center_s=-5, rings=20)
+
+# Rectangular for printing
+print_map, mapper = db.extract_rectangle(world_id=1, center_q=0, center_r=0, center_s=0, 
+                                         width_hexes=60, height_hexes=40, orientation='landscape')
+
+# Save viewport
+viewport_id = db.create_viewport(world_id=1, name="Detail", center_q=10, center_r=-5, center_s=-5,
+                                 shape="circle", rings=20)
+```
+
+## Design Patterns
+
+**Encode/Decode** - All major classes serialize:
+```python
+data = terrain.encode()
+terrain = Terrain.decode(data)
+```
+
+**Index Mapper** - Transform grids with mapping:
+```python
+new_grid, new_region, mapper = region.crop_to_centered_grid()
+for new_idx in range(len(new_grid.hexes)):
+    old_idx = mapper(new_idx)
+    if old_idx >= 0:
+        new_data[new_idx] = old_data[old_idx]
+```
+
+**FastLite Database:**
+```python
+from fastlite import database
+db = database("db.sqlite")
+table = db.create(DataClass, pk='id', if_not_exists=True, transform=True)
+```
+
+## Real-World Templates
+
+1. Bay Area - SF Bay (medium)
+2. California - Full coast (large)
+3. Maui - Hawaiian island (simple)
+4. Japan & Korea - Archipelago (complex)
+5. Normandy - D-Day beaches
+6. Hong Kong - Pearl River Delta
+7. Sydney - Harbor
+
+Access: `db.get_template(1)` for Bay Area
+
+## Technology
+
+- Python 3.x, NumPy, Dataclasses
+- FastLite + SQLite (database)
+- FastHTML + HTMX (web)
+- SVG (visualization)
+- nbdev (development)
+- SRTM elevation data
+
+## Status
+
+**Completed:**
+✅ Core terrain/geology with encode/decode
+✅ Climate modeling (Köppen)
+✅ Real-world data (7+ locations)
+✅ SVG visualization
+✅ Game mechanics basics
+✅ Database schemas designed
+✅ Multi-scale system designed
+✅ crop_to_centered_grid()
+✅ downsample_climate()
+
+**In Progress:**
+🔄 TerrainDB implementation
+🔄 ScaleTransform table
+🔄 Game database classes
+
+**Planned:**
+📋 Web routes (FastHTML)
+📋 Multi-player system
+📋 Interactive viewport
+
+## Key Insights
+
+1. **HexPosition is Universal** - Use (q,r,s) for cross-grid ops
+2. **Index Mapping Critical** - Track old→new when transforming
+3. **Multi-Scale for Large Worlds** - Downsample, map regions bidirectionally
+4. **Database Optional** - encode/decode works standalone
+5. **Two Schema Worlds** - Core library vs Web game
+6. **Pattern Visualization** - SVG patterns + overlays
+7. **Real + Procedural** - Both equally supported
+
+## Use Cases
+
+- Research: Geographic analysis, climate modeling
+- Games: Strategy/exploration with realistic worlds
+- Education: Geography, climate science, algorithms
+- Art: Map generation for RPGs, worldbuilding
+- Visualization: Novel geographic data rendering
+
+For detailed information, see docs/PROJECT_OVERVIEW.md
+For code examples, see docs/CODE_PATTERNS.md
+For implementation, see docs/IMPLEMENTATION_CHECKLIST.md
