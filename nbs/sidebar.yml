@@ -7,7 +7,19 @@ website:
       - 02_primitives.ipynb
       - 03_terrain.ipynb
       - 04_voronoi.ipynb
+      - 05_terrainpatterns.ipynb
+      - 06_river.ipynb
+      - 07_climate.ipynb
+      - 08_hydrology.ipynb
+      - 09_terraform.ipynb
+      - 10_erosion.ipynb
+      - section: plots
+        contents:
+          - plots/02a_primitives.ipynb
+          - plots/02b_Position.ipynb
+          - plots/02c_hex.ipynb
+          - plots/02d_HexRegion.ipynb
       - section: tutorials
         contents:
-          - tutorials/Voronoi.ipynb
+          - tutorials/gallery.ipynb
           - tutorials/math.ipynb

@@ -859,7 +859,7 @@ def demoRegion(self:TerraDemo):
     sampleMap = self.sanFran()
     peaks = sampleMap.find_peaks(7,0)
     start = peaks[0]
-    region = HexRegion(hexes=set([start]),  hex_grid=sampleMap.hexGrid)
+    region = HexRegion(hexes=set([start]),  hexGrid=sampleMap.hexGrid)
     #region.add(start)
     #print(region.perimeter())
     
@@ -1112,7 +1112,7 @@ def growFromHex(self: Terrain, center_idx, origin=0):
             hex_set.add(n_idx)
             to_check.append(n_idx)
     
-    return HexRegion(hexes=hex_set, hex_grid=self.hexGrid)
+    return HexRegion(hexes=hex_set, hexGrid=self.hexGrid)
 
 # %% ../nbs/03_terrain.ipynb 62
 @patch
@@ -1140,7 +1140,7 @@ def demoRegion(self:TerraDemo):
     sampleMap = self.sanFran()
     peaks = sampleMap.find_peaks(7,0)
     start =  0 # peaks[0]
-    region = HexRegion(hexes=sampleMap.find_region_at_level(0), hex_grid=sampleMap.hexGrid)
+    region = HexRegion(hexes=sampleMap.find_region_at_level(0), hexGrid=sampleMap.hexGrid)
     for x in sampleMap.find_region_at_level(0):
         region.hexes.add(x)
     
@@ -1180,7 +1180,7 @@ def demoRegion(self:TerraDemo):
 @patch
 def coastline_svg(self:Terrain,pathstyle=StyleCSS("coastPath",fill="none",stroke="#917910ff",stroke_width=3)):
     """Add a coast to the terrain."""
-    region = HexRegion(hexes=self.find_region_at_level(0), hex_grid=self.hexGrid)
+    region = HexRegion(hexes=self.find_region_at_level(0), hexGrid=self.hexGrid)
 
 
     for x in self.find_region_at_level(0):

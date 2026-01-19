@@ -937,7 +937,7 @@ class SoilSystem:
         regions = []
         for type_idx in range(len(types)):
             hexes = set(np.where(soil_type == type_idx)[0])
-            regions.append(HexRegion(hexes=hexes, hex_grid=terrain.hexGrid))
+            regions.append(HexRegion(hexes=hexes, hexGrid=terrain.hexGrid))
         
         if debug:
             print("\n=== SOIL SYSTEM CREATED ===")

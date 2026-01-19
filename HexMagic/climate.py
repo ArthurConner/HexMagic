@@ -1350,32 +1350,50 @@ class TerrainFactory:
     ),
 }
     
+    
     @staticmethod
     def create_ocean_world(bounds: MapRect, 
-                          preset: str = 'temperate',
-                          radius: float = 15,
-                          lon_span: float = 10.0,
-                          custom_params: dict = None,
-                          num_plates=None, 
-                          ocean_fraction=0.4,
-                          age = 0.25,
-                          ruggedness: float = None,
-                          factor=1.5, 
-                          oceanic_sides=['N'],
-                          
-                          debug = False) -> Geology:
+                        preset: str = 'temperate',
+                        radius: float = 15,
+                        lon_span: float = 10.0,
+                        custom_params: dict = None,
+                        # Plate params
+                        num_plates: int = None, 
+                        subdivisions: int = 3,
+                        ocean_fraction: float = 0.4,
+                        oceanic_sides: list = ['N'],
+                        edge_factor: float = 1.5,
+                        # Terrain character
+                        terrain_age: str = 'middle',  # 'young', 'middle', 'old'
+                        formation_type: str = 'ocean_distance',
+                        elevation_scale: float = 1.0,
+                        # Erosion
+                        erosion_age: float = 0.25,
+                        seed: int = None,
+                        debug: bool = False) -> Geology:
         """
-        Create a blank ocean world ready for terrain generation.
+        Create a world with tectonic plates and climate.
         
         Args:
             bounds: MapRect for the hex grid
             preset: Climate preset name (see PRESETS)
             radius: Hex radius
-            lon_span: Longitude span in degrees (lat span calculated from preset)
-            custom_params: Override specific preset parameters
+            lon_span: Longitude span in degrees
+            custom_params: Override specific climate preset parameters
+            num_plates: Number of tectonic plates (None for blank ocean)
+            subdivisions: Plate subdivision depth for detail
+            ocean_fraction: Fraction of plates marked oceanic
+            oceanic_sides: List of sides ['N','E','S','W'] that are ocean
+            edge_factor: How far from edge to mark as oceanic
+            terrain_age: 'young' (sharp), 'middle', 'old' (eroded) - affects initial terrain
+            formation_type: 'ocean_distance', 'ridge', 'volcanic', 'rolling'
+            elevation_scale: Multiplier for elevations
+            erosion_age: Age for erosion model (0-1, higher = more eroded)
+            seed: Random seed
+            debug: Print debug info
         
         Returns:
-            Terrain with all-ocean elevations and climate parameters set
+            Geology with terrain, plates, soil, and erosion model
         """
         
         if preset not in TerrainFactory.PRESETS:
@@ -1387,23 +1405,25 @@ class TerrainFactory:
         lat_min, lat_max = climate_preset.lat_range
         lon_min = -lon_span / 2
         lon_max = lon_span / 2
-
-        if ruggedness is None:
-            ruggedness = 1.0 - age  # Young terrain is rugged
-    
-        slope = int(10 + ruggedness * 30)
-        variation = int(20 + ruggedness * 60)
         
-        # Create terrain with all ocean (elevation = 0)
+        # Create terrain
         if num_plates is None:
             terrain = Terrain(bounds, radius=radius)
             terrain.elevations = np.zeros(len(terrain.elevations))  # All ocean
             plates = []
         else:
-            terrain, plates = generate_plate_terrain(bounds, 
-            radius=radius,slope=slope,variation=variation, 
-            num_plates=num_plates, ocean_fraction=ocean_fraction,
-            factor=factor, oceanic_sides=oceanic_sides
+            terrain, plates = generate_plate_terrain(
+                bounds, 
+                radius=radius,
+                num_plates=num_plates,
+                subdivisions=subdivisions,
+                ocean_fraction=ocean_fraction,
+                oceanic_sides=oceanic_sides,
+                edge_factor=edge_factor,
+                age=terrain_age,
+                formation_type=formation_type,
+                elevation_scale=elevation_scale,
+                seed=seed
             )
         
         # Set geographic bounds
@@ -1418,13 +1438,14 @@ class TerrainFactory:
         terrain._compute_hex_coordinates()
 
         terrain.climate = climate_preset
-        world = Geology(terrain,plates=plates,age=age,debug=debug)
+        world = Geology(terrain, plates=plates, age=erosion_age, debug=debug)
 
         # Apply custom parameter overrides
         if custom_params:
             for key, value in custom_params.items():
                 if hasattr(climate_preset, key):
                     setattr(climate_preset, key, value)
+        
         if debug:
             print(f"\n=== TERRAIN FACTORY ===")
             print(f"Preset: {climate_preset.name}")
@@ -1432,10 +1453,12 @@ class TerrainFactory:
             print(f"Latitude: {lat_min}° to {lat_max}°")
             print(f"Longitude: {lon_min}° to {lon_max}°")
             print(f"Grid: {terrain.hexGrid.nRows} x {terrain.hexGrid.nCols} hexes")
+            print(f"Terrain age: {terrain_age}, Formation: {formation_type}")
             print(f"Base temperature range: {climate_preset.base_temp_range[0]}°C to {climate_preset.base_temp_range[1]}°C")
             print(f"Wind: {climate_preset.wind_speed} m/s from {climate_preset.wind_dir}°")
         
         return world
+
     
     
     @staticmethod
