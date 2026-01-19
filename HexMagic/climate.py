@@ -1176,22 +1176,19 @@ def recomputeClimate(self:Terrain):
 # %% ../nbs/07_climate.ipynb 63
 class Geology:
 
-    def __init__(self,terrain,plates, num_plates=None, 
-                          age = 0.25,
+    def __init__(self,terrain,plates,rivers, num_plates=None, 
+                          age = 0.,
                           
                           debug = False):
         self.terrain = terrain
         self.plates = plates
+        self.rivers = rivers
         self.soil = SoilSystem.from_plates(terrain, plates, debug=debug)
-        if debug:
-            print(f"\n=== Before erosion (age={age}) ===")
-            print(f"Max elev: {terrain.elevations.max():.0f}")
-        
         self.model = ErosionModel(self.terrain, self.soil, age=age)
         #self.model.erode(iterations=3, base_rate=3.0)
         
 
-# %% ../nbs/07_climate.ipynb 64
+# %% ../nbs/07_climate.ipynb 65
 class TerrainFactory:
     """Factory for creating terrains with realistic climate parameters."""
     
@@ -1369,6 +1366,7 @@ class TerrainFactory:
                         elevation_scale: float = 1.0,
                         # Erosion
                         erosion_age: float = 0.25,
+                        num_lakes: int = 4,
                         seed: int = None,
                         debug: bool = False) -> Geology:
         """
@@ -1389,6 +1387,7 @@ class TerrainFactory:
             formation_type: 'ocean_distance', 'ridge', 'volcanic', 'rolling'
             elevation_scale: Multiplier for elevations
             erosion_age: Age for erosion model (0-1, higher = more eroded)
+            num_lakes: how much do we carve
             seed: Random seed
             debug: Print debug info
         
@@ -1425,6 +1424,8 @@ class TerrainFactory:
                 elevation_scale=elevation_scale,
                 seed=seed
             )
+
+        
         
         # Set geographic bounds
         terrain.geo = GeoBounds(
@@ -1438,7 +1439,13 @@ class TerrainFactory:
         terrain._compute_hex_coordinates()
 
         terrain.climate = climate_preset
-        world = Geology(terrain, plates=plates, age=erosion_age, debug=debug)
+
+        if num_lakes is not None:
+            rivers = terrain.carve_to_ocean( num_lakes=num_lakes)
+        else:
+            rivers = []
+            
+        world = Geology(terrain, plates=plates, age=erosion_age, rivers = rivers, debug=debug)
 
         # Apply custom parameter overrides
         if custom_params:
@@ -1473,7 +1480,7 @@ class TerrainFactory:
             print()
 
 
-# %% ../nbs/07_climate.ipynb 69
+# %% ../nbs/07_climate.ipynb 70
 @patch
 def bayAreaMap(self:TerraDemo,debug = False):
     """Load Maui terrain with proper geographic bounds."""

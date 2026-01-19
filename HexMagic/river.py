@@ -693,7 +693,7 @@ def find_drainage_path(self: Terrain, start: int) -> list[int]:
 
 # %% ../nbs/06_river.ipynb 46
 @patch
-def carve_to_ocean(self: Terrain, num_lakes: int = 5, max_iters: int = 10) ->  list[list[int]]:
+def carve_to_ocean(self: Terrain, num_lakes: int = 5, max_iters: int = 10) ->  list[River]:
     """Carve drainage using lowest-cost paths to ocean."""
     paths = []
     
@@ -709,7 +709,9 @@ def carve_to_ocean(self: Terrain, num_lakes: int = 5, max_iters: int = 10) ->  l
         
         for lake_idx in drain_these:
             path = self.find_drainage_path(lake_idx)
-            paths.append(path)
+            river = River(terrain=self, hexes=path)
+            paths.append(river)
+           
             
             if len(path) < 2:
                 continue
@@ -726,7 +728,7 @@ def carve_to_ocean(self: Terrain, num_lakes: int = 5, max_iters: int = 10) ->  l
     
     return  paths
 
-# %% ../nbs/06_river.ipynb 50
+# %% ../nbs/06_river.ipynb 52
 @patch
 def compute_distance_to_coast(self: Terrain):
     """Calculate distance from coast for each hex using BFS."""
@@ -760,7 +762,7 @@ def compute_distance_to_coast(self: Terrain):
     self.fields['distance_to_coast'] = distances.astype(float)
     return self.fields['distance_to_coast']
 
-# %% ../nbs/06_river.ipynb 51
+# %% ../nbs/06_river.ipynb 53
 @dataclass
 class SoilType:
     """Represents a soil/bedrock type with erosion properties."""
@@ -811,7 +813,7 @@ class SoilType:
             ),
         ]
 
-# %% ../nbs/06_river.ipynb 52
+# %% ../nbs/06_river.ipynb 54
 @patch
 def to_style(self: SoilType, stroke_width: float = 1.0, opacity: float = 1.0) -> StyleCSS:
     """Create a StyleCSS for this soil type.
@@ -832,7 +834,7 @@ def to_style(self: SoilType, stroke_width: float = 1.0, opacity: float = 1.0) ->
     )
 
 
-# %% ../nbs/06_river.ipynb 53
+# %% ../nbs/06_river.ipynb 55
 @dataclass
 class SoilSystem:
     """Manages soil types and their distribution across terrain."""
@@ -948,7 +950,7 @@ class SoilSystem:
         
         return cls(terrain=terrain, types=types, regions=regions)
 
-# %% ../nbs/06_river.ipynb 54
+# %% ../nbs/06_river.ipynb 56
 @patch
 def soilOverlay(self:SoilSystem,f=None,smooth=False)->str:
     """ build an overlay simalar to HexGrid.styleLayer but uses plates."""
@@ -974,7 +976,7 @@ def soilOverlay(self:SoilSystem,f=None,smooth=False)->str:
 
     return retLayer
 
-# %% ../nbs/06_river.ipynb 55
+# %% ../nbs/06_river.ipynb 57
 def soilInformation(showText=True,terrain=None):
     global sampleTerrain, samplePlates
     if terrain == None:
@@ -994,7 +996,7 @@ def soilInformation(showText=True,terrain=None):
 
     return sGrid.builder.show()
 
-# %% ../nbs/06_river.ipynb 59
+# %% ../nbs/06_river.ipynb 61
 @dataclass
 class ErosionModel:
     """Simple erosion model with age parameter."""
@@ -1038,10 +1040,10 @@ class ErosionModel:
         # Rebuild regions
         for type_idx in range(len(self.soil_system.types)):
             hexes = set(np.where(soil_types == type_idx)[0])
-            self.soil_system.regions[type_idx] = HexRegion(hexes=hexes, hex_grid=self.terrain.hexGrid)
+            self.soil_system.regions[type_idx] = HexRegion(hexes=hexes, hexGrid=self.terrain.hexGrid)
 
 
-# %% ../nbs/06_river.ipynb 60
+# %% ../nbs/06_river.ipynb 62
 @patch
 def _find_knickpoints(self: ErosionModel, river: River, gradient_threshold: float = 15.0) -> list[int]:
     """Find knickpoints (sudden gradient changes) in a river.

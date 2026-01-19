@@ -406,7 +406,7 @@ class Watershed:
         river.ocean_outlet = ocean_outlet
         
         # Wrap in Watershed
-        region = HexRegion(hexes=river.hexes.copy(), hex_grid=terrain.hexGrid)
+        region = HexRegion(hexes=river.hexes.copy(), hexGrid=terrain.hexGrid)
         style = StyleCSS("default", fill="#cccccc")  # Placeholder, assigned later
         
         return cls(region=region, tributary=river, style=style)
@@ -554,7 +554,7 @@ class Watershed:
                 if assigned_river == river_idx:
                     basin_hexes.add(hex_idx)
             
-            region = HexRegion(hexes=basin_hexes, hex_grid=terrain.hexGrid)
+            region = HexRegion(hexes=basin_hexes, hexGrid=terrain.hexGrid)
             style = colors[river_idx % len(colors)]
             river.terrain = terrain
             
@@ -648,7 +648,7 @@ def simplify(self: Watershed, k: int = 3) -> 'Watershed':
     # Create new region with all hexes from simplified rivers
     new_region = HexRegion(
         hexes=main_river.hexes.copy(),
-        hex_grid=terrain.hexGrid
+        hexGrid=terrain.hexGrid
     )
     
     return Watershed(
@@ -1165,14 +1165,14 @@ def lake_basin(self: Watershed, flow_per_hex: float = 100.0) -> HexRegion:
     """
     terminal = self.terminal_hex
     if terminal is None:
-        return HexRegion(hexes=set(), hex_grid=self.terrain.hexGrid)
+        return HexRegion(hexes=set(), hexGrid=self.terrain.hexGrid)
 
     there = self.terrain
 
     if there is None:
         print("Error: There is no terrain data available.")
         
-        return HexRegion(hexes=set(), hex_grid=self.terrain.hexGrid)
+        return HexRegion(hexes=set(), hexGrid=self.terrain.hexGrid)
     
     
     # Calculate how many hexes the lake should have
@@ -1206,7 +1206,7 @@ def lake_basin(self: Watershed, flow_per_hex: float = 100.0) -> HexRegion:
             if neighbor >= 0 and neighbor not in lake_hexes and neighbor in self.region.hexes:
                 heapq.heappush(candidates, (self.terrain.elevations[neighbor], neighbor))
     
-    return HexRegion(hexes=lake_hexes, hex_grid=self.terrain.hexGrid)
+    return HexRegion(hexes=lake_hexes, hexGrid=self.terrain.hexGrid)
 
 
 # %% ../nbs/08_hydrology.ipynb 35

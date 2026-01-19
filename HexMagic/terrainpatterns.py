@@ -125,26 +125,7 @@ def ballSpectrum(self:TerrainPatterns, levels=5, fills=["#007fff"], prefix="ball
     return ret
 
 
-# %% ../nbs/05_terrainpatterns.ipynb 11
-@patch
-def ballScale(self:TerrainPatterns, levels=6, fills=["#007fff"], prefix="ball") -> list:
-    """Create density patterns using scaled circles."""
-    ret = []
-    spacing = 6
-    radius = 2  # fixed radius, we scale the whole pattern
-    
-    for i in range(levels):
-        colorIndex = min(i, len(fills)-1)
-        fill = fills[colorIndex]
-        scale = 0.1 + i * 0.8 / levels
-        
-        pattern = self.circlePattern(f"{prefix}_{i}", radius=radius, spacing=spacing, color=fill)
-        pattern.attributes['patternTransform'] = f'scale({scale})'
-        ret.append(pattern)
-    return ret
-
-
-# %% ../nbs/05_terrainpatterns.ipynb 21
+# %% ../nbs/05_terrainpatterns.ipynb 20
 @patch
 def ballSpectrum(self:TerrainPatterns, levels=5, fills=["#007fff"], prefix="ball") -> [SVGBuilder]:
     """Create density patterns using circles of increasing size."""
@@ -192,7 +173,7 @@ def ballSpectrum(self:TerrainPatterns, levels=5, fills=["#007fff"], prefix="ball
         ret.append(aBuilder)
     return ret
 
-# %% ../nbs/05_terrainpatterns.ipynb 27
+# %% ../nbs/05_terrainpatterns.ipynb 25
 @patch
 def makeOverlay(self:Terrain,data,patterns:[SVGBuilder])->str:
     testBody = ""
@@ -225,7 +206,7 @@ def makeOverlay(self:Terrain,data,patterns:[SVGBuilder])->str:
    
         
 
-# %% ../nbs/05_terrainpatterns.ipynb 28
+# %% ../nbs/05_terrainpatterns.ipynb 26
 @patch
 def overlayRegions(self: HexGrid, regions: list[HexRegion], 
                    patterns: list[SVGBuilder], f=None):
@@ -261,7 +242,7 @@ def overlayRegions(self: HexGrid, regions: list[HexRegion],
     return retLayer
 
 
-# %% ../nbs/05_terrainpatterns.ipynb 29
+# %% ../nbs/05_terrainpatterns.ipynb 27
 @patch
 def visualize_difference(terrain: Terrain,adjustment,thresholds = [-5, -1, 1, 5] ):
     """Visualize erosion with red (removal) and green (deposition)."""
@@ -289,7 +270,7 @@ def visualize_difference(terrain: Terrain,adjustment,thresholds = [-5, -1, 1, 5]
     # Generate overlay
     return self.makeOverlay(adj_indices, patterns)
 
-# %% ../nbs/05_terrainpatterns.ipynb 35
+# %% ../nbs/05_terrainpatterns.ipynb 33
 # Create a terrain
 @patch
 def circusDemo(self:TerraDemo):
@@ -327,7 +308,7 @@ def circusDemo(self:TerraDemo):
     return sampleMap.hexGrid.builder.show()
 
 
-# %% ../nbs/05_terrainpatterns.ipynb 40
+# %% ../nbs/05_terrainpatterns.ipynb 38
 @patch
 def fillPattern(self:HexRegion,pattern:SVGBuilder,smooth=False):
     """Fill a region with a style.
@@ -386,7 +367,7 @@ def fillPattern(self:HexRegion,pattern:SVGBuilder,smooth=False):
     patterns = patternGen.ballDensity(3,fills=fills)  # 5 levels
     self.makeOverlay(flowData, patterns)
 
-# %% ../nbs/05_terrainpatterns.ipynb 45
+# %% ../nbs/05_terrainpatterns.ipynb 43
 class SVGMask(Generatable):
     """SVG mask definition that can be added to SVGBuilder definitions"""
     
@@ -419,7 +400,7 @@ class SVGMask(Generatable):
         return ret
 
 
-# %% ../nbs/05_terrainpatterns.ipynb 46
+# %% ../nbs/05_terrainpatterns.ipynb 44
 @patch
 def fillPatternInverted(self: HexRegion, pattern: SVGBuilder, smooth: bool = False):
     """Fill OUTSIDE a region with a pattern using a mask."""
@@ -454,7 +435,7 @@ def fillPatternInverted(self: HexRegion, pattern: SVGBuilder, smooth: bool = Fal
     return f'<rect x="0" y="0" width="10000" height="10000" fill="{fill}" mask="url(#{mask_id})"/>'
 
 
-# %% ../nbs/05_terrainpatterns.ipynb 47
+# %% ../nbs/05_terrainpatterns.ipynb 45
 @patch
 def hatchLines(self: TerrainPatterns, angle: float = 45, spacing: float = 8, 
                stroke_width: float = 1.5, color: str = "#3d9fc0ff") -> SVGBuilder:
@@ -487,7 +468,7 @@ def hatchLines(self: TerrainPatterns, angle: float = 45, spacing: float = 8,
     
     return aBuilder
 
-# %% ../nbs/05_terrainpatterns.ipynb 49
+# %% ../nbs/05_terrainpatterns.ipynb 47
 @patch
 def island(self:TerraDemo):
     mySize = MapSize(480,480)
@@ -526,7 +507,7 @@ def demoAquatic(self:TerraDemo):
 
     return sampleMap.hexGrid.builder.show()
 
-# %% ../nbs/05_terrainpatterns.ipynb 52
+# %% ../nbs/05_terrainpatterns.ipynb 50
 @patch
 def mapElement(sampleMap:Terrain,bounds:MapCord,name="compass_1",prefix="merright",style=StyleCSS("base", 
                         fill="#27ae60",  # Green
