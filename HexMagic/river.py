@@ -643,13 +643,7 @@ def flow_diagram(self: Terrain) -> str:
     directions = self.flow_directions()
     for i, x in enumerate(directions):
         if 0 <= x < n and self.elevations[i] > 0:
-
-
-    
-            path = MapPath([ self.hexGrid.hexes[i].center, self.hexGrid.hexes[x].center], style)
-    
-        
-            overlay += path.with_arrowhead() + "\n"
+            overlay += self.hexGrid.arrow(i, x, style=style,fromMiddle=True,factor=0.1) + "\n"
     
     return overlay
 
