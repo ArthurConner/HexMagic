@@ -32,13 +32,13 @@ from .styles import StyleCSS, SVGBuilder, SVGLayer, SVGPatternLoader, preview, a
 from .primitives import MapCord, MapSize, MapRect, MapPath, Hex, HexGrid, HexWrapper, HexPosition, hexBackground, HexRegion, windy_edge
 from .terrain import  TerraDemo, Terrain, GeoBounds, ClimatePreset
 #from terrainpattern import TerrainPatterns
-#from HexMagic.river import River, SoilSystem, ErosionModel
+from .river import River, SoilSystem, ErosionModel
 
 # %% ../nbs/07_climate.ipynb #f6041f38
 from .terrainpatterns import TerrainPatterns
 
 # %% ../nbs/07_climate.ipynb #96feb0e5
-#from HexMagic.river import River, RiverDemo
+from .river import River, RiverDemo
 
 # %% ../nbs/07_climate.ipynb #c8f8bc45
 import math

@@ -26,7 +26,8 @@ import numpy as np
 from .terrain import Terrain
 from .voronoi import generate_plate_terrain
 
-
-Terrain.fromSeeds = generate_plate_terrain
 from .climate import ClimatePreset, Climate, TerraDemo
 
+
+# %% ../nbs/00_core.ipynb #471a3e18
+Terrain.fromSeeds = generate_plate_terrain
