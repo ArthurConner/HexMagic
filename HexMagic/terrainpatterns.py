@@ -29,7 +29,7 @@ from treelib import Tree
 import heapq
 from .voronoi import generate_plate_terrain
 
-os.makedirs('tmp', exist_ok=True)
+
 
 
 
@@ -42,7 +42,7 @@ from .primitives import MapCord, MapSize, MapRect, MapPath, Hex, HexGrid, HexReg
 
 # %% ../nbs/05_terrainpatterns.ipynb #9d40ef74
 from .terrain import Terrain, TerraDemo
-Terrain.fromSeeds = generate_plate_terrain
+
 
 # %% ../nbs/05_terrainpatterns.ipynb #b8ce1510
 class TerrainPatterns:

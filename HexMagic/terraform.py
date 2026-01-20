@@ -647,8 +647,8 @@ def animatedEvents(self:Terraform)->Terrain:
         displayTerr.builder.adjust(name,overlay)
     
 
-    anim = LoopingLayerAnimation(layer_names, visible_count=2, step_duration=2, fade_duration=0.1, dim_opacity=0)
-    apply_looping_animation( displayTerr.hexGrid.builder,anim)
+    #anim = LoopingLayerAnimation(layer_names, visible_count=2, step_duration=2, fade_duration=0.1, dim_opacity=0)
+    #apply_looping_animation( displayTerr.hexGrid.builder,anim)
 
     return displayTerr
 
