@@ -3,7 +3,7 @@
 # %% auto 0
 __all__ = ['Watershed', 'DrainageBasins']
 
-# %% ../nbs/08_hydrology.ipynb 4
+# %% ../nbs/08_hydrology.ipynb 5
 import numpy as np
 import sys
 import os
@@ -27,7 +27,7 @@ import httpx
 #custom
 import copy
 
-# %% ../nbs/08_hydrology.ipynb 5
+# %% ../nbs/08_hydrology.ipynb 6
 from .styles import StyleCSS, SVGBuilder, SVGLayer, SVGPatternLoader, preview, app, StyleDemo, LayerAnimation
 from .primitives import MapCord, MapSize, MapRect, MapPath, Hex, HexGrid, HexWrapper, HexPosition, hexBackground, HexRegion
 from .terrain import  TerraDemo, Terrain, GeoBounds, ClimatePreset
@@ -35,7 +35,7 @@ from .terrainpatterns import TerrainPatterns, SVGMask
 from .climate import Climate, TerrainFactory
 from .river import River, RiverDemo
 
-# %% ../nbs/08_hydrology.ipynb 7
+# %% ../nbs/08_hydrology.ipynb 8
 @patch
 def simpleIsland(demo:TerraDemo,debug = False):
 
@@ -60,7 +60,7 @@ def simpleIsland(demo:TerraDemo,debug = False):
 
     return terrain
 
-# %% ../nbs/08_hydrology.ipynb 9
+# %% ../nbs/08_hydrology.ipynb 10
 #find_river_sources() - source detection
 @patch
 def find_river_sources(self: Terrain, 
@@ -112,7 +112,7 @@ def find_river_sources(self: Terrain,
     
     return sources
 
-# %% ../nbs/08_hydrology.ipynb 10
+# %% ../nbs/08_hydrology.ipynb 11
 # visualize_river_sources() - source visualization
 @patch
 def visualize_river_sources(self: Terrain,
@@ -160,7 +160,7 @@ def visualize_river_sources(self: Terrain,
     return sources
 
 
-# %% ../nbs/08_hydrology.ipynb 12
+# %% ../nbs/08_hydrology.ipynb 13
 #create_valley_river() - river creation
 @patch
 def create_valley_river(self: Terrain, source_hex, valley_floor=20):
@@ -206,7 +206,7 @@ def create_valley_river(self: Terrain, source_hex, valley_floor=20):
     
     return river
 
-# %% ../nbs/08_hydrology.ipynb 13
+# %% ../nbs/08_hydrology.ipynb 14
 #calculate_flow_from_rivers() - flow calculation from rivers
 @patch
 def calculate_flow_from_rivers(self: Terrain, rivers: list):
@@ -237,7 +237,7 @@ def calculate_flow_from_rivers(self: Terrain, rivers: list):
                 direction = self.hexGrid.index_to_hexposition(next_hex, current_hex)
                 self.fields['flow_direction'][current_hex] = direction
 
-# %% ../nbs/08_hydrology.ipynb 14
+# %% ../nbs/08_hydrology.ipynb 15
 #downsample_rivers_simple() - river downsampling
 @patch
 def downsample_rivers_simple(self: Terrain, sample_radius=2):
@@ -269,7 +269,7 @@ def downsample_rivers_simple(self: Terrain, sample_radius=2):
     
     return np.array(new_flow)
 
-# %% ../nbs/08_hydrology.ipynb 15
+# %% ../nbs/08_hydrology.ipynb 16
 #  trace_rivers_from_flow() - river tracing
 @patch
 def trace_rivers_from_flow(self: Terrain, min_flow=10, max_rivers=20):
@@ -323,7 +323,7 @@ def trace_rivers_from_flow(self: Terrain, min_flow=10, max_rivers=20):
     
     return rivers
 
-# %% ../nbs/08_hydrology.ipynb 18
+# %% ../nbs/08_hydrology.ipynb 19
 @dataclass
 class Watershed:
     region: HexRegion  # All hexes that drain here
@@ -582,7 +582,7 @@ class Watershed:
 
 
 
-# %% ../nbs/08_hydrology.ipynb 19
+# %% ../nbs/08_hydrology.ipynb 20
 @patch
 def simplify(self: Watershed, k: int = 3) -> 'Watershed':
     """Simplify watershed to k longest paths.
@@ -658,7 +658,7 @@ def simplify(self: Watershed, k: int = 3) -> 'Watershed':
     )
 
 
-# %% ../nbs/08_hydrology.ipynb 20
+# %% ../nbs/08_hydrology.ipynb 21
 @patch
 def segments(self: Watershed) -> list[list[int]]:
     """Extract hex segments from river tree, sorted high→low elevation.
@@ -695,7 +695,7 @@ def segments(self: Watershed) -> list[list[int]]:
     
     return result
 
-# %% ../nbs/08_hydrology.ipynb 21
+# %% ../nbs/08_hydrology.ipynb 22
 @patch
 def segment_to_points(self: Watershed, hexes: list[int]) -> list[MapCord]:
     """Convert hex indices to drawable points, handling ocean termination.
@@ -745,7 +745,7 @@ def segment_to_points(self: Watershed, hexes: list[int]) -> list[MapCord]:
     
     return points
 
-# %% ../nbs/08_hydrology.ipynb 22
+# %% ../nbs/08_hydrology.ipynb 23
 #using helper functions
 @patch
 def draw(self: Watershed, 
@@ -816,14 +816,14 @@ def draw(self: Watershed,
     
     return ret
 
-# %% ../nbs/08_hydrology.ipynb 24
+# %% ../nbs/08_hydrology.ipynb 25
 class DrainageBasins:
 
     def __init__(self,terrain: Terrain,debug=False):
         self.terrain = terrain
         self.sheds = Watershed.compute_all(terrain,debug=debug)
 
-# %% ../nbs/08_hydrology.ipynb 25
+# %% ../nbs/08_hydrology.ipynb 26
 @patch
 def watershed_overlay(self:DrainageBasins):
     """Demo showing watersheds colored by drainage basin."""
@@ -865,7 +865,7 @@ def boundary_overlay(self:DrainageBasins,
     return overlay
 
 
-# %% ../nbs/08_hydrology.ipynb 27
+# %% ../nbs/08_hydrology.ipynb 28
 @patch
 def gradient_overlay(self: DrainageBasins,
                      min_width: float = 0.5,
@@ -968,7 +968,7 @@ def gradient_overlay(self: DrainageBasins,
     return overlay
 
 
-# %% ../nbs/08_hydrology.ipynb 28
+# %% ../nbs/08_hydrology.ipynb 29
 @patch
 def select_shed(self: DrainageBasins, 
                                     min_flow: int = 10,
@@ -1016,7 +1016,7 @@ def select_shed(self: DrainageBasins,
     
     
 
-# %% ../nbs/08_hydrology.ipynb 29
+# %% ../nbs/08_hydrology.ipynb 30
 @patch
 def get_major(self: DrainageBasins, top_n: int = 5) -> List[Watershed]:
     """Get the N largest rivers by flow."""
@@ -1027,7 +1027,7 @@ def get_major(self: DrainageBasins, top_n: int = 5) -> List[Watershed]:
     )
 
 
-# %% ../nbs/08_hydrology.ipynb 30
+# %% ../nbs/08_hydrology.ipynb 31
 @patch
 def dotted_watershed_overlay(self: DrainageBasins, 
                               flow_levels: int = 5,
@@ -1147,7 +1147,7 @@ def dotted_watershed_overlay(self: DrainageBasins,
     return overlay
 
 
-# %% ../nbs/08_hydrology.ipynb 34
+# %% ../nbs/08_hydrology.ipynb 35
 @patch
 def lake_basin(self: Watershed, flow_per_hex: float = 100.0) -> HexRegion:
     """
@@ -1209,7 +1209,7 @@ def lake_basin(self: Watershed, flow_per_hex: float = 100.0) -> HexRegion:
     return HexRegion(hexes=lake_hexes, hexGrid=self.terrain.hexGrid)
 
 
-# %% ../nbs/08_hydrology.ipynb 35
+# %% ../nbs/08_hydrology.ipynb 36
 @patch
 def drawRiver(self: Watershed, 
          min_width: float = 1.0,
@@ -1279,7 +1279,7 @@ def drawRiver(self: Watershed,
     
     return ret
 
-# %% ../nbs/08_hydrology.ipynb 36
+# %% ../nbs/08_hydrology.ipynb 37
 @patch
 def drawLake(self:Watershed)->str:
     if self.is_ocean:
@@ -1302,7 +1302,7 @@ def drawLake(self:Watershed)->str:
     return self.terrain.styleRegion(lake,lake_style)
     
 
-# %% ../nbs/08_hydrology.ipynb 37
+# %% ../nbs/08_hydrology.ipynb 38
 @patch
 def draw(self: Watershed, 
          min_width: float = 1.0,

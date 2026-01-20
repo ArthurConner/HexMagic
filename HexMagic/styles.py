@@ -423,7 +423,7 @@ class LoopingLayerAnimation(Generatable):
 
 
 # %% ../nbs/01_styles.ipynb 24
-def apply_looping_animation(builder: 'SVGBuilder', anim: LoopingLayerAnimation):
+def apply_looping_animation(builder, anim: LoopingLayerAnimation):
     """Apply a LoopingLayerAnimation to an SVGBuilder"""
     # Set initial opacities
     for layer_name, opacity in anim.initial_opacities().items():

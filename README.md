@@ -26,6 +26,28 @@ $ nbdev_prepare
 
 ## Usage
 
+``` python
+from HexMagic.core import MapPath, MapSize, MapRect, MapCord , PrimitiveDemo
+from HexMagic.core import Hex
+from HexMagic.core import StyleCSS,  SVGBuilder
+from HexMagic.core import HexGrid, HexPosition ,  HexRegion, GosperCurve, windy_edge , unique_windy_edge
+from HexMagic.core import Terrain
+from HexMagic.core import ClimatePreset, Climate
+```
+
+``` python
+mySize = MapSize(480,480)
+myBounds = MapRect(MapCord(0,0), mySize)
+sampleMap, plates =  Terrain.fromSeeds(myBounds,radius=10)
+
+sampleMap.colorMap()
+sgrid = sampleMap.hexGrid
+sgrid.builder.adjust("regions", sgrid.styleLayer(f=windy_edge(iterations=2, offset_factor=0.1)))
+
+
+sampleMap.hexGrid.builder.show()
+```
+
 ### Installation
 
 Install latest from the GitHub
@@ -63,5 +85,3 @@ Fill me in please! Don’t forget code examples:
 ``` python
 1+1
 ```
-
-    2

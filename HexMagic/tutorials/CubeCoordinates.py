@@ -5,7 +5,7 @@
 # %% auto 0
 __all__ = ['sampleHex', 'hexStyle', 'canvas', 'grid', 'arrowLayer', 'eastDir', 'start', 'perimeter_style', 'region', 'paths',
            'overlay', 'showEast', 'showRing', 'flip', 'roll', 'hexes_in_range', 'line_demo', 'range_demo',
-           'rotation_demo', 'demo_region_spiral_with_arrows', 'demo_region_erosion', 'demo_voronoi_growth_simple']
+           'rotation_demo', 'demo_region_spiral_with_arrows', 'demo_voronoi_growth_simple']
 
 # %% ../../nbs/tutorials/math.ipynb 5
 #import nbdev; nbdev.nbdev_export()
@@ -358,58 +358,12 @@ overlay = "" + "".join([x.drawClosed() for x in paths])
 grid.builder.adjust("regionBorder",overlay)
 grid.builder.show()
 
-# %% ../../nbs/tutorials/math.ipynb 51
-grid = PrimitiveDemo().sampleGrid(3, fill="lightgray")
-perimeter_style=StyleCSS("perimeter_path", fill="red",  stroke="#ba3ca3ff", stroke_width=3)
-
-region = HexRegion(set([grid.midpoint,grid.midpoint+1,grid.midpoint//2]), grid) 
-
-paths = region.trace_perimeter(style=perimeter_style)
-grid.builder.add_style(perimeter_style)
-overlay = "" + "".join([x.drawClosed() for x in paths])
-grid.builder.adjust("regionBorder",overlay)
-grid.builder.show()
-
 # %% ../../nbs/tutorials/math.ipynb 53
-def demo_region_erosion():
-    """Demo showing a region eroding from outside in"""
-    grid = PrimitiveDemo().sampleGrid(4, fill="lightgray")
-
-    # We can do this first because we are going to add layers on top of it
-    grid.update()
-
-    stages = [
-        StyleCSS(f"erode{i}", fill=color, stroke="blue", stroke_width=2)
-        for i, color in enumerate(["#2c3e50", "#34495e", "#7f8c8d", "#95a5a6", "#bdc3c7"])
-    ]
+#| export
 
 
-    
-    for style in stages:
-        grid.builder.add_style(style)
-    
-    center = grid.midpoint
-    large_region = HexRegion(
-        set(grid.hexposition_to_index(pos, center) 
-            for pos in HexPosition.origin().spiral(3)
-            if grid.hexposition_to_index(pos, center) >= 0),
-        grid
-    )
-    
-    # First pass: create layers and count them
-    current_region = large_region
-    stage = 0
-
-    while len(current_region.hexes) > 0 and stage < len(stages):
-        boundaries = current_region.trace_perimeter(style=stages[stage])
-        layerId = f"stage{stage}"
-        grid.builder.adjust(layerId, "\n".join([x.drawClosed() for x in boundaries]))
-        current_region = current_region.inside()
-        stage += 1
-   
-    return grid.builder
-
-demo_region_erosion().show()
+# %% ../../nbs/tutorials/math.ipynb 55
+from ..styles import apply_looping_animation, LoopingLayerAnimation
 
 # %% ../../nbs/tutorials/math.ipynb 61
 def demo_voronoi_growth_simple():

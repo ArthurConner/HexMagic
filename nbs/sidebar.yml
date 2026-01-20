@@ -21,5 +21,4 @@ website:
           - plots/02d_HexRegion.ipynb
       - section: tutorials
         contents:
-          - tutorials/gallery.ipynb
           - tutorials/math.ipynb

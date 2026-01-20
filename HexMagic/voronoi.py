@@ -482,7 +482,7 @@ from .terrain import Terrain
 
 # %% ../nbs/04_voronoi.ipynb 44
 @patch
-def adjust_by_distance(terrain: 'Terrain', plate: Plate,
+def adjust_by_distance(terrain: Terrain, plate: Plate,
                        from_pos: HexPosition = None,
                        height_func=None) -> None:
     """
