@@ -957,11 +957,28 @@ def soilOverlay(self:SoilSystem,f=None,smooth=False)->str:
     
     aRender = self.terrain.hexGrid.builder
     sGrid = self.terrain.hexGrid
+    terrain = self.terrain
+    
     patGen = TerrainPatterns(self.terrain)
     cols = [x.to_nc() for x in SoilType.standard_types()]
 
+    terrain.colorMap()
+    
+    # Find ocean hexes (level 0)
+    ocean_hexes = terrain.find_region_at_level(0)
+    ocean_region = HexRegion(hexes=ocean_hexes, hexGrid=sGrid)
 
-    patterns, soilStyles = patGen.namedHatchPattern(cols,stroke_width=3,spacing=5)
+    wave = patGen.wavePattern("ocean_waves_pat", 
+                              amplitude=4, 
+                              wavelength=16, 
+                              color="#1565C0",      # stroke: medium blue
+                              fill="#E3F2FD")       # fill: light blue
+    oceanStyle = StyleCSS("ocean", fill=f"url(#ocean_waves_pat)")
+    aRender.add_definition(wave)
+    aRender.add_style(oceanStyle)
+
+
+    patterns, soilStyles = patGen.namedHatchPattern(cols,stroke_width=4,spacing=8)
     
     # Add patterns to builder
     for p in patterns:
@@ -973,10 +990,13 @@ def soilOverlay(self:SoilSystem,f=None,smooth=False)->str:
     for i, region in enumerate(self.regions):
         style = soilStyles[i]
         for h in region:
-            self.terrain.hexGrid.hexes[h].style = style
+            sGrid.hexes[h].style = style
+
+    for i in ocean_region:
+        sGrid.hexes[i].style = oceanStyle
      
-    ret = self.terrain.hexGrid.styleLayerOrdered(
-        styles=sampleMap.colorLevels,
+    ret = sGrid.styleLayerOrdered(
+        styles=soilStyles,
         f=f)
 
     return ret

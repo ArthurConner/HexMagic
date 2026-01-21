@@ -703,15 +703,34 @@ def add_climate_overlay(self: Terrain, layer_name="climate"):
 
 # %% ../nbs/07_climate.ipynb #e429dc22
 @patch
-def add_climate_overlay(self: Terrain, layer_name="climate",showLegend=False):
+def add_climate_overlay(self: Terrain, layer_name="climate",showLegend=True):
     """Visualize climate zones with appropriate colors."""
-    opacity = 0.5
-    
     patGen = TerrainPatterns(self)
     terrain = self
     sgrid = self.hexGrid
+    aRender = sgrid.builder
 
-    patterns, styles = patGen.precipitationStyle(0.1)
+    terrain.colorMap()
+    
+    # Find ocean hexes (level 0)
+    ocean_hexes = terrain.find_region_at_level(0)
+    ocean_region = HexRegion(hexes=ocean_hexes, hexGrid=terrain.hexGrid)
+    
+    # Create wave pattern with ocean blues
+   
+    wave = patGen.wavePattern("ocean_waves_pat", 
+                              amplitude=4, 
+                              wavelength=16, 
+                              color="#1565C0",      # stroke: medium blue
+                              fill="#E3F2FD")       # fill: light blue
+
+    oceanStyle = StyleCSS("ocean_waves", fill=f"url(#ocean_waves_pat)")
+
+    aRender.add_definition(wave)
+    aRender.add_style(oceanStyle)
+    
+
+    patterns, styles = patGen.climateStyle(0.2)
 
        # Add patterns to builder
     for p in patterns:
@@ -734,16 +753,18 @@ def add_climate_overlay(self: Terrain, layer_name="climate",showLegend=False):
         style = styles[styleI]
         for i in region:
             sgrid.hexes[i].style = style
-
+            
+    for i in ocean_region:
+        sgrid.hexes[i].style = oceanStyle
     
     overlay =  sgrid.styleLayerOrdered(
         styles=styles,
         f=unique_windy_edge(iterations=3))
     
-    self.builder.adjust(layer_name, overlay)
+    aRender.adjust(layer_name, overlay)
     if showLegend:
-        legend = sgrid.builder.legendOverlay(styles)
-        sgrid.builder.adjust("legend", legend)
+        legend = aRender.legendOverlay(styles)
+        aRender.adjust("legend", legend)
 
 # %% ../nbs/07_climate.ipynb #06b01099
 @patch
