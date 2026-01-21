@@ -270,31 +270,18 @@ def overlayRegions(self: HexGrid, regions: list[HexRegion],
     return retLayer
 
 
-# %% ../nbs/05_terrainpatterns.ipynb #00d5e632
+# %% ../nbs/05_terrainpatterns.ipynb #c5579aad
 @patch
-def precipitationStyle(patternGen:TerrainPatterns,scale = 0.25):
-    cols = [
-        ("#8B4513", "Desert"),      # added comma
-        ("#DEB887", "Arid"),
-        ("#F0E68C", "Semi-arid"),
-        ("#9ACD32", "Dry"),
-        ("#32CD32", "Moderate"),
-        ("#228B22", "Wet"),
-        ("#006400", "Very_wet"),    # added comma
-        ("#004d00", "Rainforest")
-    ]
-    fills = [c[0] for c in cols]    # fixed
-    labels = [c[1] for c in cols]   # fixed
+def namedBalls(patternGen:TerrainPatterns,cols=[],scale = 0.25):
+    
     spacing = 60
     radius = 20
-    
-    
-   
+
     patterns = []
     styles = []
-    for i in range(len(cols)):      # fixed
-        fill = fills[i]
-        name = labels[i]
+    for pair in cols:      # fixed
+        fill = pair.color
+        name = pair.name
         patternName = f"{name}_pat"
         
         pattern = patternGen.circlePattern(patternName, radius=radius, spacing=spacing, color=fill)  # fixed
@@ -306,34 +293,49 @@ def precipitationStyle(patternGen:TerrainPatterns,scale = 0.25):
     
     return patterns, styles
 
+# %% ../nbs/05_terrainpatterns.ipynb #00d5e632
+@patch
+def precipitationStyle(self:TerrainPatterns,scale = 0.25):
+    cols = [
+        NamedColor("#8B4513", "Desert"),      # added comma
+        NamedColor("#DEB887", "Arid"),
+        NamedColor("#F0E68C", "Semi-arid"),
+        NamedColor("#9ACD32", "Dry"),
+        NamedColor("#32CD32", "Moderate"),
+        NamedColor("#228B22", "Wet"),
+        NamedColor("#006400", "Very_wet"),    # added comma
+        NamedColor("#004d00", "Rainforest")
+    ]
+
+    return self.namedBalls(cols,scale)
+
 # %% ../nbs/05_terrainpatterns.ipynb #af6ee0a5
 @patch
-def climateStyle(patternGen:TerrainPatterns,scale = 0.25):
+def climateStyle(self:TerrainPatterns, scale = 0.25):
     cols = [  
-        ("#1e88e5", "Marine"),
-       ("#42a5f5","Fresh_Water"),
-       ("#e3f2fd","Tundra"),
-       ( "#fdd835","Desert"),
-        ("#9ccc65","Grassland"),
-        ("#2e7d32","Forrest"),
-        ("#1b5e20","Jungle")
+        NamedColor("#1e88e5", "Marine"),
+        NamedColor("#42a5f5","Fresh_Water"),
+        NamedColor("#e3f2fd","Tundra"),
+        NamedColor("#fdd835","Desert"),
+        NamedColor("#9ccc65","Grassland"),
+        NamedColor("#2e7d32","Forrest"),
+        NamedColor("#1b5e20","Jungle")
     ]
-    fills = [c[0] for c in cols]    # fixed
-    labels = [c[1] for c in cols]   # fixed
-    spacing = 60
-    radius = 20
+    return self.namedBalls(cols,scale)
     
+
+# %% ../nbs/05_terrainpatterns.ipynb #a5569840
+@patch
+def namedHatchPattern(patternGen:TerrainPatterns,cols=[],stroke_width=1,spacing=10):
     
-   
     patterns = []
     styles = []
-    for i in range(len(cols)):      # fixed
-        fill = fills[i]
-        name = labels[i]
-        patternName = f"{name}_pat"
+    for pair in cols:      # fixed
+        fill = pair.color
+        name = pair.name
+        patternName = f"{name}_pat_hatch"
         
-        pattern = patternGen.circlePattern(patternName, radius=radius, spacing=spacing, color=fill)  # fixed
-        pattern.attributes['patternTransform'] = f'scale({scale})'
+        pattern = patternGen.crosshatchPattern(patternName,  spacing=spacing,stroke_width= stroke_width,color=fill)  # fixed
         patterns.append(pattern)
         style = StyleCSS(name, fill=f"url(#{patternName})")
         styles.append(style)

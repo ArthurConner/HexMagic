@@ -30,8 +30,8 @@ import heapq
 
 
 # %% ../nbs/06_river.ipynb #a00c60ae
-from .styles import StyleCSS, SVGBuilder,SVGLayer, SVGPatternLoader, preview, app, StyleDemo
-from .primitives import MapCord, MapSize, MapRect, MapPath, Hex, HexGrid, HexWrapper, HexPosition, hexBackground,windy_edge, HexRegion
+from .styles import StyleCSS, SVGBuilder,SVGLayer, SVGPatternLoader, preview, app, StyleDemo,NamedColor
+from .primitives import MapCord, MapSize, MapRect, MapPath, Hex, HexGrid, HexWrapper, HexPosition, hexBackground,windy_edge, HexRegion, unique_windy_edge
 from .terrain import  TerraDemo, Terrain
 from .terrainpatterns import TerrainPatterns
 
@@ -557,7 +557,7 @@ def demoGradient(self:RiverDemo):
     aRender.adjust("rivers", rivSVG)
     aRender.adjust("root","")
     sampleMap.addCoast()
-    aRender.adjust("legend",drawLegend(legends))
+    aRender.adjust("legend",aRender.legendOverlay(legends))
     
     #return max(flowData)
     return aRender.show()
@@ -829,23 +829,9 @@ class SoilType:
 
 # %% ../nbs/06_river.ipynb #d3b0da5b
 @patch
-def to_style(self: SoilType, stroke_width: float = 1.0, opacity: float = 1.0) -> StyleCSS:
-    """Create a StyleCSS for this soil type.
-    
-    Args:
-        stroke_width: Width of stroke for hex borders
-        opacity: Opacity of the fill color (0-1)
-    
-    Returns:
-        StyleCSS with soil color as fill
-    """
-    return StyleCSS(
-        name=f"soil_{self.name.lower()}",
-        fill=self.color,
-        stroke="#000000",
-        stroke_width=stroke_width,
-        opacity=opacity
-    )
+def to_nc(self: SoilType) -> NamedColor:
+    return NamedColor(self.color,self.name)
+   
 
 
 # %% ../nbs/06_river.ipynb #a7ae2e7f
@@ -968,27 +954,32 @@ class SoilSystem:
 @patch
 def soilOverlay(self:SoilSystem,f=None,smooth=False)->str:
     """ build an overlay simalar to HexGrid.styleLayer but uses plates."""
-    retLayer = ""
-    orders = {}  # Shared cache across all regions
-    allPaths = []
-    borders = {}  # Shared cache across all regions
-    soilStyles = [x.to_style() for x in SoilType.standard_types()]
     
+    aRender = self.terrain.hexGrid.builder
+    sGrid = self.terrain.hexGrid
+    patGen = TerrainPatterns(self.terrain)
+    cols = [x.to_nc() for x in SoilType.standard_types()]
+
+
+    patterns, soilStyles = patGen.namedHatchPattern(cols,stroke_width=3,spacing=5)
+    
+    # Add patterns to builder
+    for p in patterns:
+        aRender.add_definition(p)
+
+    for s in soilStyles:
+        aRender.add_style(s)
 
     for i, region in enumerate(self.regions):
         style = soilStyles[i]
-        self.terrain.hexGrid.builder.add_style(style)
-        allPaths.extend( region.trace_perimeter_cached(borders, f, style))
+        for h in region:
+            self.terrain.hexGrid.hexes[h].style = style
+     
+    ret = self.terrain.hexGrid.styleLayerOrdered(
+        styles=sampleMap.colorLevels,
+        f=f)
 
-    allPaths = reversed(sorted(allPaths))
-    for path in allPaths:
-        if smooth:
-            #path = path.smooth()
-            retLayer += path.svg()
-        else:
-            retLayer += path.drawClosed()
-
-    return retLayer
+    return ret
 
 # %% ../nbs/06_river.ipynb #9a3637cf
 def soilInformation(showText=True,terrain=None):
