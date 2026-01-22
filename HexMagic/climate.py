@@ -202,7 +202,7 @@ def compute_precipitation_sb(self: Terrain,
 
 # %% ../nbs/07_climate.ipynb #b09556ab
 @patch
-def visualize_precipitation(self: Terrain, layer_name="precipitation"):
+def visualize_precipitation(self: Terrain, layer_name="precipitation",f=None):
     """Visualize precipitation with color gradient and legend."""
     if 'precipitation' not in self.fields:
         print("Computing precipitation first...")
@@ -266,11 +266,11 @@ def visualize_precipitation(self: Terrain, layer_name="precipitation"):
 
     overlay =  sgrid.styleLayerOrdered(
         styles=styles,
-        f=unique_windy_edge(iterations=3))
+        f=f)
 
 
    
-    sgrid.builder.adjust("rain",overlay)
+    sgrid.builder.adjust(layer_name,overlay)
 
     legend = sgrid.builder.legendOverlay(styles)
     sgrid.builder.adjust("legend", legend)
@@ -703,7 +703,7 @@ def add_climate_overlay(self: Terrain, layer_name="climate"):
 
 # %% ../nbs/07_climate.ipynb #e429dc22
 @patch
-def add_climate_overlay(self: Terrain, layer_name="climate",showLegend=True):
+def add_climate_overlay(self: Terrain, layer_name="climate",showLegend=True, scale=0.2,background=None):
     """Visualize climate zones with appropriate colors."""
     patGen = TerrainPatterns(self)
     terrain = self
@@ -730,7 +730,7 @@ def add_climate_overlay(self: Terrain, layer_name="climate",showLegend=True):
     aRender.add_style(oceanStyle)
     
 
-    patterns, styles = patGen.climateStyle(0.2)
+    patterns, styles = patGen.climateStyle(scale=scale,commonFill=background)
 
        # Add patterns to builder
     for p in patterns:
@@ -754,8 +754,8 @@ def add_climate_overlay(self: Terrain, layer_name="climate",showLegend=True):
         for i in region:
             sgrid.hexes[i].style = style
             
-    for i in ocean_region:
-        sgrid.hexes[i].style = oceanStyle
+    #for i in ocean_region:
+    #    sgrid.hexes[i].style = oceanStyle
     
     overlay =  sgrid.styleLayerOrdered(
         styles=styles,
@@ -827,8 +827,7 @@ def downsample_climate(self: Terrain, scale=0.5,sample_radius=1):
         'distance_to_coast': 'min',  # Closest coast matters
         'latitude': 'weighted_avg',
         'longitude': 'weighted_avg',
-        'climate': 'mode',  # Most common climate type
-        'temp_range': 'weighted_avg',
+        'temp_range': 'weighted_avg'
     }
     
     for field_name, method in field_methods.items():
@@ -841,6 +840,7 @@ def downsample_climate(self: Terrain, scale=0.5,sample_radius=1):
     if new_terrain.colorLevels:
         for color in new_terrain.colorLevels:
             new_terrain.hexGrid.builder.add_style(color)
+    new_terrain.compute_climate()
     
     return new_terrain
 
@@ -1229,6 +1229,58 @@ def add_rain_overlay(self: Terrain, layer_name="climate_precip",debug=False):
     self.hexGrid.builder.adjust(layer_name, overlay)
     
     return self
+
+# %% ../nbs/07_climate.ipynb #29b0e48a
+@patch
+def terrainCream(self: Terrain, layer_name="terrain_base"):
+    """Create parchment-style base fills using elevation + climate + coast."""
+    
+    terrain_fills = {
+        'ocean':     '#E3F2FD',  # light blue (or pattern)
+        'coast':     '#F8F4E8',  # cooler cream near water
+        'lowland':   '#FDF5E6',  # base old lace
+        'plains':    '#FAF0D4',  # warmer yellow
+        'hills':     '#EFE6D5',  # slightly darker
+        'highlands': '#E8DFD0',  # aged/darker
+        'mountain':  '#DED4C4',  # even darker for peaks
+    }
+    
+    # Create styles
+    styles = {k: StyleCSS(k, fill=v) for k, v in terrain_fills.items()}
+    for s in styles.values():
+        self.builder.add_style(s)
+    
+    grid = self.hexGrid
+    
+    # Ensure we have distance_to_coast
+    if 'distance_to_coast' not in self.fields:
+        self.compute_distance_to_coast()
+    
+    for i in range(len(self.elevations)):
+        elev = self.elevations[i]
+        dist_coast = self.fields['distance_to_coast'][i]
+        
+        if elev <= 0:
+            style = styles['ocean']
+        elif dist_coast <= 2 and elev < 200:
+            style = styles['coast']
+        elif elev < 200:
+            style = styles['lowland']
+        elif elev < 500:
+            style = styles['plains']
+        elif elev < 1200:
+            style = styles['hills']
+        elif elev < 2000:
+            style = styles['highlands']
+        else:
+            style = styles['mountain']
+        
+        grid.hexes[i].style = style
+    
+    # Render as base layer
+    overlay = grid.styleLayerOrdered(styles=list(styles.values()))
+    self.builder.adjust(layer_name, overlay)
+
 
 # %% ../nbs/07_climate.ipynb #91f412fa
 @patch  

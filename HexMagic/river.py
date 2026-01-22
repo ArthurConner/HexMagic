@@ -586,7 +586,7 @@ def carve(self:River, base_erosion=0.5, valley_width=3, lower = 40, shape='river
         
         if i < len(sorted_hexes) - 1:
             next_hex = sorted_hexes[i + 1]
-            gradient = self.terrain.elevations[hex_idx] - self.terrain.elevations[next_hex] + lower
+            gradient = self.terrain.elevations[hex_idx] - self.terrain.elevations[next_hex] 
         else:
             gradient = 0.1  # Small default at mouth
         
