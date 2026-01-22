@@ -1,0 +1,86 @@
+# HexMagic
+
+> A hex map generation system that outputs SVG files
+
+## Overview
+
+HexMagic is a Python library for procedural hex map generation with terrain, climate, hydrology, and erosion simulation. Built with nbdev, it provides tools for creating detailed hex-based maps with realistic geographic features.
+
+## Key Features
+
+- **Hex Grid System**: Core hexagonal coordinate system and grid management
+- **Terrain Generation**: Procedural terrain generation using Voronoi diagrams and seed-based algorithms
+- **Climate Simulation**: Climate zones and weather patterns
+- **Hydrology**: River systems, water flow, and drainage basins
+- **Erosion**: Realistic terrain erosion simulation
+- **Terraform**: Terrain modification and editing tools
+- **SVG Output**: High-quality SVG rendering with customizable styles
+
+## Installation
+
+```bash
+pip install HexMagic
+```
+
+Or from GitHub:
+```bash
+pip install git+https://github.com/ArthurConner/HexMagic.git
+```
+
+## Quick Start
+
+```python
+from HexMagic.core import MapPath, MapSize, MapRect, MapCord
+from HexMagic.core import Hex, HexGrid, HexPosition, HexRegion
+from HexMagic.core import StyleCSS, SVGBuilder
+from HexMagic.core import Terrain
+
+# Create a map
+mySize = MapSize(480, 480)
+myBounds = MapRect(MapCord(0, 0), mySize)
+sampleMap, plates = Terrain.fromSeeds(myBounds, radius=10)
+
+# Generate visualization
+sampleMap.colorMap()
+sampleMap.hexGrid.builder.show()
+```
+
+## Core Modules
+
+- **core**: Basic primitives, coordinates, and grid structures
+- **styles**: SVG styling and rendering system
+- **primitives**: Low-level geometric primitives
+- **terrain**: Terrain generation and heightmap algorithms
+- **voronoi**: Voronoi diagram generation for terrain
+- **terrainpatterns**: Pattern-based terrain features
+- **river**: River generation and flow simulation
+- **climate**: Climate zones and weather simulation
+- **hydrology**: Water systems and drainage
+- **erosion**: Erosion simulation algorithms
+- **terraform**: Terrain editing and modification
+
+## Documentation
+
+- GitHub: https://github.com/ArthurConner/HexMagic
+- Documentation: https://ArthurConner.github.io/HexMagic/
+- PyPI: https://pypi.org/project/HexMagic/
+
+## Development
+
+Built with nbdev - notebooks in `nbs/` directory are the source of truth.
+
+```bash
+# Install in development mode
+pip install -e .
+
+# After making changes
+nbdev_prepare
+```
+
+## Author
+
+Arthur Conner (ArthurConner@me.com)
+
+## License
+
+Apache Software License 2.0
