@@ -1222,7 +1222,7 @@ def dottedClimate(self: Terrain,
 
 # %% ../nbs/07_climate.ipynb #6ea71e52
 @patch
-def add_climate_overlay(self: Terrain, layer_name="climate_precip",debug=False):
+def add_rain_overlay(self: Terrain, layer_name="climate_precip",debug=False):
     """Combine climate colors with precipitation-based dot density."""
    
     overlay =  self.dottedClimate(debug=debug)

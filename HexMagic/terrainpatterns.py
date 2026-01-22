@@ -366,10 +366,11 @@ def namedPatterns(patternGen:TerrainPatterns, patternDefs:[PathPattern]):
 # %% ../nbs/05_terrainpatterns.ipynb #af6ee0a5
 @patch
 def climateStyle(self:TerrainPatterns, scale = 0.25):
+    parchment = "#FDF5E6"
     cols = [  
-        PathPattern("#64B5F6", "Marine",
-    fill="#1976D2",
-    path="""
+        PathPattern("#2F4F4F", "Marine",
+            fill="#4A6670",
+            path="""
 <circle cx="120" cy="150" r="80" stroke-width="15" fill="none"/>
 <circle cx="360" cy="150" r="80" stroke-width="15" fill="none"/>
 <circle cx="240" cy="350" r="80" stroke-width="15" fill="none"/>
@@ -377,47 +378,52 @@ def climateStyle(self:TerrainPatterns, scale = 0.25):
 <circle cx="420" cy="450" r="80" stroke-width="15" fill="none"/>
 """),
 
-        PathPattern("#4FC3F7", "Fresh_Water",
-    fill="#03A9F4",
-    path="""
+        PathPattern("#5F9EA0", "Fresh_Water",
+            fill="#6B8A8E",
+            path="""
 <circle cx="160" cy="200" r="100" stroke-width="12" fill="none"/>
 <circle cx="160" cy="200" r="60" stroke-width="12" fill="none"/>
 <circle cx="360" cy="400" r="80" stroke-width="12" fill="none"/>
 <circle cx="360" cy="400" r="40" stroke-width="12" fill="none"/>
 """),
-        PathPattern("#e3f2fd","Tundra","""<line x1="240" y1="100" x2="240" y2="500" stroke-width="40"/>
+        PathPattern("#708090", "Tundra", fill=parchment, path="""<line x1="240" y1="100" x2="240" y2="500" stroke-width="40"/>
 <line x1="66" y1="200" x2="414" y2="400" stroke-width="40"/>
-<line x1="66" y1="400" x2="414" y2="200" stroke-width="40"/>"""),
-        PathPattern("#fdd835","Desert",path = """
-<line x1="0" y1="200" x2="160" y2="300" stroke-width="30"/>
-<line x1="160" y1="300" x2="240" y2="150" stroke-width="30"/>
-<line x1="240" y1="150" x2="480" y2="200" stroke-width="30"/>
-<line x1="160" y1="300" x2="100" y2="600" stroke-width="30"/>
-<line x1="240" y1="150" x2="350" y2="0" stroke-width="30"/>
-<line x1="0" y1="450" x2="200" y2="500" stroke-width="30"/>
-<line x1="200" y1="500" x2="320" y2="400" stroke-width="30"/>
-<line x1="320" y1="400" x2="480" y2="450" stroke-width="30"/>
-<line x1="200" y1="500" x2="380" y2="600" stroke-width="30"/>
-"""),
-        PathPattern("#9ccc65","Grassland",path = """
-        <path d="M240 120A120 120 0 0 1 120 0H0a240 240 0 0 0 240 240A240 240 0 0 0 0 480h120c0-66.3 53.7-120 120-120a120 120 0 1 0 0-240Z" stroke-width="8"></path>
-        """,height=480),
-        PathPattern("#66BB6A","Forrest",path = """
+<line x1="66" y1="400" x2="414" y2="200" stroke-width="40"/>""",scale=scale/2),
+        PathPattern("#CD853F", "Desert", fill="#FDF5E6", path="""
+<path d="M120 450 L120 250 M120 320 Q80 300 70 250 M120 350 Q160 330 170 280" stroke-width="18" fill="none"/>
+<path d="M350 500 L350 350 M350 420 Q320 400 310 360 M350 440 Q380 420 390 380" stroke-width="14" fill="none"/>
+<ellipse cx="220" cy="520" rx="35" ry="45" stroke-width="10"/>
+<ellipse cx="420" cy="540" rx="25" ry="35" stroke-width="8"/>
+<line x1="220" y1="480" x2="220" y2="475" stroke-width="4"/>
+<line x1="235" y1="500" x2="240" y2="495" stroke-width="4"/>
+<line x1="205" y1="510" x2="200" y2="505" stroke-width="4"/>
+""",scale=scale),
+        PathPattern("#6B8E23", "Grassland", fill="#FDF5E6", path="""
+<ellipse cx="120" cy="280" rx="60" ry="40" stroke-width="8"/>
+<line x1="120" y1="320" x2="120" y2="400" stroke-width="12"/>
+<ellipse cx="350" cy="180" rx="50" ry="35" stroke-width="8"/>
+<line x1="350" y1="215" x2="350" y2="280" stroke-width="10"/>
+<ellipse cx="80" cy="500" rx="40" ry="25" stroke-width="6"/>
+<ellipse cx="400" cy="480" rx="45" ry="30" stroke-width="6"/>
+""",scale=scale),
+        PathPattern("#355E3B", "Forrest", fill=parchment, path="""
 <path d="M120 400 L120 300 L60 300 L120 200 L80 200 L120 100 L160 200 L120 200 L180 300 L120 300 Z" stroke-width="10"/>
 <path d="M320 500 L320 400 L260 400 L320 300 L280 300 L320 200 L360 300 L320 300 L380 400 L320 400 Z" stroke-width="10"/>
 <path d="M200 550 L200 480 L160 480 L200 400 L170 400 L200 320 L230 400 L200 400 L240 480 L200 480 Z" stroke-width="8"/>
-"""),
-        PathPattern("#43A047", "Jungle", path="""
-<path d="M120 300 Q80 200 120 100" stroke-width="20" fill="none"/>
-<path d="M120 300 Q160 200 200 120" stroke-width="20" fill="none"/>
-<path d="M120 300 Q60 250 40 180" stroke-width="20" fill="none"/>
-<path d="M360 450 Q320 350 360 250" stroke-width="20" fill="none"/>
-<path d="M360 450 Q400 350 440 270" stroke-width="20" fill="none"/>
-<path d="M360 450 Q300 400 280 330" stroke-width="20" fill="none"/>
-""")
+""",scale=scale),
+        PathPattern("#2E4A3B", "Jungle", fill="#FDF5E6", path="""
+<ellipse cx="100" cy="150" rx="70" ry="50" stroke-width="10"/>
+<line x1="100" y1="200" x2="100" y2="350" stroke-width="15"/>
+<path d="M60 180 Q40 280 60 380" stroke-width="6" fill="none"/>
+<path d="M140 180 Q160 260 140 340" stroke-width="6" fill="none"/>
+<ellipse cx="360" cy="350" rx="80" ry="55" stroke-width="10"/>
+<line x1="360" y1="405" x2="360" y2="550" stroke-width="15"/>
+<path d="M310 380 Q280 460 300 540" stroke-width="6" fill="none"/>
+<path d="M410 380 Q440 450 420 520" stroke-width="6" fill="none"/>
+""",scale=scale)
     ]
     return self.namedPatterns(cols)
-    
+
 
 # %% ../nbs/05_terrainpatterns.ipynb #a5569840
 @patch
