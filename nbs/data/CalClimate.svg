@@ -1,0 +1,604 @@
+<?xml version='1.0' encoding='utf-8'?>
+<svg  width="1043.25" height="885.0" viewBox="0 0 1043.25 885.0" xmlns="http://www.w3.org/2000/svg">
+<title> Untitled </title>
+  <defs>
+    <pattern width="16" height="8" patternUnits="userSpaceOnUse" id="ocean_waves_pat" patternTransform="scale(0.25)"><rect width="16" height="8" fill="#E3F2FD"/><path d="M 0,4 Q 4.0,0 8.0,4 T 16,4" stroke="#1565C0" stroke-width="2" fill="none"/></pattern>
+<pattern width="480" height="600" patternUnits="userSpaceOnUse" id="Marine_pat" patternTransform="scale(0.05)"><g fill="#2F4F4F" stroke="#2F4F4F">
+<rect fill="#4A6670" width="480" height="600"/>
+
+<circle cx="120" cy="150" r="80" stroke-width="15" fill="none"/>
+<circle cx="360" cy="150" r="80" stroke-width="15" fill="none"/>
+<circle cx="240" cy="350" r="80" stroke-width="15" fill="none"/>
+<circle cx="60" cy="450" r="80" stroke-width="15" fill="none"/>
+<circle cx="420" cy="450" r="80" stroke-width="15" fill="none"/>
+
+</g>
+</pattern>
+<pattern width="480" height="600" patternUnits="userSpaceOnUse" id="Fresh_Water_pat" patternTransform="scale(0.05)"><g fill="#5F9EA0" stroke="#5F9EA0">
+<rect fill="#6B8A8E" width="480" height="600"/>
+
+<circle cx="160" cy="200" r="100" stroke-width="12" fill="none"/>
+<circle cx="160" cy="200" r="60" stroke-width="12" fill="none"/>
+<circle cx="360" cy="400" r="80" stroke-width="12" fill="none"/>
+<circle cx="360" cy="400" r="40" stroke-width="12" fill="none"/>
+
+</g>
+</pattern>
+<pattern width="480" height="600" patternUnits="userSpaceOnUse" id="Tundra_pat" patternTransform="scale(0.05)"><g fill="#708090" stroke="#708090">
+<rect fill="#FDF5E6" width="480" height="600"/>
+<line x1="240" y1="100" x2="240" y2="500" stroke-width="40"/>
+<line x1="66" y1="200" x2="414" y2="400" stroke-width="40"/>
+<line x1="66" y1="400" x2="414" y2="200" stroke-width="40"/>
+</g>
+</pattern>
+<pattern width="480" height="600" patternUnits="userSpaceOnUse" id="Desert_pat" patternTransform="scale(0.1)"><g fill="#CD853F" stroke="#CD853F">
+<rect fill="#FDF5E6" width="480" height="600"/>
+
+<path d="M120 450 L120 250 M120 320 Q80 300 70 250 M120 350 Q160 330 170 280" stroke-width="18" fill="none"/>
+<path d="M350 500 L350 350 M350 420 Q320 400 310 360 M350 440 Q380 420 390 380" stroke-width="14" fill="none"/>
+<ellipse cx="220" cy="520" rx="35" ry="45" stroke-width="10"/>
+<ellipse cx="420" cy="540" rx="25" ry="35" stroke-width="8"/>
+<line x1="220" y1="480" x2="220" y2="475" stroke-width="4"/>
+<line x1="235" y1="500" x2="240" y2="495" stroke-width="4"/>
+<line x1="205" y1="510" x2="200" y2="505" stroke-width="4"/>
+
+</g>
+</pattern>
+<pattern width="480" height="600" patternUnits="userSpaceOnUse" id="Grassland_pat" patternTransform="scale(0.1)"><g fill="#6B8E23" stroke="#6B8E23">
+<rect fill="#FDF5E6" width="480" height="600"/>
+
+<ellipse cx="120" cy="280" rx="60" ry="40" stroke-width="8"/>
+<line x1="120" y1="320" x2="120" y2="400" stroke-width="12"/>
+<ellipse cx="350" cy="180" rx="50" ry="35" stroke-width="8"/>
+<line x1="350" y1="215" x2="350" y2="280" stroke-width="10"/>
+<ellipse cx="80" cy="500" rx="40" ry="25" stroke-width="6"/>
+<ellipse cx="400" cy="480" rx="45" ry="30" stroke-width="6"/>
+
+</g>
+</pattern>
+<pattern width="480" height="600" patternUnits="userSpaceOnUse" id="Forrest_pat" patternTransform="scale(0.1)"><g fill="#355E3B" stroke="#355E3B">
+<rect fill="#FDF5E6" width="480" height="600"/>
+
+<path d="M120 400 L120 300 L60 300 L120 200 L80 200 L120 100 L160 200 L120 200 L180 300 L120 300 Z" stroke-width="10"/>
+<path d="M320 500 L320 400 L260 400 L320 300 L280 300 L320 200 L360 300 L320 300 L380 400 L320 400 Z" stroke-width="10"/>
+<path d="M200 550 L200 480 L160 480 L200 400 L170 400 L200 320 L230 400 L200 400 L240 480 L200 480 Z" stroke-width="8"/>
+
+</g>
+</pattern>
+<pattern width="480" height="600" patternUnits="userSpaceOnUse" id="Jungle_pat" patternTransform="scale(0.1)"><g fill="#2E4A3B" stroke="#2E4A3B">
+<rect fill="#FDF5E6" width="480" height="600"/>
+
+<ellipse cx="100" cy="150" rx="70" ry="50" stroke-width="10"/>
+<line x1="100" y1="200" x2="100" y2="350" stroke-width="15"/>
+<path d="M60 180 Q40 280 60 380" stroke-width="6" fill="none"/>
+<path d="M140 180 Q160 260 140 340" stroke-width="6" fill="none"/>
+<ellipse cx="360" cy="350" rx="80" ry="55" stroke-width="10"/>
+<line x1="360" y1="405" x2="360" y2="550" stroke-width="15"/>
+<path d="M310 380 Q280 460 300 540" stroke-width="6" fill="none"/>
+<path d="M410 380 Q440 450 420 520" stroke-width="6" fill="none"/>
+
+</g>
+</pattern>
+  </defs>
+  <style>
+.sealevel {
+  fill:#81b1e1ff;
+}
+.ocean_waves {
+  fill:url(#ocean_waves_pat);
+}
+.Tundra {
+  fill:url(#Tundra_pat);
+}
+.Summits {
+  stroke:#333333;
+  stroke-width:1.5;
+  opacity:0.9;
+  fill:#E65100;
+}
+.Summits:hover {
+  fill:#ac6139;
+  cursor:pointer;
+}
+.Snow {
+  stroke:#333333;
+  stroke-width:1.5;
+  opacity:0.9;
+  fill:#ffffff;
+}
+.Snow:hover {
+  fill:#ffffff;
+  cursor:pointer;
+}
+.Plains {
+  stroke:#333333;
+  stroke-width:1.5;
+  opacity:0.9;
+  fill:#9CCC65;
+}
+.Plains:hover {
+  fill:#9ab27e;
+  cursor:pointer;
+}
+.Peaks {
+  stroke:#333333;
+  stroke-width:1.5;
+  opacity:0.9;
+  fill:#BF360C;
+}
+.Peaks:hover {
+  fill:#924d38;
+  cursor:pointer;
+}
+.Mountains {
+  stroke:#333333;
+  stroke-width:1.5;
+  opacity:0.9;
+  fill:#F57C00;
+}
+.Mountains:hover {
+  fill:#b77b3d;
+  cursor:pointer;
+}
+.Marine {
+  fill:url(#Marine_pat);
+}
+.Lowland {
+  stroke:#333333;
+  stroke-width:1.5;
+  opacity:0.9;
+  fill:#66BB6A;
+}
+.Lowland:hover {
+  fill:#7ba57d;
+  cursor:pointer;
+}
+.Jungle {
+  fill:url(#Jungle_pat);
+}
+.Hills {
+  stroke:#333333;
+  stroke-width:1.5;
+  opacity:0.9;
+  fill:#D4E157;
+}
+.Hills:hover {
+  fill:#b8be79;
+  cursor:pointer;
+}
+.Highlands {
+  stroke:#333333;
+  stroke-width:1.5;
+  opacity:0.9;
+  fill:#FF9800;
+}
+.Highlands:hover {
+  fill:#bf8b3f;
+  cursor:pointer;
+}
+.Grassland {
+  fill:url(#Grassland_pat);
+}
+.Fresh_Water {
+  fill:url(#Fresh_Water_pat);
+}
+.Forrest {
+  fill:url(#Forrest_pat);
+}
+.Foothills {
+  stroke:#333333;
+  stroke-width:1.5;
+  opacity:0.9;
+  fill:#FFCA28;
+}
+.Foothills:hover {
+  fill:#c9ae5d;
+  cursor:pointer;
+}
+.Desert {
+  fill:url(#Desert_pat);
+}
+  </style>
+
+	<polygon points="56,15 56,45 30,60 4,45 4,15 30,0 " class="ocean_waves"/>
+	<polygon points="108,15 108,45 82,60 56,45 56,15 82,0 " class="Forrest"/>
+	<polygon points="160,15 160,45 134,60 108,45 108,15 134,0 " class="Forrest"/>
+	<polygon points="212,15 212,45 186,60 160,45 160,15 186,0 " class="Desert"/>
+	<polygon points="264,15 264,45 238,60 212,45 212,15 238,0 " class="Desert"/>
+	<polygon points="316,15 316,45 290,60 264,45 264,15 290,0 " class="Forrest"/>
+	<polygon points="368,15 368,45 342,60 316,45 316,15 342,0 " class="Forrest"/>
+	<polygon points="420,15 420,45 394,60 368,45 368,15 394,0 " class="Forrest"/>
+	<polygon points="472,15 472,45 446,60 420,45 420,15 446,0 " class="Forrest"/>
+	<polygon points="524,15 524,45 498,60 472,45 472,15 498,0 " class="Desert"/>
+	<polygon points="576,15 576,45 550,60 524,45 524,15 550,0 " class="Desert"/>
+	<polygon points="628,15 628,45 602,60 576,45 576,15 602,0 " class="Desert"/>
+	<polygon points="680,15 680,45 654,60 628,45 628,15 654,0 " class="Desert"/>
+	<polygon points="731,15 731,45 705,60 680,45 680,15 705,0 " class="Forrest"/>
+	<polygon points="783,15 783,45 757,60 731,45 731,15 757,0 " class="Desert"/>
+	<polygon points="835,15 835,45 809,60 783,45 783,15 809,0 " class="Desert"/>
+	<polygon points="887,15 887,45 861,60 835,45 835,15 861,0 " class="Desert"/>
+	<polygon points="939,15 939,45 913,60 887,45 887,15 913,0 " class="Desert"/>
+	<polygon points="991,15 991,45 965,60 939,45 939,15 965,0 " class="Desert"/>
+	<polygon points="1043,15 1043,45 1017,60 991,45 991,15 1017,0 " class="Desert"/>
+	<polygon points="82,60 82,90 56,105 30,90 30,60 56,45 " class="Marine"/>
+	<polygon points="134,60 134,90 108,105 82,90 82,60 108,45 " class="Forrest"/>
+	<polygon points="186,60 186,90 160,105 134,90 134,60 160,45 " class="Forrest"/>
+	<polygon points="238,60 238,90 212,105 186,90 186,60 212,45 " class="Desert"/>
+	<polygon points="290,60 290,90 264,105 238,90 238,60 264,45 " class="Desert"/>
+	<polygon points="342,60 342,90 316,105 290,90 290,60 316,45 " class="Forrest"/>
+	<polygon points="394,60 394,90 368,105 342,90 342,60 368,45 " class="Forrest"/>
+	<polygon points="446,60 446,90 420,105 394,90 394,60 420,45 " class="Forrest"/>
+	<polygon points="498,60 498,90 472,105 446,90 446,60 472,45 " class="Forrest"/>
+	<polygon points="550,60 550,90 524,105 498,90 498,60 524,45 " class="Desert"/>
+	<polygon points="602,60 602,90 576,105 550,90 550,60 576,45 " class="Desert"/>
+	<polygon points="654,60 654,90 628,105 602,90 602,60 628,45 " class="Desert"/>
+	<polygon points="705,60 705,90 680,105 654,90 654,60 680,45 " class="Desert"/>
+	<polygon points="757,60 757,90 731,105 705,90 705,60 731,45 " class="Desert"/>
+	<polygon points="809,60 809,90 783,105 757,90 757,60 783,45 " class="Desert"/>
+	<polygon points="861,60 861,90 835,105 809,90 809,60 835,45 " class="Desert"/>
+	<polygon points="913,60 913,90 887,105 861,90 861,60 887,45 " class="Desert"/>
+	<polygon points="965,60 965,90 939,105 913,90 913,60 939,45 " class="Desert"/>
+	<polygon points="1017,60 1017,90 991,105 965,90 965,60 991,45 " class="Desert"/>
+	<polygon points="1069,60 1069,90 1043,105 1017,90 1017,60 1043,45 " class="Desert"/>
+	<polygon points="56,105 56,135 30,150 4,135 4,105 30,90 " class="Marine"/>
+	<polygon points="108,105 108,135 82,150 56,135 56,105 82,90 " class="Forrest"/>
+	<polygon points="160,105 160,135 134,150 108,135 108,105 134,90 " class="Forrest"/>
+	<polygon points="212,105 212,135 186,150 160,135 160,105 186,90 " class="Forrest"/>
+	<polygon points="264,105 264,135 238,150 212,135 212,105 238,90 " class="Desert"/>
+	<polygon points="316,105 316,135 290,150 264,135 264,105 290,90 " class="Forrest"/>
+	<polygon points="368,105 368,135 342,150 316,135 316,105 342,90 " class="Forrest"/>
+	<polygon points="420,105 420,135 394,150 368,135 368,105 394,90 " class="Forrest"/>
+	<polygon points="472,105 472,135 446,150 420,135 420,105 446,90 " class="Forrest"/>
+	<polygon points="524,105 524,135 498,150 472,135 472,105 498,90 " class="Desert"/>
+	<polygon points="576,105 576,135 550,150 524,135 524,105 550,90 " class="Desert"/>
+	<polygon points="628,105 628,135 602,150 576,135 576,105 602,90 " class="Desert"/>
+	<polygon points="680,105 680,135 654,150 628,135 628,105 654,90 " class="Desert"/>
+	<polygon points="731,105 731,135 705,150 680,135 680,105 705,90 " class="Desert"/>
+	<polygon points="783,105 783,135 757,150 731,135 731,105 757,90 " class="Desert"/>
+	<polygon points="835,105 835,135 809,150 783,135 783,105 809,90 " class="Desert"/>
+	<polygon points="887,105 887,135 861,150 835,135 835,105 861,90 " class="Desert"/>
+	<polygon points="939,105 939,135 913,150 887,135 887,105 913,90 " class="Desert"/>
+	<polygon points="991,105 991,135 965,150 939,135 939,105 965,90 " class="Desert"/>
+	<polygon points="1043,105 1043,135 1017,150 991,135 991,105 1017,90 " class="Desert"/>
+	<polygon points="82,150 82,180 56,195 30,180 30,150 56,135 " class="Marine"/>
+	<polygon points="134,150 134,180 108,195 82,180 82,150 108,135 " class="Forrest"/>
+	<polygon points="186,150 186,180 160,195 134,180 134,150 160,135 " class="Forrest"/>
+	<polygon points="238,150 238,180 212,195 186,180 186,150 212,135 " class="Forrest"/>
+	<polygon points="290,150 290,180 264,195 238,180 238,150 264,135 " class="Desert"/>
+	<polygon points="342,150 342,180 316,195 290,180 290,150 316,135 " class="Forrest"/>
+	<polygon points="394,150 394,180 368,195 342,180 342,150 368,135 " class="Forrest"/>
+	<polygon points="446,150 446,180 420,195 394,180 394,150 420,135 " class="Forrest"/>
+	<polygon points="498,150 498,180 472,195 446,180 446,150 472,135 " class="Desert"/>
+	<polygon points="550,150 550,180 524,195 498,180 498,150 524,135 " class="Desert"/>
+	<polygon points="602,150 602,180 576,195 550,180 550,150 576,135 " class="Desert"/>
+	<polygon points="654,150 654,180 628,195 602,180 602,150 628,135 " class="Desert"/>
+	<polygon points="705,150 705,180 680,195 654,180 654,150 680,135 " class="Forrest"/>
+	<polygon points="757,150 757,180 731,195 705,180 705,150 731,135 " class="Desert"/>
+	<polygon points="809,150 809,180 783,195 757,180 757,150 783,135 " class="Desert"/>
+	<polygon points="861,150 861,180 835,195 809,180 809,150 835,135 " class="Desert"/>
+	<polygon points="913,150 913,180 887,195 861,180 861,150 887,135 " class="Desert"/>
+	<polygon points="965,150 965,180 939,195 913,180 913,150 939,135 " class="Desert"/>
+	<polygon points="1017,150 1017,180 991,195 965,180 965,150 991,135 " class="Desert"/>
+	<polygon points="1069,150 1069,180 1043,195 1017,180 1017,150 1043,135 " class="Desert"/>
+	<polygon points="56,195 56,225 30,240 4,225 4,195 30,180 " class="Marine"/>
+	<polygon points="108,195 108,225 82,240 56,225 56,195 82,180 " class="Forrest"/>
+	<polygon points="160,195 160,225 134,240 108,225 108,195 134,180 " class="Forrest"/>
+	<polygon points="212,195 212,225 186,240 160,225 160,195 186,180 " class="Forrest"/>
+	<polygon points="264,195 264,225 238,240 212,225 212,195 238,180 " class="Desert"/>
+	<polygon points="316,195 316,225 290,240 264,225 264,195 290,180 " class="Forrest"/>
+	<polygon points="368,195 368,225 342,240 316,225 316,195 342,180 " class="Forrest"/>
+	<polygon points="420,195 420,225 394,240 368,225 368,195 394,180 " class="Forrest"/>
+	<polygon points="472,195 472,225 446,240 420,225 420,195 446,180 " class="Desert"/>
+	<polygon points="524,195 524,225 498,240 472,225 472,195 498,180 " class="Desert"/>
+	<polygon points="576,195 576,225 550,240 524,225 524,195 550,180 " class="Desert"/>
+	<polygon points="628,195 628,225 602,240 576,225 576,195 602,180 " class="Desert"/>
+	<polygon points="680,195 680,225 654,240 628,225 628,195 654,180 " class="Desert"/>
+	<polygon points="731,195 731,225 705,240 680,225 680,195 705,180 " class="Forrest"/>
+	<polygon points="783,195 783,225 757,240 731,225 731,195 757,180 " class="Desert"/>
+	<polygon points="835,195 835,225 809,240 783,225 783,195 809,180 " class="Desert"/>
+	<polygon points="887,195 887,225 861,240 835,225 835,195 861,180 " class="Desert"/>
+	<polygon points="939,195 939,225 913,240 887,225 887,195 913,180 " class="Desert"/>
+	<polygon points="991,195 991,225 965,240 939,225 939,195 965,180 " class="Desert"/>
+	<polygon points="1043,195 1043,225 1017,240 991,225 991,195 1017,180 " class="Desert"/>
+	<polygon points="82,240 82,270 56,285 30,270 30,240 56,225 " class="Marine"/>
+	<polygon points="134,240 134,270 108,285 82,270 82,240 108,225 " class="Marine"/>
+	<polygon points="186,240 186,270 160,285 134,270 134,240 160,225 " class="Forrest"/>
+	<polygon points="238,240 238,270 212,285 186,270 186,240 212,225 " class="Forrest"/>
+	<polygon points="290,240 290,270 264,285 238,270 238,240 264,225 " class="Desert"/>
+	<polygon points="342,240 342,270 316,285 290,270 290,240 316,225 " class="Forrest"/>
+	<polygon points="394,240 394,270 368,285 342,270 342,240 368,225 " class="Forrest"/>
+	<polygon points="446,240 446,270 420,285 394,270 394,240 420,225 " class="Forrest"/>
+	<polygon points="498,240 498,270 472,285 446,270 446,240 472,225 " class="Forrest"/>
+	<polygon points="550,240 550,270 524,285 498,270 498,240 524,225 " class="Desert"/>
+	<polygon points="602,240 602,270 576,285 550,270 550,240 576,225 " class="Desert"/>
+	<polygon points="654,240 654,270 628,285 602,270 602,240 628,225 " class="Desert"/>
+	<polygon points="705,240 705,270 680,285 654,270 654,240 680,225 " class="Forrest"/>
+	<polygon points="757,240 757,270 731,285 705,270 705,240 731,225 " class="Forrest"/>
+	<polygon points="809,240 809,270 783,285 757,270 757,240 783,225 " class="Desert"/>
+	<polygon points="861,240 861,270 835,285 809,270 809,240 835,225 " class="Desert"/>
+	<polygon points="913,240 913,270 887,285 861,270 861,240 887,225 " class="Desert"/>
+	<polygon points="965,240 965,270 939,285 913,270 913,240 939,225 " class="Desert"/>
+	<polygon points="1017,240 1017,270 991,285 965,270 965,240 991,225 " class="Desert"/>
+	<polygon points="1069,240 1069,270 1043,285 1017,270 1017,240 1043,225 " class="Desert"/>
+	<polygon points="56,285 56,315 30,330 4,315 4,285 30,270 " class="Marine"/>
+	<polygon points="108,285 108,315 82,330 56,315 56,285 82,270 " class="Marine"/>
+	<polygon points="160,285 160,315 134,330 108,315 108,285 134,270 " class="Forrest"/>
+	<polygon points="212,285 212,315 186,330 160,315 160,285 186,270 " class="Forrest"/>
+	<polygon points="264,285 264,315 238,330 212,315 212,285 238,270 " class="Desert"/>
+	<polygon points="316,285 316,315 290,330 264,315 264,285 290,270 " class="Forrest"/>
+	<polygon points="368,285 368,315 342,330 316,315 316,285 342,270 " class="Forrest"/>
+	<polygon points="420,285 420,315 394,330 368,315 368,285 394,270 " class="Forrest"/>
+	<polygon points="472,285 472,315 446,330 420,315 420,285 446,270 " class="Forrest"/>
+	<polygon points="524,285 524,315 498,330 472,315 472,285 498,270 " class="Desert"/>
+	<polygon points="576,285 576,315 550,330 524,315 524,285 550,270 " class="Desert"/>
+	<polygon points="628,285 628,315 602,330 576,315 576,285 602,270 " class="Desert"/>
+	<polygon points="680,285 680,315 654,330 628,315 628,285 654,270 " class="Forrest"/>
+	<polygon points="731,285 731,315 705,330 680,315 680,285 705,270 " class="Forrest"/>
+	<polygon points="783,285 783,315 757,330 731,315 731,285 757,270 " class="Desert"/>
+	<polygon points="835,285 835,315 809,330 783,315 783,285 809,270 " class="Desert"/>
+	<polygon points="887,285 887,315 861,330 835,315 835,285 861,270 " class="Desert"/>
+	<polygon points="939,285 939,315 913,330 887,315 887,285 913,270 " class="Desert"/>
+	<polygon points="991,285 991,315 965,330 939,315 939,285 965,270 " class="Desert"/>
+	<polygon points="1043,285 1043,315 1017,330 991,315 991,285 1017,270 " class="Desert"/>
+	<polygon points="82,330 82,360 56,375 30,360 30,330 56,315 " class="Marine"/>
+	<polygon points="134,330 134,360 108,375 82,360 82,330 108,315 " class="Marine"/>
+	<polygon points="186,330 186,360 160,375 134,360 134,330 160,315 " class="Marine"/>
+	<polygon points="238,330 238,360 212,375 186,360 186,330 212,315 " class="Forrest"/>
+	<polygon points="290,330 290,360 264,375 238,360 238,330 264,315 " class="Forrest"/>
+	<polygon points="342,330 342,360 316,375 290,360 290,330 316,315 " class="Forrest"/>
+	<polygon points="394,330 394,360 368,375 342,360 342,330 368,315 " class="Forrest"/>
+	<polygon points="446,330 446,360 420,375 394,360 394,330 420,315 " class="Forrest"/>
+	<polygon points="498,330 498,360 472,375 446,360 446,330 472,315 " class="Forrest"/>
+	<polygon points="550,330 550,360 524,375 498,360 498,330 524,315 " class="Forrest"/>
+	<polygon points="602,330 602,360 576,375 550,360 550,330 576,315 " class="Desert"/>
+	<polygon points="654,330 654,360 628,375 602,360 602,330 628,315 " class="Desert"/>
+	<polygon points="705,330 705,360 680,375 654,360 654,330 680,315 " class="Desert"/>
+	<polygon points="757,330 757,360 731,375 705,360 705,330 731,315 " class="Desert"/>
+	<polygon points="809,330 809,360 783,375 757,360 757,330 783,315 " class="Forrest"/>
+	<polygon points="861,330 861,360 835,375 809,360 809,330 835,315 " class="Desert"/>
+	<polygon points="913,330 913,360 887,375 861,360 861,330 887,315 " class="Desert"/>
+	<polygon points="965,330 965,360 939,375 913,360 913,330 939,315 " class="Desert"/>
+	<polygon points="1017,330 1017,360 991,375 965,360 965,330 991,315 " class="Desert"/>
+	<polygon points="1069,330 1069,360 1043,375 1017,360 1017,330 1043,315 " class="Desert"/>
+	<polygon points="56,375 56,405 30,420 4,405 4,375 30,360 " class="Marine"/>
+	<polygon points="108,375 108,405 82,420 56,405 56,375 82,360 " class="Marine"/>
+	<polygon points="160,375 160,405 134,420 108,405 108,375 134,360 " class="Marine"/>
+	<polygon points="212,375 212,405 186,420 160,405 160,375 186,360 " class="Marine"/>
+	<polygon points="264,375 264,405 238,420 212,405 212,375 238,360 " class="Forrest"/>
+	<polygon points="316,375 316,405 290,420 264,405 264,375 290,360 " class="Forrest"/>
+	<polygon points="368,375 368,405 342,420 316,405 316,375 342,360 " class="Forrest"/>
+	<polygon points="420,375 420,405 394,420 368,405 368,375 394,360 " class="Forrest"/>
+	<polygon points="472,375 472,405 446,420 420,405 420,375 446,360 " class="Forrest"/>
+	<polygon points="524,375 524,405 498,420 472,405 472,375 498,360 " class="Forrest"/>
+	<polygon points="576,375 576,405 550,420 524,405 524,375 550,360 " class="Desert"/>
+	<polygon points="628,375 628,405 602,420 576,405 576,375 602,360 " class="Desert"/>
+	<polygon points="680,375 680,405 654,420 628,405 628,375 654,360 " class="Desert"/>
+	<polygon points="731,375 731,405 705,420 680,405 680,375 705,360 " class="Desert"/>
+	<polygon points="783,375 783,405 757,420 731,405 731,375 757,360 " class="Forrest"/>
+	<polygon points="835,375 835,405 809,420 783,405 783,375 809,360 " class="Forrest"/>
+	<polygon points="887,375 887,405 861,420 835,405 835,375 861,360 " class="Desert"/>
+	<polygon points="939,375 939,405 913,420 887,405 887,375 913,360 " class="Desert"/>
+	<polygon points="991,375 991,405 965,420 939,405 939,375 965,360 " class="Desert"/>
+	<polygon points="1043,375 1043,405 1017,420 991,405 991,375 1017,360 " class="Desert"/>
+	<polygon points="82,420 82,450 56,465 30,450 30,420 56,405 " class="Marine"/>
+	<polygon points="134,420 134,450 108,465 82,450 82,420 108,405 " class="Marine"/>
+	<polygon points="186,420 186,450 160,465 134,450 134,420 160,405 " class="Marine"/>
+	<polygon points="238,420 238,450 212,465 186,450 186,420 212,405 " class="Marine"/>
+	<polygon points="290,420 290,450 264,465 238,450 238,420 264,405 " class="Marine"/>
+	<polygon points="342,420 342,450 316,465 290,450 290,420 316,405 " class="Forrest"/>
+	<polygon points="394,420 394,450 368,465 342,450 342,420 368,405 " class="Forrest"/>
+	<polygon points="446,420 446,450 420,465 394,450 394,420 420,405 " class="Forrest"/>
+	<polygon points="498,420 498,450 472,465 446,450 446,420 472,405 " class="Forrest"/>
+	<polygon points="550,420 550,450 524,465 498,450 498,420 524,405 " class="Forrest"/>
+	<polygon points="602,420 602,450 576,465 550,450 550,420 576,405 " class="Forrest"/>
+	<polygon points="654,420 654,450 628,465 602,450 602,420 628,405 " class="Desert"/>
+	<polygon points="705,420 705,450 680,465 654,450 654,420 680,405 " class="Desert"/>
+	<polygon points="757,420 757,450 731,465 705,450 705,420 731,405 " class="Desert"/>
+	<polygon points="809,420 809,450 783,465 757,450 757,420 783,405 " class="Desert"/>
+	<polygon points="861,420 861,450 835,465 809,450 809,420 835,405 " class="Forrest"/>
+	<polygon points="913,420 913,450 887,465 861,450 861,420 887,405 " class="Desert"/>
+	<polygon points="965,420 965,450 939,465 913,450 913,420 939,405 " class="Desert"/>
+	<polygon points="1017,420 1017,450 991,465 965,450 965,420 991,405 " class="Desert"/>
+	<polygon points="1069,420 1069,450 1043,465 1017,450 1017,420 1043,405 " class="Desert"/>
+	<polygon points="56,465 56,495 30,510 4,495 4,465 30,450 " class="Marine"/>
+	<polygon points="108,465 108,495 82,510 56,495 56,465 82,450 " class="Marine"/>
+	<polygon points="160,465 160,495 134,510 108,495 108,465 134,450 " class="Marine"/>
+	<polygon points="212,465 212,495 186,510 160,495 160,465 186,450 " class="Marine"/>
+	<polygon points="264,465 264,495 238,510 212,495 212,465 238,450 " class="Marine"/>
+	<polygon points="316,465 316,495 290,510 264,495 264,465 290,450 " class="Forrest"/>
+	<polygon points="368,465 368,495 342,510 316,495 316,465 342,450 " class="Forrest"/>
+	<polygon points="420,465 420,495 394,510 368,495 368,465 394,450 " class="Forrest"/>
+	<polygon points="472,465 472,495 446,510 420,495 420,465 446,450 " class="Forrest"/>
+	<polygon points="524,465 524,495 498,510 472,495 472,465 498,450 " class="Forrest"/>
+	<polygon points="576,465 576,495 550,510 524,495 524,465 550,450 " class="Forrest"/>
+	<polygon points="628,465 628,495 602,510 576,495 576,465 602,450 " class="Forrest"/>
+	<polygon points="680,465 680,495 654,510 628,495 628,465 654,450 " class="Desert"/>
+	<polygon points="731,465 731,495 705,510 680,495 680,465 705,450 " class="Desert"/>
+	<polygon points="783,465 783,495 757,510 731,495 731,465 757,450 " class="Desert"/>
+	<polygon points="835,465 835,495 809,510 783,495 783,465 809,450 " class="Forrest"/>
+	<polygon points="887,465 887,495 861,510 835,495 835,465 861,450 " class="Forrest"/>
+	<polygon points="939,465 939,495 913,510 887,495 887,465 913,450 " class="Desert"/>
+	<polygon points="991,465 991,495 965,510 939,495 939,465 965,450 " class="Desert"/>
+	<polygon points="1043,465 1043,495 1017,510 991,495 991,465 1017,450 " class="Desert"/>
+	<polygon points="82,510 82,540 56,555 30,540 30,510 56,495 " class="Marine"/>
+	<polygon points="134,510 134,540 108,555 82,540 82,510 108,495 " class="Marine"/>
+	<polygon points="186,510 186,540 160,555 134,540 134,510 160,495 " class="Marine"/>
+	<polygon points="238,510 238,540 212,555 186,540 186,510 212,495 " class="Marine"/>
+	<polygon points="290,510 290,540 264,555 238,540 238,510 264,495 " class="Marine"/>
+	<polygon points="342,510 342,540 316,555 290,540 290,510 316,495 " class="Marine"/>
+	<polygon points="394,510 394,540 368,555 342,540 342,510 368,495 " class="Forrest"/>
+	<polygon points="446,510 446,540 420,555 394,540 394,510 420,495 " class="Forrest"/>
+	<polygon points="498,510 498,540 472,555 446,540 446,510 472,495 " class="Forrest"/>
+	<polygon points="550,510 550,540 524,555 498,540 498,510 524,495 " class="ocean_waves"/>
+	<polygon points="602,510 602,540 576,555 550,540 550,510 576,495 " class="Forrest"/>
+	<polygon points="654,510 654,540 628,555 602,540 602,510 628,495 " class="Forrest"/>
+	<polygon points="705,510 705,540 680,555 654,540 654,510 680,495 " class="Tundra"/>
+	<polygon points="757,510 757,540 731,555 705,540 705,510 731,495 " class="Desert"/>
+	<polygon points="809,510 809,540 783,555 757,540 757,510 783,495 " class="Desert"/>
+	<polygon points="861,510 861,540 835,555 809,540 809,510 835,495 " class="Forrest"/>
+	<polygon points="913,510 913,540 887,555 861,540 861,510 887,495 " class="Forrest"/>
+	<polygon points="965,510 965,540 939,555 913,540 913,510 939,495 " class="Forrest"/>
+	<polygon points="1017,510 1017,540 991,555 965,540 965,510 991,495 " class="Desert"/>
+	<polygon points="1069,510 1069,540 1043,555 1017,540 1017,510 1043,495 " class="Desert"/>
+	<polygon points="56,555 56,585 30,600 4,585 4,555 30,540 " class="Marine"/>
+	<polygon points="108,555 108,585 82,600 56,585 56,555 82,540 " class="Marine"/>
+	<polygon points="160,555 160,585 134,600 108,585 108,555 134,540 " class="Marine"/>
+	<polygon points="212,555 212,585 186,600 160,585 160,555 186,540 " class="Marine"/>
+	<polygon points="264,555 264,585 238,600 212,585 212,555 238,540 " class="Marine"/>
+	<polygon points="316,555 316,585 290,600 264,585 264,555 290,540 " class="Marine"/>
+	<polygon points="368,555 368,585 342,600 316,585 316,555 342,540 " class="Forrest"/>
+	<polygon points="420,555 420,585 394,600 368,585 368,555 394,540 " class="Forrest"/>
+	<polygon points="472,555 472,585 446,600 420,585 420,555 446,540 " class="Forrest"/>
+	<polygon points="524,555 524,585 498,600 472,585 472,555 498,540 " class="Forrest"/>
+	<polygon points="576,555 576,585 550,600 524,585 524,555 550,540 " class="ocean_waves"/>
+	<polygon points="628,555 628,585 602,600 576,585 576,555 602,540 " class="Forrest"/>
+	<polygon points="680,555 680,585 654,600 628,585 628,555 654,540 " class="Forrest"/>
+	<polygon points="731,555 731,585 705,600 680,585 680,555 705,540 " class="Desert"/>
+	<polygon points="783,555 783,585 757,600 731,585 731,555 757,540 " class="Desert"/>
+	<polygon points="835,555 835,585 809,600 783,585 783,555 809,540 " class="Forrest"/>
+	<polygon points="887,555 887,585 861,600 835,585 835,555 861,540 " class="Forrest"/>
+	<polygon points="939,555 939,585 913,600 887,585 887,555 913,540 " class="Forrest"/>
+	<polygon points="991,555 991,585 965,600 939,585 939,555 965,540 " class="Desert"/>
+	<polygon points="1043,555 1043,585 1017,600 991,585 991,555 1017,540 " class="Desert"/>
+	<polygon points="82,600 82,630 56,645 30,630 30,600 56,585 " class="Marine"/>
+	<polygon points="134,600 134,630 108,645 82,630 82,600 108,585 " class="Marine"/>
+	<polygon points="186,600 186,630 160,645 134,630 134,600 160,585 " class="Marine"/>
+	<polygon points="238,600 238,630 212,645 186,630 186,600 212,585 " class="Marine"/>
+	<polygon points="290,600 290,630 264,645 238,630 238,600 264,585 " class="Marine"/>
+	<polygon points="342,600 342,630 316,645 290,630 290,600 316,585 " class="Marine"/>
+	<polygon points="394,600 394,630 368,645 342,630 342,600 368,585 " class="Marine"/>
+	<polygon points="446,600 446,630 420,645 394,630 394,600 420,585 " class="Forrest"/>
+	<polygon points="498,600 498,630 472,645 446,630 446,600 472,585 " class="Forrest"/>
+	<polygon points="550,600 550,630 524,645 498,630 498,600 524,585 " class="Forrest"/>
+	<polygon points="602,600 602,630 576,645 550,630 550,600 576,585 " class="Forrest"/>
+	<polygon points="654,600 654,630 628,645 602,630 602,600 628,585 " class="Forrest"/>
+	<polygon points="705,600 705,630 680,645 654,630 654,600 680,585 " class="Forrest"/>
+	<polygon points="757,600 757,630 731,645 705,630 705,600 731,585 " class="Desert"/>
+	<polygon points="809,600 809,630 783,645 757,630 757,600 783,585 " class="Desert"/>
+	<polygon points="861,600 861,630 835,645 809,630 809,600 835,585 " class="Desert"/>
+	<polygon points="913,600 913,630 887,645 861,630 861,600 887,585 " class="Desert"/>
+	<polygon points="965,600 965,630 939,645 913,630 913,600 939,585 " class="Forrest"/>
+	<polygon points="1017,600 1017,630 991,645 965,630 965,600 991,585 " class="Desert"/>
+	<polygon points="1069,600 1069,630 1043,645 1017,630 1017,600 1043,585 " class="Desert"/>
+	<polygon points="56,645 56,675 30,690 4,675 4,645 30,630 " class="Marine"/>
+	<polygon points="108,645 108,675 82,690 56,675 56,645 82,630 " class="Marine"/>
+	<polygon points="160,645 160,675 134,690 108,675 108,645 134,630 " class="Marine"/>
+	<polygon points="212,645 212,675 186,690 160,675 160,645 186,630 " class="Marine"/>
+	<polygon points="264,645 264,675 238,690 212,675 212,645 238,630 " class="Marine"/>
+	<polygon points="316,645 316,675 290,690 264,675 264,645 290,630 " class="Marine"/>
+	<polygon points="368,645 368,675 342,690 316,675 316,645 342,630 " class="Marine"/>
+	<polygon points="420,645 420,675 394,690 368,675 368,645 394,630 " class="Marine"/>
+	<polygon points="472,645 472,675 446,690 420,675 420,645 446,630 " class="Forrest"/>
+	<polygon points="524,645 524,675 498,690 472,675 472,645 498,630 " class="Forrest"/>
+	<polygon points="576,645 576,675 550,690 524,675 524,645 550,630 " class="Forrest"/>
+	<polygon points="628,645 628,675 602,690 576,675 576,645 602,630 " class="Forrest"/>
+	<polygon points="680,645 680,675 654,690 628,675 628,645 654,630 " class="Desert"/>
+	<polygon points="731,645 731,675 705,690 680,675 680,645 705,630 " class="Desert"/>
+	<polygon points="783,645 783,675 757,690 731,675 731,645 757,630 " class="Desert"/>
+	<polygon points="835,645 835,675 809,690 783,675 783,645 809,630 " class="Desert"/>
+	<polygon points="887,645 887,675 861,690 835,675 835,645 861,630 " class="Desert"/>
+	<polygon points="939,645 939,675 913,690 887,675 887,645 913,630 " class="Forrest"/>
+	<polygon points="991,645 991,675 965,690 939,675 939,645 965,630 " class="Desert"/>
+	<polygon points="1043,645 1043,675 1017,690 991,675 991,645 1017,630 " class="Desert"/>
+	<polygon points="82,690 82,720 56,735 30,720 30,690 56,675 " class="Marine"/>
+	<polygon points="134,690 134,720 108,735 82,720 82,690 108,675 " class="Marine"/>
+	<polygon points="186,690 186,720 160,735 134,720 134,690 160,675 " class="Marine"/>
+	<polygon points="238,690 238,720 212,735 186,720 186,690 212,675 " class="Marine"/>
+	<polygon points="290,690 290,720 264,735 238,720 238,690 264,675 " class="Marine"/>
+	<polygon points="342,690 342,720 316,735 290,720 290,690 316,675 " class="Marine"/>
+	<polygon points="394,690 394,720 368,735 342,720 342,690 368,675 " class="Marine"/>
+	<polygon points="446,690 446,720 420,735 394,720 394,690 420,675 " class="Marine"/>
+	<polygon points="498,690 498,720 472,735 446,720 446,690 472,675 " class="Marine"/>
+	<polygon points="550,690 550,720 524,735 498,720 498,690 524,675 " class="Forrest"/>
+	<polygon points="602,690 602,720 576,735 550,720 550,690 576,675 " class="Forrest"/>
+	<polygon points="654,690 654,720 628,735 602,720 602,690 628,675 " class="Desert"/>
+	<polygon points="705,690 705,720 680,735 654,720 654,690 680,675 " class="Desert"/>
+	<polygon points="757,690 757,720 731,735 705,720 705,690 731,675 " class="Desert"/>
+	<polygon points="809,690 809,720 783,735 757,720 757,690 783,675 " class="Forrest"/>
+	<polygon points="861,690 861,720 835,735 809,720 809,690 835,675 " class="Desert"/>
+	<polygon points="913,690 913,720 887,735 861,720 861,690 887,675 " class="Desert"/>
+	<polygon points="965,690 965,720 939,735 913,720 913,690 939,675 " class="Desert"/>
+	<polygon points="1017,690 1017,720 991,735 965,720 965,690 991,675 " class="Desert"/>
+	<polygon points="1069,690 1069,720 1043,735 1017,720 1017,690 1043,675 " class="Desert"/>
+	<polygon points="56,735 56,765 30,780 4,765 4,735 30,720 " class="Marine"/>
+	<polygon points="108,735 108,765 82,780 56,765 56,735 82,720 " class="Marine"/>
+	<polygon points="160,735 160,765 134,780 108,765 108,735 134,720 " class="Marine"/>
+	<polygon points="212,735 212,765 186,780 160,765 160,735 186,720 " class="Marine"/>
+	<polygon points="264,735 264,765 238,780 212,765 212,735 238,720 " class="Marine"/>
+	<polygon points="316,735 316,765 290,780 264,765 264,735 290,720 " class="Marine"/>
+	<polygon points="368,735 368,765 342,780 316,765 316,735 342,720 " class="Marine"/>
+	<polygon points="420,735 420,765 394,780 368,765 368,735 394,720 " class="Marine"/>
+	<polygon points="472,735 472,765 446,780 420,765 420,735 446,720 " class="Marine"/>
+	<polygon points="524,735 524,765 498,780 472,765 472,735 498,720 " class="Marine"/>
+	<polygon points="576,735 576,765 550,780 524,765 524,735 550,720 " class="Marine"/>
+	<polygon points="628,735 628,765 602,780 576,765 576,735 602,720 " class="Marine"/>
+	<polygon points="680,735 680,765 654,780 628,765 628,735 654,720 " class="Forrest"/>
+	<polygon points="731,735 731,765 705,780 680,765 680,735 705,720 " class="Forrest"/>
+	<polygon points="783,735 783,765 757,780 731,765 731,735 757,720 " class="Forrest"/>
+	<polygon points="835,735 835,765 809,780 783,765 783,735 809,720 " class="Desert"/>
+	<polygon points="887,735 887,765 861,780 835,765 835,735 861,720 " class="Desert"/>
+	<polygon points="939,735 939,765 913,780 887,765 887,735 913,720 " class="Desert"/>
+	<polygon points="991,735 991,765 965,780 939,765 939,735 965,720 " class="Desert"/>
+	<polygon points="1043,735 1043,765 1017,780 991,765 991,735 1017,720 " class="Grassland"/>
+	<polygon points="82,780 82,810 56,825 30,810 30,780 56,765 " class="Marine"/>
+	<polygon points="134,780 134,810 108,825 82,810 82,780 108,765 " class="Marine"/>
+	<polygon points="186,780 186,810 160,825 134,810 134,780 160,765 " class="Marine"/>
+	<polygon points="238,780 238,810 212,825 186,810 186,780 212,765 " class="Marine"/>
+	<polygon points="290,780 290,810 264,825 238,810 238,780 264,765 " class="Marine"/>
+	<polygon points="342,780 342,810 316,825 290,810 290,780 316,765 " class="Marine"/>
+	<polygon points="394,780 394,810 368,825 342,810 342,780 368,765 " class="Marine"/>
+	<polygon points="446,780 446,810 420,825 394,810 394,780 420,765 " class="Marine"/>
+	<polygon points="498,780 498,810 472,825 446,810 446,780 472,765 " class="Marine"/>
+	<polygon points="550,780 550,810 524,825 498,810 498,780 524,765 " class="Marine"/>
+	<polygon points="602,780 602,810 576,825 550,810 550,780 576,765 " class="Marine"/>
+	<polygon points="654,780 654,810 628,825 602,810 602,780 628,765 " class="Marine"/>
+	<polygon points="705,780 705,810 680,825 654,810 654,780 680,765 " class="Marine"/>
+	<polygon points="757,780 757,810 731,825 705,810 705,780 731,765 " class="Forrest"/>
+	<polygon points="809,780 809,810 783,825 757,810 757,780 783,765 " class="Forrest"/>
+	<polygon points="861,780 861,810 835,825 809,810 809,780 835,765 " class="Forrest"/>
+	<polygon points="913,780 913,810 887,825 861,810 861,780 887,765 " class="Desert"/>
+	<polygon points="965,780 965,810 939,825 913,810 913,780 939,765 " class="Desert"/>
+	<polygon points="1017,780 1017,810 991,825 965,810 965,780 991,765 " class="Desert"/>
+	<polygon points="1069,780 1069,810 1043,825 1017,810 1017,780 1043,765 " class="Desert"/>
+	<polygon points="56,825 56,855 30,870 4,855 4,825 30,810 " class="Marine"/>
+	<polygon points="108,825 108,855 82,870 56,855 56,825 82,810 " class="Marine"/>
+	<polygon points="160,825 160,855 134,870 108,855 108,825 134,810 " class="Marine"/>
+	<polygon points="212,825 212,855 186,870 160,855 160,825 186,810 " class="Marine"/>
+	<polygon points="264,825 264,855 238,870 212,855 212,825 238,810 " class="Marine"/>
+	<polygon points="316,825 316,855 290,870 264,855 264,825 290,810 " class="Marine"/>
+	<polygon points="368,825 368,855 342,870 316,855 316,825 342,810 " class="Marine"/>
+	<polygon points="420,825 420,855 394,870 368,855 368,825 394,810 " class="Marine"/>
+	<polygon points="472,825 472,855 446,870 420,855 420,825 446,810 " class="Marine"/>
+	<polygon points="524,825 524,855 498,870 472,855 472,825 498,810 " class="Marine"/>
+	<polygon points="576,825 576,855 550,870 524,855 524,825 550,810 " class="Marine"/>
+	<polygon points="628,825 628,855 602,870 576,855 576,825 602,810 " class="Marine"/>
+	<polygon points="680,825 680,855 654,870 628,855 628,825 654,810 " class="Marine"/>
+	<polygon points="731,825 731,855 705,870 680,855 680,825 705,810 " class="Marine"/>
+	<polygon points="783,825 783,855 757,870 731,855 731,825 757,810 " class="Forrest"/>
+	<polygon points="835,825 835,855 809,870 783,855 783,825 809,810 " class="Forrest"/>
+	<polygon points="887,825 887,855 861,870 835,855 835,825 861,810 " class="Desert"/>
+	<polygon points="939,825 939,855 913,870 887,855 887,825 913,810 " class="Desert"/>
+	<polygon points="991,825 991,855 965,870 939,855 939,825 965,810 " class="Forrest"/>
+	<polygon points="1043,825 1043,855 1017,870 991,855 991,825 1017,810 " class="Forrest"/>
+	<polygon points="82,870 82,900 56,915 30,900 30,870 56,855 " class="Marine"/>
+	<polygon points="134,870 134,900 108,915 82,900 82,870 108,855 " class="Marine"/>
+	<polygon points="186,870 186,900 160,915 134,900 134,870 160,855 " class="Marine"/>
+	<polygon points="238,870 238,900 212,915 186,900 186,870 212,855 " class="Marine"/>
+	<polygon points="290,870 290,900 264,915 238,900 238,870 264,855 " class="Marine"/>
+	<polygon points="342,870 342,900 316,915 290,900 290,870 316,855 " class="Marine"/>
+	<polygon points="394,870 394,900 368,915 342,900 342,870 368,855 " class="Marine"/>
+	<polygon points="446,870 446,900 420,915 394,900 394,870 420,855 " class="Marine"/>
+	<polygon points="498,870 498,900 472,915 446,900 446,870 472,855 " class="Marine"/>
+	<polygon points="550,870 550,900 524,915 498,900 498,870 524,855 " class="Marine"/>
+	<polygon points="602,870 602,900 576,915 550,900 550,870 576,855 " class="Marine"/>
+	<polygon points="654,870 654,900 628,915 602,900 602,870 628,855 " class="Marine"/>
+	<polygon points="705,870 705,900 680,915 654,900 654,870 680,855 " class="Marine"/>
+	<polygon points="757,870 757,900 731,915 705,900 705,870 731,855 " class="Marine"/>
+	<polygon points="809,870 809,900 783,915 757,900 757,870 783,855 " class="Marine"/>
+	<polygon points="861,870 861,900 835,915 809,900 809,870 835,855 " class="Forrest"/>
+	<polygon points="913,870 913,900 887,915 861,900 861,870 887,855 " class="Desert"/>
+	<polygon points="965,870 965,900 939,915 913,900 913,870 939,855 " class="Desert"/>
+	<polygon points="1017,870 1017,900 991,915 965,900 965,870 991,855 " class="Forrest"/>
+	<polygon points="1069,870 1069,900 1043,915 1017,900 1017,870 1043,855 " class="Forrest"/>
+
+</svg>
