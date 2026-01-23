@@ -379,23 +379,34 @@ def _edge_is_forward(p1: MapCord, p2: MapCord) -> bool:
 
 # %% ../../nbs/plots/02d_HexRegion.ipynb #86e667ed
 @patch
-def trace_boundary_with_cache(self: HexRegion, borders: dict, f=None, style=None) -> MapPath:
+def trace_boundary_with_cache(self: HexRegion, borders: dict, f=None, style=None, inset=1.0) -> MapPath:
     """Trace boundary using shared edge cache.
     
     Args:
         borders: Shared dict mapping edge_key -> list[MapCord] (the transformed points)
         f: Function (p1, p2) -> list[MapCord] to transform edge endpoints into path segment
         style: Style for the resulting MapPath
+        inset: Factor from center to vertex (1.0 = at vertex, 0.5 = halfway, 0.0 = at center)
     """
     if style is None:
         style = StyleCSS("boundary", fill="none", stroke="#333", stroke_width=2)
     
     if f is None:
-        f = lambda p1, p2: [p1, p2]  # Default: straight line
+        f = lambda p1, p2: [p1, p2]
     
     boundary_points = self.trace_boundary()
     if not boundary_points:
         return MapPath([], style)
+    
+    def get_inset_point(bp):
+        """Get point interpolated between hex center and vertex."""
+        hex_obj = self.hexGrid.hexes[bp.hex_idx]
+        center = hex_obj.center
+        vertex = hex_obj.v[bp.vertex]
+        return MapCord(
+            center.x + inset * (vertex.x - center.x),
+            center.y + inset * (vertex.y - center.y)
+        )
     
     all_coords = []
     
@@ -403,25 +414,22 @@ def trace_boundary_with_cache(self: HexRegion, borders: dict, f=None, style=None
         bp1 = boundary_points[i]
         bp2 = boundary_points[(i + 1) % len(boundary_points)]
         
-        p1 = self.hexGrid.hexes[bp1.hex_idx].v[bp1.vertex]
-        p2 = self.hexGrid.hexes[bp2.hex_idx].v[bp2.vertex]
+        p1 = get_inset_point(bp1)
+        p2 = get_inset_point(bp2)
         
         key = _edge_key(p1, p2)
         forward = _edge_is_forward(p1, p2)
         
         if key not in borders:
-            # Compute and cache in canonical direction
             if forward:
                 borders[key] = f(p1, p2)
             else:
                 borders[key] = f(p2, p1)
         
-        # Get segment, reverse if needed
         segment = borders[key]
         if not forward:
             segment = list(reversed(segment))
         
-        # Add points (skip first if not first segment to avoid duplicates)
         if i == 0:
             all_coords.extend(segment)
         else:
@@ -432,13 +440,15 @@ def trace_boundary_with_cache(self: HexRegion, borders: dict, f=None, style=None
 
 # %% ../../nbs/plots/02d_HexRegion.ipynb #2cccd05f
 @patch
-def trace_perimeter_cached(self: HexRegion, borders: dict, f=None, 
-                           style=StyleCSS("perimeter_path", fill="none", 
-                                         stroke="#ba3ca3ff", stroke_width=3)):
+def trace_perimeter_cached(self: HexRegion, 
+    borders: dict, #This dictionary stores already computed edges so they match
+    f=None, # the wrinkle function such as windy edge
+    style=StyleCSS("perimeter_path", fill="none", stroke="#ba3ca3ff", stroke_width=3), 
+    inset=1.0) :
     """Trace perimeter using shared border cache."""
     paths = []
     for subR in self.contiguous():
-        path = subR.trace_boundary_with_cache(borders, f, style)
+        path = subR.trace_boundary_with_cache(borders=borders, f=f, style=style,inset=inset)
         paths.append(path)
     return paths
 
@@ -448,6 +458,32 @@ def trace_perimeter_cached(self: HexRegion, borders: dict, f=None,
 def __lt__(self: MapPath, other: MapPath) -> bool:
     """Less than comparison: first by x, then by y."""
     return len(self.points) < len(other.points)
+
+# %% ../../nbs/plots/02d_HexRegion.ipynb #d98a919e
+@patch
+def draw(self:HexRegion,style,f=None,smooth=False,inset=1.0):
+    borders = {}  # Shared cache across all regions
+    allPaths = []
+    retLayer = ""
+    
+    allPaths.extend( self.trace_perimeter_cached(
+        borders=borders, 
+        f=f, 
+        style=style,
+        inset = inset
+        ))
+            
+    allPaths = reversed(sorted(allPaths))
+    for path in allPaths:
+        if smooth:
+            #path = path.smooth()
+            retLayer += path.svg()
+        else:
+            retLayer += path.drawClosed()
+    return retLayer
+
+
+    
 
 # %% ../../nbs/plots/02d_HexRegion.ipynb #153470ff
 @patch

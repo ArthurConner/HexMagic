@@ -29,36 +29,11 @@ import copy
 
 # %% ../nbs/08_hydrology.ipynb #f400829f
 from .styles import StyleCSS, SVGBuilder, SVGLayer, SVGPatternLoader, preview, app, StyleDemo, LayerAnimation
-from .primitives import MapCord, MapSize, MapRect, MapPath, Hex, HexGrid, HexWrapper, HexPosition, hexBackground, HexRegion
+from .primitives import MapCord, MapSize, MapRect, MapPath, Hex, HexGrid, HexWrapper, HexPosition, hexBackground, HexRegion, unique_windy_edge
 from .terrain import  TerraDemo, Terrain, GeoBounds, ClimatePreset
 from .terrainpatterns import TerrainPatterns, SVGMask
 from .climate import Climate, TerrainFactory
 from .river import River, RiverDemo
-
-# %% ../nbs/08_hydrology.ipynb #59af3edd
-@patch
-def simpleIsland(demo:TerraDemo,debug = False):
-
-
-    # 1. Create blank ocean world with tropical preset
-    bounds = MapRect(MapCord(0, 0), MapSize(800, 800))
-
-
-    world = TerrainFactory.create_ocean_world(
-        bounds=bounds,
-        preset='monsoon',
-        radius=15,
-        lon_span=5.0,
-        num_plates=16,
-        ocean_fraction=0.6,
-        debug= debug
-    )
-
-    terrain = world.terrain
-
-    terrain.climate.configure(terrain,debug=debug)
-
-    return terrain
 
 # %% ../nbs/08_hydrology.ipynb #2a819c68
 #find_river_sources() - source detection
@@ -582,6 +557,68 @@ class Watershed:
 
 
 
+# %% ../nbs/08_hydrology.ipynb #7d27869b
+@patch
+def lake_basin(self: Watershed, flow_per_hex: float = 100.0) -> HexRegion:
+    """
+    Create a lake basin at the terminal hex based on accumulated flow.
+    
+    The lake grows by adding the lowest neighboring hexes that drain into it,
+    until the total flow is "used up" by the lake area.
+    
+    Args:
+        flow_per_hex: How much flow each hex of lake can hold (default: 100)
+                     Lower values = bigger lakes
+    
+    Returns:
+        HexRegion representing the lake basin
+    """
+    terminal = self.terminal_hex
+    if terminal is None:
+        return HexRegion(hexes=set(), hexGrid=self.terrain.hexGrid)
+
+    there = self.terrain
+
+    if there is None:
+        print("Error: There is no terrain data available.")
+        
+        return HexRegion(hexes=set(), hexGrid=self.terrain.hexGrid)
+    
+    
+    # Calculate how many hexes the lake should have
+    flows = self.tributary._calculate_flow()
+    terminal_flow = flows.get(terminal, 0)
+    target_hexes = max(1, int(terminal_flow / flow_per_hex))
+    
+    # Start with terminal hex
+    lake_hexes = {terminal}
+    candidates = []  # (elevation, hex_idx)
+    
+    # Add neighbors as candidates
+    for neighbor in self.terrain.hexGrid.neighborsOf(terminal):
+        if neighbor >= 0 and neighbor in self.region.hexes:
+            candidates.append((self.terrain.elevations[neighbor], neighbor))
+    
+    # Grow lake by adding lowest neighbors
+    import heapq
+    heapq.heapify(candidates)
+    
+    while len(lake_hexes) < target_hexes and candidates:
+        elev, hex_idx = heapq.heappop(candidates)
+        
+        if hex_idx in lake_hexes:
+            continue
+        
+        lake_hexes.add(hex_idx)
+        
+        # Add this hex's neighbors as new candidates
+        for neighbor in self.terrain.hexGrid.neighborsOf(hex_idx):
+            if neighbor >= 0 and neighbor not in lake_hexes and neighbor in self.region.hexes:
+                heapq.heappush(candidates, (self.terrain.elevations[neighbor], neighbor))
+    
+    return HexRegion(hexes=lake_hexes, hexGrid=self.terrain.hexGrid)
+
+
 # %% ../nbs/08_hydrology.ipynb #9fc076d9
 @patch
 def simplify(self: Watershed, k: int = 3) -> 'Watershed':
@@ -745,10 +782,9 @@ def segment_to_points(self: Watershed, hexes: list[int]) -> list[MapCord]:
     
     return points
 
-# %% ../nbs/08_hydrology.ipynb #c56d866c
-#using helper functions
+# %% ../nbs/08_hydrology.ipynb #973f54b2
 @patch
-def draw(self: Watershed, 
+def drawRiver(self: Watershed, 
          min_width: float = 1.0,
          max_width: float = 8.0,
          min_windiness: float = 0.05,
@@ -756,6 +792,7 @@ def draw(self: Watershed,
          min_iterations: int = 2,
          max_iterations: int = 5,
          color: str = "#1565c0",
+         max_flow: float = None,
          opacity: float = 0.7,
          debug: bool = False) -> str:
     """Render river with flow-based thickness and gradient-based windiness."""
@@ -765,7 +802,11 @@ def draw(self: Watershed,
         return ""
     
     terrain = self.tributary.terrain
-    max_flow = max(flows.values())
+    
+    # Use provided max_flow or calculate from this watershed's flows
+    if max_flow is None:
+        max_flow = max(flows.values())
+    
     log_max_flow = math.log10(max_flow + 1)
     
     ret = ""
@@ -816,6 +857,62 @@ def draw(self: Watershed,
     
     return ret
 
+
+# %% ../nbs/08_hydrology.ipynb #f44c2253
+@patch
+def drawLake(self:Watershed,flow_per_hex=20,fill="#0000ff")->str:
+    if self.is_ocean:
+        return ""
+    
+    lake = self.lake_basin(flow_per_hex=flow_per_hex)
+    
+    if not lake.hexes:
+        return ""
+    
+    # Create a new style for the lake
+    lake_style = StyleCSS(
+        f"lake_",
+        fill=fill,  # Blue color for the lake
+        opacity=0.5,  # Adjust opacity as needed
+        stroke="none"
+    )
+    
+    self.terrain.builder.add_style(lake_style)  
+    return lake.draw(style=lake_style,inset=0.7,f=unique_windy_edge)
+    #return self.terrain.styleRegion(lake,lake_style,inset = 0.3,f=unique_windy_edge)
+    
+
+# %% ../nbs/08_hydrology.ipynb #c56d866c
+@patch
+def draw(self: Watershed, 
+         min_width: float = 1.0,
+         max_width: float = 8.0,
+         min_windiness: float = 0.05,
+         max_windiness: float = 0.3,
+         min_iterations: int = 2,
+         max_iterations: int = 5,
+         color: str = "#1565c0",
+         opacity: float = 0.7,
+         max_flow:float = None,
+         flow_per_hex=40,
+         debug: bool = False) -> str:
+
+        rivers = self.drawRiver(
+                min_width = min_width,
+                max_width =  max_width,
+                min_windiness = min_windiness,
+                max_windiness = max_windiness,
+                min_iterations  =  min_iterations,
+                max_iterations = max_iterations,
+                max_flow = max_flow,
+                color =color,
+                opacity = opacity,
+                debug = debug
+                )
+
+        rivers += self.drawLake(flow_per_hex=flow_per_hex)
+        return rivers
+
 # %% ../nbs/08_hydrology.ipynb #8c18e5b1
 class DrainageBasins:
 
@@ -864,6 +961,54 @@ def boundary_overlay(self:DrainageBasins,
     
     return overlay
 
+
+# %% ../nbs/08_hydrology.ipynb #5941a02c
+@patch
+def select_shed(self: DrainageBasins, 
+                                    min_flow: int = 10,
+                                    max_rivers: int = 20,
+                                    min_length: int = 5) -> List[Watershed]:
+    """Select the most important rivers to display.
+    
+    Strategy:
+    1. One main river per major watershed (largest basins)
+    2. Rivers must have significant flow (min_flow)
+    3. Rivers must be long enough to be visible (min_length)
+    4. Prioritize by watershed size and flow
+    
+    Args:
+        min_flow: Minimum accumulated flow to show
+        max_rivers: Maximum number of rivers to return
+        min_length: Minimum number of hexes in river path
+    
+    Returns:
+        List of River objects suitable for display
+    """
+    candidates = []
+    
+    for watershed in self.sheds:
+        river = watershed.tributary
+        
+        # Calculate river metrics
+        flow_values = river._calculate_flow()
+        max_flow = max(flow_values.values()) if flow_values else 0
+        river_length = len(river.hexes)
+        watershed_size = len(watershed.region.hexes)
+        
+        # Score = combination of flow, length, and watershed size
+        score = max_flow * 0.5 + river_length * 0.3 + watershed_size * 0.2
+        
+        # Filter by minimum criteria
+        if max_flow >= min_flow and river_length >= min_length:
+            candidates.append((watershed, score, max_flow, river_length))
+    
+    # Sort by score descending
+    candidates.sort(key=lambda x: x[1], reverse=True)
+    
+    # Return top N watershed
+    return [watershed for watershed, _, _, _ in candidates[:max_rivers]]
+    
+    
 
 # %% ../nbs/08_hydrology.ipynb #2c9d1041
 @patch
@@ -967,54 +1112,6 @@ def gradient_overlay(self: DrainageBasins,
     
     return overlay
 
-
-# %% ../nbs/08_hydrology.ipynb #5941a02c
-@patch
-def select_shed(self: DrainageBasins, 
-                                    min_flow: int = 10,
-                                    max_rivers: int = 20,
-                                    min_length: int = 5) -> List[Watershed]:
-    """Select the most important rivers to display.
-    
-    Strategy:
-    1. One main river per major watershed (largest basins)
-    2. Rivers must have significant flow (min_flow)
-    3. Rivers must be long enough to be visible (min_length)
-    4. Prioritize by watershed size and flow
-    
-    Args:
-        min_flow: Minimum accumulated flow to show
-        max_rivers: Maximum number of rivers to return
-        min_length: Minimum number of hexes in river path
-    
-    Returns:
-        List of River objects suitable for display
-    """
-    candidates = []
-    
-    for watershed in self.sheds:
-        river = watershed.tributary
-        
-        # Calculate river metrics
-        flow_values = river._calculate_flow()
-        max_flow = max(flow_values.values()) if flow_values else 0
-        river_length = len(river.hexes)
-        watershed_size = len(watershed.region.hexes)
-        
-        # Score = combination of flow, length, and watershed size
-        score = max_flow * 0.5 + river_length * 0.3 + watershed_size * 0.2
-        
-        # Filter by minimum criteria
-        if max_flow >= min_flow and river_length >= min_length:
-            candidates.append((watershed, score, max_flow, river_length))
-    
-    # Sort by score descending
-    candidates.sort(key=lambda x: x[1], reverse=True)
-    
-    # Return top N watershed
-    return [watershed for watershed, _, _, _ in candidates[:max_rivers]]
-    
-    
 
 # %% ../nbs/08_hydrology.ipynb #bbb8e31c
 @patch
@@ -1147,185 +1244,25 @@ def dotted_watershed_overlay(self: DrainageBasins,
     return overlay
 
 
-# %% ../nbs/08_hydrology.ipynb #dc8b04c9
+# %% ../nbs/08_hydrology.ipynb #2b3db31a
 @patch
-def lake_basin(self: Watershed, flow_per_hex: float = 100.0) -> HexRegion:
-    """
-    Create a lake basin at the terminal hex based on accumulated flow.
-    
-    The lake grows by adding the lowest neighboring hexes that drain into it,
-    until the total flow is "used up" by the lake area.
-    
-    Args:
-        flow_per_hex: How much flow each hex of lake can hold (default: 100)
-                     Lower values = bigger lakes
-    
-    Returns:
-        HexRegion representing the lake basin
-    """
-    terminal = self.terminal_hex
-    if terminal is None:
-        return HexRegion(hexes=set(), hexGrid=self.terrain.hexGrid)
+def draw_watersheds(self: DrainageBasins, top_n: int = 8, simplify_k: int = 3, max_width: float = None,flow_per_hex=40) -> str:
 
-    there = self.terrain
-
-    if there is None:
-        print("Error: There is no terrain data available.")
-        
-        return HexRegion(hexes=set(), hexGrid=self.terrain.hexGrid)
+    watersheds = self.get_major(top_n)
     
-    
-    # Calculate how many hexes the lake should have
-    flows = self.tributary._calculate_flow()
-    terminal_flow = flows.get(terminal, 0)
-    target_hexes = max(1, int(terminal_flow / flow_per_hex))
-    
-    # Start with terminal hex
-    lake_hexes = {terminal}
-    candidates = []  # (elevation, hex_idx)
-    
-    # Add neighbors as candidates
-    for neighbor in self.terrain.hexGrid.neighborsOf(terminal):
-        if neighbor >= 0 and neighbor in self.region.hexes:
-            candidates.append((self.terrain.elevations[neighbor], neighbor))
-    
-    # Grow lake by adding lowest neighbors
-    import heapq
-    heapq.heapify(candidates)
-    
-    while len(lake_hexes) < target_hexes and candidates:
-        elev, hex_idx = heapq.heappop(candidates)
-        
-        if hex_idx in lake_hexes:
-            continue
-        
-        lake_hexes.add(hex_idx)
-        
-        # Add this hex's neighbors as new candidates
-        for neighbor in self.terrain.hexGrid.neighborsOf(hex_idx):
-            if neighbor >= 0 and neighbor not in lake_hexes and neighbor in self.region.hexes:
-                heapq.heappush(candidates, (self.terrain.elevations[neighbor], neighbor))
-    
-    return HexRegion(hexes=lake_hexes, hexGrid=self.terrain.hexGrid)
-
-
-# %% ../nbs/08_hydrology.ipynb #b57c87fd
-@patch
-def drawRiver(self: Watershed, 
-         min_width: float = 1.0,
-         max_width: float = 8.0,
-         min_windiness: float = 0.05,
-         max_windiness: float = 0.3,
-         min_iterations: int = 2,
-         max_iterations: int = 5,
-         color: str = "#1565c0",
-         opacity: float = 0.7,
-         debug: bool = False) -> str:
-    """Render river with flow-based thickness and gradient-based windiness."""
-    
-    flows = self.tributary._calculate_flow()
-    if not flows:
-        return ""
-    
-    terrain = self.tributary.terrain
-    max_flow = max(flows.values())
-    log_max_flow = math.log10(max_flow + 1)
-    
-    ret = ""
-    
-    for hexes in self.segments():
-        points = self.segment_to_points(hexes)
-        
-        if len(points) < 2:
-            continue
-        
-        # Calculate gradient from elevation difference
-        land_hexes = [h for h in hexes if terrain.elevations[h] > 0]
-        if len(land_hexes) >= 2:
-            gradient = terrain.elevations[land_hexes[0]] - terrain.elevations[land_hexes[-1]]
-        else:
-            gradient = 0
-        
-        # Calculate average flow (log scaled)
-        segment_flows = [flows.get(h, 1) for h in land_hexes]
-        avg_flow = sum(segment_flows) / len(segment_flows) if segment_flows else 1
-        log_flow = math.log10(avg_flow + 1)
-        flow_ratio = log_flow / log_max_flow if log_max_flow > 0 else 0
-        
-        # Map flow to width
-        width = round(min_width + flow_ratio * (max_width - min_width), 1)
-        
-        # Map gradient to windiness (high gradient = less windy)
-        max_possible_gradient = max(terrain.elevations) - min(e for e in terrain.elevations if e > 0)
-        if max_possible_gradient > 0:
-            gradient_ratio = min(gradient / max_possible_gradient, 1.0)
-            windiness_ratio = 1.0 - gradient_ratio
-        else:
-            windiness_ratio = 0.5
-        
-        offset_factor = min_windiness + windiness_ratio * (max_windiness - min_windiness)
-        iterations = int(min_iterations + windiness_ratio * (max_iterations - min_iterations))
-        
-        if debug:
-            print(f"Segment: {len(hexes)} hexes, gradient={gradient:.0f}, "
-                  f"width={width:.1f}, windiness={offset_factor:.2f}")
-        
-        # Create and draw path
-        aPath = MapPath(points, style=StyleCSS("dummy"))
-        windy = aPath.make_windy(iterations=iterations, offset_factor=offset_factor)
-        
-        inline_style = f"fill:none;stroke:{color};stroke-width:{width};opacity:{opacity}"
-        ret += windy.drawSpline(adds=f'style="{inline_style}"')
-    
-    return ret
-
-# %% ../nbs/08_hydrology.ipynb #e7ccecaf
-@patch
-def drawLake(self:Watershed)->str:
-    if self.is_ocean:
-        return ""
-    
-    lake = self.lake_basin()
-    
-    if not lake.hexes:
-        return ""
-    
-    # Create a new style for the lake
-    lake_style = StyleCSS(
-        f"lake_",
-        fill="#0000ff",  # Blue color for the lake
-        opacity=0.5,  # Adjust opacity as needed
-        stroke="none"
+    if max_width is None:
+        max_width = self.terrain.hexGrid.radius * 2 / 3
+    # Compute max flow across all selected rivers
+    max_flow = max(
+        max(shed.tributary._calculate_flow().values())
+        for shed in watersheds
     )
     
-    self.terrain.builder.add_style(lake_style)  
-    return self.terrain.styleRegion(lake,lake_style)
+    # Draw each watershed, passing max_flow for absolute scaling
+    svg = ""
+    for shed in watersheds:
+        #svg += shed.simplify(simplify_k).draw(max_flow=max_flow)
+        svg += shed.draw(max_flow=max_flow,max_width=max_width,flow_per_hex=flow_per_hex)
     
+    return svg
 
-# %% ../nbs/08_hydrology.ipynb #235cbd1a
-@patch
-def draw(self: Watershed, 
-         min_width: float = 1.0,
-         max_width: float = 8.0,
-         min_windiness: float = 0.05,
-         max_windiness: float = 0.3,
-         min_iterations: int = 2,
-         max_iterations: int = 5,
-         color: str = "#1565c0",
-         opacity: float = 0.7,
-         debug: bool = False) -> str:
-
-        rivers = self.drawRiver(
-                min_width = min_width,
-                max_width =  max_width,
-                min_windiness = min_windiness,
-                max_windiness = max_windiness,
-                min_iterations  =  min_iterations,
-                max_iterations = max_iterations,
-                color =color,
-                opacity = opacity,
-                debug = debug
-                )
-
-        rivers += self.drawLake()
-        return rivers

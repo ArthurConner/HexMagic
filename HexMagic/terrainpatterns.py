@@ -835,7 +835,7 @@ def mapElement(sampleMap:Terrain,bounds:MapCord,name="compass_1",prefix="merrigh
 
 # %% ../nbs/05_terrainpatterns.ipynb #1958f05a
 @patch
-def styleLayerOrdered(self: HexGrid, styles: list[StyleCSS], f=None, smooth=False):
+def styleLayerOrdered(self: HexGrid, styles: list[StyleCSS],  f=None, smooth=False,inset=None):
     """Generate style layer with styles applied in specified order.
     
     Args:
@@ -846,6 +846,8 @@ def styleLayerOrdered(self: HexGrid, styles: list[StyleCSS], f=None, smooth=Fals
     regions = self.styleRegions()
     borders = {}
     rendered = set()
+    if inset is None:
+        inset = 1
 
     # First: render specified styles in order
     for style in styles:
@@ -854,7 +856,7 @@ def styleLayerOrdered(self: HexGrid, styles: list[StyleCSS], f=None, smooth=Fals
             continue
         rendered.add(styleName)
         region = regions[styleName]
-        for path in region.trace_perimeter_cached(borders, f, style):
+        for path in region.trace_perimeter_cached(borders, f, style, inset=inset):
             if smooth:
                 retLayer += path.sbg()
             else:

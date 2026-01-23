@@ -510,6 +510,61 @@ def adjust_by_distance(terrain: Terrain, plate: Plate,
             dist = hex_pos.distance(from_pos)
             terrain.elevations[idx] = height_func(terrain.elevations[idx], dist)
 
+# %% ../nbs/04_voronoi.ipynb #96586ed1
+def _elevation_crater(grid, plates, params, scale):
+    """Ring mountains around central depressions (calderas)."""
+    elevations = np.zeros(len(grid.hexes))
+    
+    for plate in plates:
+        centroid = plate.centroid_position()
+        
+        if plate.kind == PlateKind.oceanic:
+            base, ring_radius, rim_height = -50 * scale, 2, 30
+        else:
+            base, ring_radius, rim_height = 40 * scale, 3, params['peak_height'] * 0.6
+        
+        for idx in plate.hexes:
+            pos = grid.index_to_hexposition(idx)
+            dist = pos.distance(centroid)
+            
+            # Ring shape: peak at ring_radius, lower inside and outside
+            ring_effect = rim_height * max(0, 1 - abs(dist - ring_radius) / 2) * scale
+            # Depression in center
+            if dist < ring_radius * 0.5:
+                ring_effect = -20 * scale
+            
+            elevations[idx] = base + ring_effect + np.random.uniform(-params['variation']*0.3, params['variation']*0.3)
+    
+    return elevations
+
+# %% ../nbs/04_voronoi.ipynb #8f84b70b
+def _elevation_rift(grid, plates, boundaries, params, scale):
+    """Valleys at boundaries (divergent plates), plateaus elsewhere."""
+    elevations = np.zeros(len(grid.hexes))
+    
+    plate_map = {idx: p for p in plates for idx in p.hexes}
+    
+    for i in range(len(grid.hexes)):
+        plate = plate_map.get(i)
+        if plate is None:
+            continue
+        
+        pos = grid.index_to_hexposition(i)
+        dist_to_boundary = min((pos.distance(b) for b in boundaries), default=10)
+        
+        if plate.kind == PlateKind.oceanic:
+            base = -60 * scale
+        else:
+            base = 60 * scale
+            # Valley AT boundary, rising to plateaus
+            rift_depth = max(0, 3 - dist_to_boundary) * 40 * scale
+            base -= rift_depth
+        
+        elevations[i] = base + np.random.uniform(-params['variation'], params['variation']) * scale * 0.3
+    
+    return elevations
+
+
 # %% ../nbs/04_voronoi.ipynb #c4bae956
 def generate_plate_terrain(
     bounds, 
@@ -597,6 +652,10 @@ def generate_plate_terrain(
         elevations = _elevation_volcanic(grid, plates, params, elevation_scale)
     elif formation_type == 'rolling':
         elevations = _elevation_rolling(grid, plates, params, elevation_scale)
+    elif formation_type == 'rift':
+        elevations = _elevation_rift(grid, plates, params, elevation_scale)
+    elif formation_type == 'crater':
+        elevations = _elevation_crater(grid, plates, params, elevation_scale)
     else:
         raise ValueError(f"Unknown formation_type: {formation_type}")
     
