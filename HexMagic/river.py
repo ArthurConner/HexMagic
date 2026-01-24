@@ -59,33 +59,32 @@ class River:
     @classmethod
     def from_peak(cls, terrain, peak_index):
         """Create a river by tracing downhill from a peak."""
-      
-        
-        # Trace downhill to find the outlet first
         path = [peak_index]
         current = peak_index
-        
+        ocean_outlet = None
+
         while True:
             lowest = terrain.lowest_neighbor(current)
-            # Stop if local minimum or hit water
-            if lowest is None or terrain.elevations[lowest] < 1:
+            if lowest is None:
+                break
+            if terrain.elevations[lowest] <= 0:
+                ocean_outlet = lowest  # ← Save the ocean hex
+                path.append(lowest)  # ← Add this
                 break
             path.append(lowest)
             current = lowest
-        # Don't create river if path is too short (just the peak itself)
+
         if len(path) < 2:
             return None
-        
-        # Build tree from outlet (root) upward
-        # Reverse path so outlet is first
+
         path.reverse()
-        
-        river = River(terrain)
-        # Create root node with the path as a single segment
+        river = cls(terrain)
         river.tree.create_node(tag="segment", identifier=0, data=path)
         river.hexes.update(path)
+        river.ocean_outlet = ocean_outlet  # ← Set it on the river
         
         return river
+
     
     @staticmethod
     def combine_rivers(rivers):
@@ -120,6 +119,9 @@ class River:
         merged.hexes = self.hexes | other.hexes
         # Tree merging is more complex - need to attach other's
         # upstream portion at the intersection point
+
+        merged.ocean_outlet = self.ocean_outlet or other.ocean_outlet
+
         return merged
 
 
