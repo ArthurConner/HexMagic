@@ -1111,7 +1111,8 @@ def legendOverlay(self: SVGBuilder,
     styles:[StyleCSS], #the list of styles we want to have as our legend. Style name will be the text
     bg_fill="white", # the default background color
     xOffset=10, # how far over we want
-    yOffset=10 #and in the y direction
+    yOffset=10, #and in the y direction
+    width = 150
     ):
 
     ret = ""
@@ -1123,7 +1124,7 @@ def legendOverlay(self: SVGBuilder,
     
     # Calculate total height needed
     total_height = len(styles) * (radius * 2 + pad) + pad 
-    total_width = 150 + x # Adjust as needed for text
+    total_width = width + x # Adjust as needed for text
     
     # Add background rectangle
     if bg_fill:

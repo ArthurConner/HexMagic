@@ -377,6 +377,9 @@ def clone(self: Terrain) -> 'Terrain':
     # Copy hex styles
     for i, hex in enumerate(self.hexGrid.hexes):
         new_terrain.hexGrid.hexes[i].style = hex.style
+
+    new_terrain.geo = self.geo
+    new_terrain.climate = self.climate
     
     return new_terrain
 

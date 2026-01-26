@@ -34,7 +34,7 @@ from .primitives import HexGrid, HexPosition ,  HexRegion , HexWrapper, unique_w
 from .terrain import Terrain , TerraDemo
 from .terrainpatterns import TerrainPatterns
 from .climate import TerrainFactory, ClimatePreset
-from .hydrology import DrainageBasins
+from .geology import  SoilSystem, DrainageBasins, Geology
 from .styles import  StyleCSS 
 
 # %% ../nbs/09_terraform.ipynb #e0928974
@@ -340,8 +340,9 @@ def starterWorld(demo:TerraDemo,createNew = False, debug = False):
             ocean_fraction=0.6,
             debug = debug
         )
+        
     else:
-        terrain = TerraDemo().bayAreaMap()
+        terrain = TerraDemo().bayArea_map()
 
     terra = Terraform(terrain)
 
@@ -354,7 +355,7 @@ def starterWorld(demo:TerraDemo,createNew = False, debug = False):
 
     if debug:
         print("\n=== COMPUTING CLIMATE ===")
-    terrain.climate.configure(terrain,debug=debug)
+    terrain.compute_weather()
     return  terra
     
     
@@ -413,7 +414,7 @@ def render_climate_zones(self: Terrain, config: ClimateRenderConfig) -> tuple[st
     if 'climate' not in self.fields or 'precipitation' not in self.fields:
         # Compute if needed
         if hasattr(self, 'climate') and self.climate is not None:
-            self.climate.configure(self, force_recompute=False)
+            self.compute_climate()
         else:
             raise ValueError("Need climate data - use TerrainFactory.create_ocean_world()")
     
@@ -563,7 +564,7 @@ def render_layer(self: Terraform, event_index: int, prior = None,  debug=False) 
     if not hasattr(currentTerrain, 'climate') or currentTerrain.climate is None:
         raise ValueError("Terrain must have climate configured")
     
-    currentTerrain.climate.configure(currentTerrain,force_recompute=True)
+    currentTerrain.compute_climate(force_recompute=True)
     if debug:
         print(" --- render_layer ---")
         print(config)

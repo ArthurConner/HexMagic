@@ -30,4 +30,5 @@ from .voronoi import generate_plate_terrain
 
 Terrain.fromSeeds = generate_plate_terrain
 from .climate import ClimatePreset, Climate, TerraDemo
+from .geology import Geology, DrainageBasins
 
