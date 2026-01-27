@@ -322,168 +322,179 @@ freshwaterPath="freshwater.txt"
 # %% ../nbs/05_terrainpatterns.ipynb #d2b6ea5b
 grasslandPath = "grassland.txt"
 
-# %% ../nbs/05_terrainpatterns.ipynb #cfee38d0
+# %% ../nbs/05_terrainpatterns.ipynb #35c59550
 @dataclass
 class PathPattern:
-    color: str      # used for stroke
+    color: str
     name: str
     path: str = None
-    fill: str = "#626261ff"  # background
-    width: int = 480
-    height: int = 600
-    scale: float = 0.05
-
+    fill: str = "#626261ff"
+    # Design dimensions (what your SVG paths use)
+    design_width: int = 480
+    design_height: int = 600
+    # Final tile size
+    tile_size: int = 60
+    # For clustered patterns
+    canvasMult: float = None
+    n_elements: int = 25
+    cluster_prob: float = 0.4
+    cluster_size: int = 3
+    seed: int = None
 
     def patternName(self):
         return f"{self.name}_pat"
     
-    def toPattern(self,fill = None):
-
-        with resources.files('HexMagic').joinpath('data/patterns/climate/' +self.path).open() as f:
-            mainPattern = f.read()
-
-        
-        if fill is None:
-            fill = self.fill
-        content = f'<g fill="{self.color}" stroke="{self.color}">\n'
-        content += f'<rect fill="{fill}" width="{self.width}" height="{self.height}"/>\n'
-        content += mainPattern 
-        content += "\n</g>\n"
-        
-        pattern = SVGDef("pattern", self.patternName(), content,
-                        width=self.width, height=self.height,
-                        patternUnits="userSpaceOnUse")
-        pattern.attributes['patternTransform'] = f'scale({self.scale})'
-        return pattern
+    def get_scale(self):
+        """Calculate scale to fit design into tile"""
+        if self.canvasMult:
+            canvas_size = max(self.design_width, self.design_height) * self.canvasMult
+            return self.tile_size / canvas_size
+        return self.tile_size / max(self.design_width, self.design_height)
 
 
-# %% ../nbs/05_terrainpatterns.ipynb #5fcc4479
+
+
+
+
+# %% ../nbs/05_terrainpatterns.ipynb #8bcaebe3
 @patch
-def clustered_pattern(self:PathPattern, symbol_id, canvasMult=8, n_elements=25, 
-                     cluster_prob=0.4, cluster_size=3, seed=42) -> SVGDef:
-    """Generate a pattern with random clusters of elements as an SVGDef"""
-    random.seed(seed)
+def clustered_pattern(self:PathPattern, symbol_id,fill=None) -> ([SVGDef], StyleCSS):
+    """Generate a pattern with random clusters of elements."""
+    if self.seed is not None:
+        random.seed(self.seed)
     
-    width = self.width * canvasMult
-    height = self.height * canvasMult
-    symbol_def = self.path
+    # Create large canvas for clustering
+    canvas_w = self.design_width * self.canvasMult
+    canvas_h = self.design_height * self.canvasMult
+
+    if fill is None:
+        fill = self.fill
+
+    # Load symbol and get its approximate size for edge detection
+    with resources.files('HexMagic').joinpath('data/patterns/climate/' + self.path).open() as f:
+        symbol_def_content = f.read()
     
+    symbol_def = SVGDef("symbol", symbol_id, symbol_def_content)
+    
+    # Estimate symbol size (you might need to adjust this based on your symbols)
+    symbol_size = max(self.design_width, self.design_height) * 1.5  # Max scale is 1.4
+    margin = symbol_size / 2  # Keep elements this far from edges
+    
+    # Create clustered uses
     uses = []
     i = 0
-    while i < n_elements:
-        x = random.uniform(0, width)
-        y = random.uniform(0, height)
+    while i < self.n_elements:
+        # Place within safe bounds
+        x = random.uniform(margin, canvas_w - margin)
+        y = random.uniform(margin, canvas_h - margin)
         
-        # Sometimes create a cluster
-        if random.random() < cluster_prob:
-            for _ in range(random.randint(2, cluster_size)):
-                cx = x + random.gauss(0, 20)
-                cy = y + random.gauss(0, 20)
-                scale = random.uniform(0.8, 1.2)
-                rot = random.uniform(-15, 15)
+        if random.random() < self.cluster_prob:
+            for _ in range(random.randint(2, self.cluster_size)):
+                # Cluster offset - keep it small enough to stay in bounds
+                offset_limit = min(margin * 0.5, canvas_w * 0.02)
+                cx = x + random.gauss(0, offset_limit)
+                cy = y + random.gauss(0, offset_limit)
+                # Clamp to safe bounds
+                cx = max(margin, min(canvas_w - margin, cx))
+                cy = max(margin, min(canvas_h - margin, cy))
+                
+                scale = random.uniform(0.6, 1.4)
+                rot = 0
                 uses.append(f'<use href="#{symbol_id}" x="{cx:.1f}" y="{cy:.1f}" '
                            f'transform="translate({cx:.1f},{cy:.1f}) rotate({rot:.1f}) scale({scale:.2f}) translate({-cx:.1f},{-cy:.1f})"/>')
                 i += 1
-                if i >= n_elements: break
+                if i >= self.n_elements: break
         else:
-            scale = random.uniform(0.8, 1.2)
-            rot = random.uniform(-15, 15)
+            scale = random.uniform(0.6, 1.4)
+            rot = 0
             uses.append(f'<use href="#{symbol_id}" x="{x:.1f}" y="{y:.1f}" '
                        f'transform="translate({x:.1f},{y:.1f}) rotate({rot:.1f}) scale({scale:.2f}) translate({-x:.1f},{-y:.1f})"/>')
             i += 1
     
-    # Build complete pattern content with symbol definition
-    content = f'<g fill="{self.color}" stroke="{self.color}">\n'
-    content += f'<rect fill="{self.fill}" width="{width}" height="{height}"/>\n'
-    content += f'<symbol id="{symbol_id}">{symbol_def}</symbol>\n'
+    # Build pattern content
+    content = f'<rect fill="{fill}" width="{canvas_w}" height="{canvas_h}"/>\n'
+    content += f'<g fill="{self.color}" stroke="{self.color}">\n'
     content += '\n'.join(uses)
-    content += '\n</g>\n'
+    content += '\n</g>'
     
-    # Adjust scale: original scale divided by canvas multiplier
-    adjusted_scale = self.scale / canvasMult
+    # Create pattern with scale to fit tile_size
+    pattern_def = SVGDef("pattern", self.patternName(), content,
+                        width=canvas_w, height=canvas_h,
+                        patternUnits="userSpaceOnUse")
+    pattern_def.attributes['patternTransform'] = f'scale({self.get_scale()})'
     
-    # Create and return SVGDef
+    return [symbol_def, pattern_def], StyleCSS(self.name, fill=f"url(#{self.patternName()})")
+
+
+# %% ../nbs/05_terrainpatterns.ipynb #9463037b
+@patch
+def single_pattern(self:PathPattern,fill=None) -> ([SVGDef], StyleCSS):
+    """Generate a simple repeating pattern."""
+    with resources.files('HexMagic').joinpath('data/patterns/climate/' + self.path).open() as f:
+        pattern_content = f.read()
+
+    if fill is None:
+        fill = self.fill
+    
+    content = f'<rect fill="{fill}" width="{self.design_width}" height="{self.design_height}"/>\n'
+    content += f'<g fill="{self.color}" stroke="{self.color}">\n'
+    content += pattern_content 
+    content += '\n</g>'
+    
     pattern = SVGDef("pattern", self.patternName(), content,
-                    width=width, height=height,
+                    width=self.design_width, height=self.design_height,
                     patternUnits="userSpaceOnUse")
-    pattern.attributes['patternTransform'] = f'scale({adjusted_scale})'
+    pattern.attributes['patternTransform'] = f'scale({self.get_scale()})'
     
-    return pattern
+    return [pattern], StyleCSS(self.name, fill=f"url(#{self.patternName()})")
 
-
-# %% ../nbs/05_terrainpatterns.ipynb #aafef6ce
 @patch
-def namedPatterns(patternGen:TerrainPatterns, patternDefs:[PathPattern],commonFill=None):
-    spacing = 60
-    radius = 20
-    scale = 0.25
+def toPattern(self:PathPattern,fill=None) -> tuple:
+    """Generate pattern - dispatches to clustered or single."""
+    if self.canvasMult is not None:
+        return self.clustered_pattern(symbol_id=f"{self.name}_symbol",fill = fill)
+    else:
+        return self.single_pattern(fill=fill)
 
-    patterns = []
-    styles = []
-    for patDef in patternDefs:      # fixed
-        fill = patDef.color
-        name = patDef.name
-        patternName = patDef.patternName()
-        if patDef.path is None:
-            pattern = patternGen.circlePattern(patternName, radius=radius, spacing=spacing, color=fill)  # fixed
-            pattern.attributes['patternTransform'] = f'scale({scale})'
-        else:
-            pattern = patDef.toPattern(fill = commonFill)
-
-        patterns.append(pattern)
-        style = StyleCSS(name, fill=f"url(#{patternName})")
-        styles.append(style)
-
-    
-    return patterns, styles
-
-# %% ../nbs/05_terrainpatterns.ipynb #f6e61680
+# %% ../nbs/05_terrainpatterns.ipynb #772eb04f
 @patch
-def climateStyleClustered(self:TerrainPatterns, scale=0.25, commonFill="#f5f0e7ff"):
+def climateStyle(self:TerrainPatterns, tile_size=1000, commonFill=None)->([SVGDef],[StyleCSS]):
     cols = [  
-        PathPattern("#5F9EA0", "Marine",fill="#6B8A8E", path="marine.txt",scale=scale),
-
-        PathPattern( "#2F4F4F","Fresh_Water",fill="#ecf2f8ff",path=freshwaterPath,scale=scale),
-        PathPattern("#708090", "Tundra", fill="#F0EDE5", path="tundra.txt",scale=scale/2.5),
-        PathPattern("#CD853F", "Desert", fill="#FAE8D0", path="desert.txt",scale=scale),
-        PathPattern("#6B8E23", "Grassland", fill="#F5F0DC", path=grasslandPath,width=2600,height=3000,scale=scale/5),
-        PathPattern("#355E3B", "Forrest", fill="#EDF2E8", path="forest.txt",width=1300,height=1500,scale=scale/2.5),
-        PathPattern("#2E4A3B", "Jungle", fill="#E8F0E4", path=swampPath,width=1100,height=1200,scale=scale/2.5)
+        PathPattern("#5F9EA0", "Marine", fill="#6B8A8E", path="marine.txt",
+                   design_width=480, design_height=600, tile_size=tile_size/10),
+        
+        PathPattern("#2F4F4F", "Fresh_Water", fill="#ecf2f8ff", path="freshwater.txt",
+                   design_width=480, design_height=600, tile_size=tile_size/10),
+        
+        PathPattern("#708090", "Tundra", fill="#F0EDE5", path="tundra.txt",
+                   design_width=480, design_height=600, tile_size=tile_size/4,
+                   canvasMult=6, n_elements=15, cluster_prob=0),
+        
+        PathPattern("#CD853F", "Desert", fill="#FAE8D0", path="desert.txt",
+                   design_width=480, design_height=600, tile_size=tile_size,
+                   canvasMult=6, n_elements=10, cluster_prob=0.1),
+        
+        PathPattern("#6B8E23", "Grassland", fill="#F5F0DC", path="grassland.txt",
+                   design_width=2600, design_height=3000, tile_size=tile_size*2,
+                   canvasMult=6, n_elements=200),
+        
+        PathPattern("#355E3B", "Forrest", fill="#EDF2E8", path="forest.txt",
+                   design_width=1300, design_height=1500, n_elements=80,tile_size=tile_size,
+                   canvasMult=6),
+        
+        PathPattern("#2E4A3B", "Jungle", fill="#E8F0E4", path="swamp.txt",
+                   design_width=1100, design_height=1200, tile_size=tile_size,  n_elements=70,
+                   canvasMult=6)
     ]
     
     patterns = []
     styles = []
     for patDef in cols:
-        # Use clustered pattern instead of toPattern
-        pattern = patDef.clustered_pattern(
-            symbol_id=f"{patDef.name}_symbol",
-            canvasMult=6,
-            n_elements=30
-        )
-        patterns.append(pattern)
-        style = StyleCSS(patDef.name, fill=f"url(#{patDef.patternName()})")
+        pats, style = patDef.toPattern(fill=commonFill)
+        patterns.extend(pats)
         styles.append(style)
     
     return patterns, styles
-
-
-# %% ../nbs/05_terrainpatterns.ipynb #af6ee0a5
-@patch
-def climateStyle(self:TerrainPatterns, scale = 0.25,commonFill="#f5f0e7ff"):
-
-    
-    cols = [  
-        PathPattern("#5F9EA0", "Marine",fill="#6B8A8E", path="marine.txt",scale=scale),
-
-        PathPattern( "#2F4F4F","Fresh_Water",fill="#ecf2f8ff",path=freshwaterPath,scale=scale),
-        PathPattern("#708090", "Tundra", fill="#F0EDE5", path="tundra.txt",scale=scale/2.5),
-        PathPattern("#CD853F", "Desert", fill="#FAE8D0", path="desert.txt",scale=scale),
-        PathPattern("#6B8E23", "Grassland", fill="#F5F0DC", path=grasslandPath,width=2600,height=3000,scale=scale/5),
-        PathPattern("#355E3B", "Forrest", fill="#EDF2E8", path="forest.txt",width=1300,height=1500,scale=scale/2.5),
-        PathPattern("#2E4A3B", "Jungle", fill="#E8F0E4", path=swampPath,width=1100,height=1200,scale=scale/2.5)
-    ]
-    return self.namedPatterns(cols,commonFill=commonFill)
-
 
 # %% ../nbs/05_terrainpatterns.ipynb #a5569840
 @patch

@@ -150,7 +150,7 @@ def add_climate_overlay(self: Terrain, layer_name="climate"):
 
 # %% ../nbs/08_climate.ipynb #e429dc22
 @patch
-def add_climate_overlay(self: Terrain, layer_name="climate",showLegend=True, scale=0.2,background=None):
+def add_climate_overlay(self: Terrain, layer_name="climate",showLegend=True, tile_size=300,background=None):
     """Visualize climate zones with appropriate colors."""
     patGen = TerrainPatterns(self)
     terrain = self
@@ -177,7 +177,7 @@ def add_climate_overlay(self: Terrain, layer_name="climate",showLegend=True, sca
     aRender.add_style(oceanStyle)
     
 
-    patterns, styles = patGen.climateStyle(scale=scale,commonFill=background)
+    patterns, styles = patGen.climateStyle(tile_size=tile_size,commonFill=background)
 
        # Add patterns to builder
     for p in patterns:
@@ -234,18 +234,18 @@ def downsample_climate(self: Terrain, scale=0.5,sample_radius=1):
 # %% ../nbs/08_climate.ipynb #7b89523d
 @patch
 def climateIconMap(self: Geology, scale=20):
-    scale = scale / 100
+    
 
     grid = self.terrain.hexGrid
     builder = grid.builder
     builder.layers = []
-    self.terrain.add_climate_overlay(scale=scale, showLegend=False)
+    self.terrain.add_climate_overlay(tile_size=50*scale, showLegend=False)
     
     builder.adjust("watersheds", self.basins.draw_watersheds())
     
     # Get climate styles for legend
     patGen = TerrainPatterns(self.terrain)
-    _, styles = patGen.climateStyle(scale=scale)
+    _, styles = patGen.climateStyle()
     
     # Add legend below the map
     legend_svg = builder.legendBelow(styles, use_hex=True)
