@@ -231,29 +231,35 @@ def downsample_climate(self: Terrain, scale=0.5,sample_radius=1):
     return new_terrain
 
 
-# %% ../nbs/08_climate.ipynb #1746052d
+# %% ../nbs/08_climate.ipynb #7b89523d
 @patch
-def climateIconMap(self:Geology,scale=20):
-    scale = scale/100
-
+def climateIconMap(self: Geology, scale=20):
+    scale = scale / 100
 
     grid = self.terrain.hexGrid
     builder = grid.builder
     builder.layers = []
-    self.terrain.add_climate_overlay(scale=scale)
+    self.terrain.add_climate_overlay(scale=scale, showLegend=False)
     
     builder.adjust("watersheds", self.basins.draw_watersheds())
-    #builder.adjust("legend",builder.legendOverlay(self.terrain.colorLevels,width=100))
+    
+    # Get climate styles for legend
+    patGen = TerrainPatterns(self.terrain)
+    _, styles = patGen.climateStyle(scale=scale)
+    
+    # Add legend below the map
+    legend_svg = builder.legendBelow(styles, use_hex=True)
+    builder.adjust("legend", legend_svg)
 
     legend_text = f"{self.name} Climate"
-    self.terrain.hexGrid.builder.add_centered_text(
+    builder.add_centered_text(
         legend_text, 
-        y_offset=-self.terrain.hexGrid.builder.height/2 + 30,
+        y_offset=-builder.height / 2 + 30,
         class_name="watershed_legend"
     )
-    
 
     return builder.show()
+
 
 # %% ../nbs/08_climate.ipynb #4e0021d9
 @patch
@@ -496,7 +502,8 @@ def climateDotMap(self:Geology,showHexes=False):
     # Create styles
     legend = [StyleCSS(k, fill=v) for k, v in terrain_fills.items()]
 
-    builder.adjust("legend",builder.legendOverlay(legend,width=100))
+    #builder.adjust("legend",builder.legendOverlay(legend,width=100))
+    builder.adjust("legend", builder.legendBelow(legend, use_hex=True))
 
     legend_text = f"{self.name} Climate"
     

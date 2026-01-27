@@ -148,7 +148,8 @@ def baseMap(self:Geology,showHexes=True):
         f=unique_windy_edge(iterations=3)))
 
     builder.adjust("watersheds", self.basins.draw_watersheds())
-    builder.adjust("legend",builder.legendOverlay(self.terrain.colorLevels,width=100))
+    #builder.adjust("legend",builder.legendOverlay(self.terrain.colorLevels,width=100))
+    builder.adjust("legend", builder.legendBelow(self.terrain.colorLevels, use_hex=True))
 
     legend_text = f"{self.name}"
     
@@ -182,7 +183,8 @@ def weatherMap(self:Geology):
     legend.append(StyleCSS("Hot",fill="#E74C3C"))
     for style in legend:
         builder.add_style(style)
-    builder.adjust("legend",builder.legendOverlay(legend,width=100))
+    #builder.adjust("legend",builder.legendOverlay(legend,width=100))
+    builder.adjust("legend", builder.legendBelow(legend, use_hex=True))
 
     
     return builder.show()
@@ -229,7 +231,8 @@ def soilMap(self:Geology):
     legend = [StyleCSS(x.name,fill=x.color) for x in cols]
     for style in legend:
         builder.add_style(style)
-    builder.adjust("legend",builder.legendOverlay(legend,width=100))
+    #builder.adjust("legend",builder.legendOverlay(legend,width=100))
+    builder.adjust("legend", builder.legendBelow(legend, use_hex=True))
     legend_text = f"{self.name} Soil"
     
     self.terrain.hexGrid.builder.add_centered_text(
@@ -237,6 +240,7 @@ def soilMap(self:Geology):
         y_offset=-self.terrain.hexGrid.builder.height/2 + 30,
         class_name="watershed_legend"
     )
+    
 
 
     return builder.show()

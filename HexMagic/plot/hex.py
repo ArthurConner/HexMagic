@@ -578,6 +578,62 @@ def commonEdge(self: HexGrid, i: int, j: int) -> tuple[int, int, int, int] | Non
 
 
 
+# %% ../../nbs/plots/02c_hex.ipynb #aaa688eb
+@patch
+def legendOverlayHorizontal(self: SVGBuilder,
+    styles: [StyleCSS],
+    bg_fill="white",
+    xOffset=10,
+    yOffset=10,
+    max_width=None,  # defaults to self.width - xOffset
+    char_width=7,    # approximate width per character
+    radius=12,
+    pad=8
+    ):
+    """Horizontal legend that wraps to multiple rows if needed."""
+    
+    if max_width is None:
+        max_width = self.width - xOffset * 2
+    
+    ret = ""
+    row_height = radius * 2 + pad
+    
+    # First pass: calculate positions and total height
+    positions = []
+    x = radius + pad
+    y = radius + pad
+    
+    for style in styles:
+        name = " ".join(style.name.split("_"))
+        text_width = len(name) * char_width
+        item_width = radius * 2 + pad + text_width + pad * 2
+        
+        # Check if we need to wrap
+        if x + item_width > max_width and x > radius + pad:
+            x = radius + pad
+            y += row_height
+        
+        positions.append((x, y, style, name))
+        x += item_width
+    
+    # Calculate total dimensions
+    total_height = y + radius + pad
+    total_width = max_width
+    
+    # Add background rectangle
+    if bg_fill:
+        ret += f'\t<rect x="{xOffset}" y="{yOffset}" width="{total_width}" height="{total_height}" fill="{bg_fill}" rx="5"/>\n'
+    
+    # Draw items
+    for x, y, style, name in positions:
+        cx = xOffset + x
+        cy = yOffset + y
+        ret += f'\t<circle cx="{cx}" cy="{cy}" r="{radius}" class="{style.name}"/>\n'
+        ret += f'\t<text x="{cx + radius + pad}" y="{cy}" text-anchor="start" dy="0.35em" class="keyLabel">{name}</text>\n'
+    
+    return ret
+
+
 # %% ../../nbs/plots/02c_hex.ipynb #9ef0bf95
 @patch
 def styledHexes(self:HexGrid,wrapper:HexWrapper = HexWrapper()):
@@ -761,4 +817,109 @@ def gradient(self:HexGrid,lookup = {5:"#007fff",6:"#07ff66ff",10:"#ff005dff]"} )
                 testBody += lg.poly()
 
     return testBody
+
+
+# %% ../../nbs/plots/02c_hex.ipynb #ef9adb7c
+@patch
+def legendLayout(self: SVGBuilder,
+    styles: list[StyleCSS],
+    max_width: float = None,
+    char_width: float = 7,
+    radius: float = 12,
+    pad: float = 8
+) -> tuple[list[tuple], float, float]:
+    """Calculate legend layout without drawing. Returns (positions, total_width, total_height).
+    Each position is (x, y, style, label_text)."""
+    
+    if max_width is None:
+        max_width = self.width
+    
+    row_height = radius * 2 + pad
+    positions = []
+    x = radius + pad
+    y = radius + pad
+    
+    for style in styles:
+        name = " ".join(style.name.split("_"))
+        text_width = len(name) * char_width
+        item_width = radius * 2 + pad + text_width + pad * 2
+        
+        # Wrap to next row if needed
+        if x + item_width > max_width and x > radius + pad:
+            x = radius + pad
+            y += row_height
+        
+        positions.append((x, y, style, name))
+        x += item_width
+    
+    total_height = y + radius + pad
+    return positions, max_width, total_height
+
+
+@patch
+def legendRender(self: SVGBuilder,
+    positions: list[tuple],
+    width: float,
+    height: float,
+    x_offset: float = 0,
+    y_offset: float = 0,
+    bg_fill: str = "white",
+    radius: float = 12,
+    pad: float = 8,
+    use_hex: bool = False
+) -> str:
+    """Render legend from pre-calculated positions."""
+    
+    ret = ""
+    
+    # Background
+    if bg_fill:
+        ret += f'\t<rect x="{x_offset}" y="{y_offset}" width="{width}" height="{height}" fill="{bg_fill}" rx="5"/>\n'
+    
+    # Items
+    for x, y, style, name in positions:
+        cx = x_offset + x
+        cy = y_offset + y
+        
+        if use_hex:
+            # Use a small hex
+            hex_item = Hex(radius=radius, center=MapCord(cx, cy), style=style)
+            ret += f'\t{hex_item.svg()}\n'
+        else:
+            ret += f'\t<circle cx="{cx}" cy="{cy}" r="{radius}" class="{style.name}"/>\n'
+        
+        ret += f'\t<text x="{cx + radius + pad}" y="{cy}" text-anchor="start" dy="0.35em" class="keyLabel">{name}</text>\n'
+    
+    return ret
+
+
+@patch
+def legendBelow(self: SVGBuilder,
+    styles: list[StyleCSS],
+    gap: float = 10,
+    bg_fill: str = "white",
+    char_width: float = 7,
+    radius: float = 12,
+    pad: float = 8,
+    use_hex: bool = False
+) -> str:
+    """Add legend below current content, expanding builder height as needed."""
+    
+    # Calculate layout
+    positions, legend_width, legend_height = self.legendLayout(
+        styles, max_width=self.width, char_width=char_width, radius=radius, pad=pad
+    )
+    
+    # Position below current content
+    y_offset = self.height + gap
+    
+    # Expand builder height
+    self.height = y_offset + legend_height
+    
+    # Render
+    return self.legendRender(
+        positions, legend_width, legend_height,
+        x_offset=0, y_offset=y_offset,
+        bg_fill=bg_fill, radius=radius, pad=pad, use_hex=use_hex
+    )
 

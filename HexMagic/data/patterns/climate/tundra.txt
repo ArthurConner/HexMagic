@@ -1,0 +1,3 @@
+<line x1="240" y1="100" x2="240" y2="500" stroke-width="40"/>
+<line x1="66" y1="200" x2="414" y2="400" stroke-width="40"/>
+<line x1="66" y1="400" x2="414" y2="200" stroke-width="40"/>

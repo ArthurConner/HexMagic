@@ -595,79 +595,22 @@ def compute_weather(self:Terrain,
 def bayArea_map(self:TerraDemo):
     """Load Maui terrain with proper geographic bounds."""
     with resources.files('HexMagic').joinpath('data/templates/BayArea.txt').open() as f:
-        terrain = Terrain.decode(f.read())
-    
-    # Set Maui's geographic bounds
-    terrain.geo = GeoBounds(
-        lat_min=37.57,   # 
-        lat_max=38.03,   # 
-        lon_min=-122.69, # 
-        lon_max=-121.97  # 
-    )
-    
-    # Compute hex coordinates
-    terrain._compute_hex_coordinates()
-    
-    terrain.climate =  ClimatePreset(
-            name='Mediterranean',
-            lat_range=(30, 45),
-            base_temp_range=(14, 18),
-            wind_speed=12.0,
-            wind_dir=270.0,  # Westerlies
-            precip_base=0.08,
-            nm=0.01,
-            hw=2000.0,
-            cw=0.0025,
-            conv_time=1500.0,
-            fall_time=1500.0,
-            lapse_rate=6.5,
-            description="Mild winters, dry summers. California-like."
-        )
+        return Terrain.decode(f.read())
 
-    return terrain
 
 # %% ../nbs/06_weather.ipynb #49bd4428
 @patch
 def aussie_map(self:TerraDemo):
     """Load Maui terrain with proper geographic bounds."""
     with resources.files('HexMagic').joinpath('data/templates/australia.txt').open() as f:
-        terrain = Terrain.decode(f.read())
-    
-    # Set Maui's geographic bounds
-    terrain.geo = GeoBounds(
-        lat_min=-44.0,  # 
-        lat_max=-10.0,   # 
-        lon_min= 113.0, # 
-        lon_max=154.97  # 
-    )
-    
-    # Compute hex coordinates
-    terrain._compute_hex_coordinates()
-    
-    terrain.climate =  ClimatePreset(
-            name='oceanic',
-            lat_range=(30, 45),
-            base_temp_range=(14, 18),
-            wind_speed=12.0,
-            wind_dir=270.0,  # Westerlies
-            precip_base=0.08,
-            nm=0.01,
-            hw=2000.0,
-            cw=0.0025,
-            conv_time=1500.0,
-            fall_time=1500.0,
-            lapse_rate=6.5,
-            description="Mild winters, dry summers. California-like."
-        )
-
-    return terrain
+        return Terrain.decode(f.read())
 
 # %% ../nbs/06_weather.ipynb #8517d8be
 @patch
 def california_map(self: TerraDemo):
     """Load California terrain with proper geographic bounds."""
     with resources.files('HexMagic').joinpath('data/templates/ca_nv_elevation_grid.txt').open() as f:
-        terrain_ca = Terrain.decode(f.read())
+        return Terrain.decode(f.read())
     
     # Set the geographic bounds that match your data
     terrain_ca.geo = GeoBounds(
@@ -696,6 +639,8 @@ def california_map(self: TerraDemo):
     description="Mediterranean with extreme orographic effects. Mojave to redwoods."
 )
     terrain_ca.hexGrid.adjustRadius(30)
+    with open('../HexMagic/data/templates/ca_nv_elevation_grid.txt', 'w') as f:
+        f.write(terrain_ca.encode())
     
     return terrain_ca
 
@@ -704,7 +649,7 @@ def california_map(self: TerraDemo):
 def maui_map(self:TerraDemo):
     """Load Maui terrain with proper geographic bounds."""
     with resources.files('HexMagic').joinpath('data/templates/maui.txt').open() as f:
-        terrain = Terrain.decode(f.read())
+        return Terrain.decode(f.read())
     
     # Set Maui's geographic bounds
     terrain.geo = GeoBounds(
@@ -732,6 +677,9 @@ def maui_map(self:TerraDemo):
     conv_time=1000.0,      # Faster conversion
     fall_time=1000.0 
     )
+
+    with open('../HexMagic/data/templates/maui.txt', 'w') as f:
+        f.write(terrain.encode())
 
 
     return terrain
@@ -985,6 +933,214 @@ def grand_canyon_map(self: TerraDemo):
         lapse_rate=7.0,  # Steeper due to dry air
         precip_bins=(150, 300, 450, 700),  # Desert precipitation
         description="High desert. Extreme elevation range (rim to river ~1500m). Hot summers, cold winters at rim."
+    )
+    
+    return terrain
+
+
+# %% ../nbs/06_weather.ipynb #3df56371
+@patch
+def sydney_map(self: TerraDemo):
+    """Load Sydney terrain with proper geographic bounds."""
+    with resources.files('HexMagic').joinpath('data/templates/sydney.txt').open() as f:
+        terrain = Terrain.decode(f.read())
+    
+    terrain.geo = GeoBounds(
+        lat_min=-34.05,
+        lat_max=-33.70,
+        lon_min=150.95,
+        lon_max=151.35
+    )
+    
+    terrain._compute_hex_coordinates()
+    
+    terrain.climate = ClimatePreset(
+        name='Humid Subtropical Sydney',
+        lat_range=(-34, -33),
+        base_temp_range=(18, 17),  # Mild year-round
+        wind_speed=10.0,
+        wind_dir=90.0,  # Easterlies from Pacific
+        precip_base=0.12,
+        nm=0.01,
+        hw=2200.0,
+        cw=0.003,
+        conv_time=1200.0,
+        fall_time=1200.0,
+        lapse_rate=6.0,
+        precip_bins=(600, 900, 1200, 1600),
+        description="Humid subtropical. Warm summers, mild winters. Rain year-round."
+    )
+    
+    return terrain
+
+@patch
+def hong_kong_map(self: TerraDemo):
+    """Load Hong Kong terrain with proper geographic bounds."""
+    with resources.files('HexMagic').joinpath('data/templates/hong_kong.txt').open() as f:
+        terrain = Terrain.decode(f.read())
+    
+    terrain.geo = GeoBounds(
+        lat_min=22.15,
+        lat_max=22.55,
+        lon_min=113.85,
+        lon_max=114.40
+    )
+    
+    terrain._compute_hex_coordinates()
+    
+    terrain.climate = ClimatePreset(
+        name='Subtropical Monsoon Hong Kong',
+        lat_range=(22, 23),
+        base_temp_range=(23, 22),  # Hot and humid
+        wind_speed=10.0,
+        wind_dir=135.0,  # SE monsoon in summer
+        precip_base=0.18,
+        nm=0.008,
+        hw=2600.0,
+        cw=0.004,
+        conv_time=900.0,
+        fall_time=900.0,
+        lapse_rate=5.5,
+        precip_bins=(1200, 1800, 2400, 3200),
+        description="Subtropical monsoon. Hot wet summers, mild dry winters. Typhoon season."
+    )
+    
+    return terrain
+
+
+# %% ../nbs/06_weather.ipynb #83fabb6e
+@patch
+def reykjavik_map(self: TerraDemo):
+    """Load Reykjavik terrain with proper geographic bounds."""
+    with resources.files('HexMagic').joinpath('data/templates/reykjavik.txt').open() as f:
+        terrain = Terrain.decode(f.read())
+    
+    terrain.geo = GeoBounds(
+        lat_min=63.95,
+        lat_max=64.20,
+        lon_min=-22.10,
+        lon_max=-21.70
+    )
+    
+    terrain._compute_hex_coordinates()
+    
+    terrain.climate = ClimatePreset(
+        name='Subarctic Oceanic Iceland',
+        lat_range=(63, 65),
+        base_temp_range=(5, 4),  # Cool year-round, Gulf Stream moderates
+        wind_speed=14.0,
+        wind_dir=240.0,  # SW winds from Atlantic
+        precip_base=0.10,
+        nm=0.013,
+        hw=1600.0,
+        cw=0.003,
+        conv_time=1800.0,
+        fall_time=1800.0,
+        lapse_rate=6.5,
+        precip_bins=(400, 700, 1000, 1400),
+        description="Subarctic oceanic. Mild for latitude due to Gulf Stream. Windy, changeable."
+    )
+    
+    return terrain
+
+@patch
+def rio_map(self: TerraDemo):
+    """Load Rio de Janeiro terrain with proper geographic bounds."""
+    with resources.files('HexMagic').joinpath('data/templates/rio.txt').open() as f:
+        terrain = Terrain.decode(f.read())
+    
+    terrain.geo = GeoBounds(
+        lat_min=-23.10,
+        lat_max=-22.75,
+        lon_min=-43.55,
+        lon_max=-43.10
+    )
+    
+    terrain._compute_hex_coordinates()
+    
+    terrain.climate = ClimatePreset(
+        name='Tropical Rio',
+        lat_range=(-23, -22),
+        base_temp_range=(25, 26),  # Hot year-round
+        wind_speed=8.0,
+        wind_dir=90.0,  # Trade winds from east/Atlantic
+        precip_base=0.15,
+        nm=0.007,
+        hw=2600.0,
+        cw=0.004,
+        conv_time=900.0,
+        fall_time=900.0,
+        lapse_rate=5.5,
+        precip_bins=(1000, 1400, 1800, 2500),
+        description="Tropical savanna. Hot humid summers, warm dry winters. Orographic rain on mountains."
+    )
+    
+    return terrain
+
+@patch
+def santorini_map(self: TerraDemo):
+    """Load Santorini terrain with proper geographic bounds."""
+    with resources.files('HexMagic').joinpath('data/templates/santorini.txt').open() as f:
+        terrain = Terrain.decode(f.read())
+    
+    terrain.geo = GeoBounds(
+        lat_min=36.35,
+        lat_max=36.48,
+        lon_min=25.35,
+        lon_max=25.50
+    )
+    
+    terrain._compute_hex_coordinates()
+    
+    terrain.climate = ClimatePreset(
+        name='Mediterranean Aegean',
+        lat_range=(36, 37),
+        base_temp_range=(18, 17),  # Warm Mediterranean
+        wind_speed=12.0,
+        wind_dir=350.0,  # Etesian/Meltemi winds from north in summer
+        precip_base=0.04,  # Very dry
+        nm=0.012,
+        hw=1800.0,
+        cw=0.002,
+        conv_time=1800.0,
+        fall_time=1800.0,
+        lapse_rate=6.5,
+        precip_bins=(200, 350, 500, 700),
+        description="Hot-summer Mediterranean. Very dry summers, mild wet winters. Strong summer winds."
+    )
+    
+    return terrain
+
+@patch
+def kathmandu_map(self: TerraDemo):
+    """Load Kathmandu terrain with proper geographic bounds."""
+    with resources.files('HexMagic').joinpath('data/templates/kathmandu.txt').open() as f:
+        terrain = Terrain.decode(f.read())
+    
+    terrain.geo = GeoBounds(
+        lat_min=27.60,
+        lat_max=27.80,
+        lon_min=85.25,
+        lon_max=85.45
+    )
+    
+    terrain._compute_hex_coordinates()
+    
+    terrain.climate = ClimatePreset(
+        name='Subtropical Highland Monsoon',
+        lat_range=(27, 28),
+        base_temp_range=(20, 18),  # Moderate due to elevation (~1400m)
+        wind_speed=6.0,
+        wind_dir=180.0,  # Monsoon from south in summer
+        precip_base=0.12,
+        nm=0.008,
+        hw=2400.0,
+        cw=0.005,  # Strong orographic effect - Himalayas!
+        conv_time=800.0,
+        fall_time=800.0,
+        lapse_rate=6.0,
+        precip_bins=(800, 1200, 1800, 2500),
+        description="Subtropical highland with monsoon. Warm wet summers, cool dry winters. Extreme orographic effects."
     )
     
     return terrain
