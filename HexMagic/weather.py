@@ -626,6 +626,42 @@ def bayArea_map(self:TerraDemo):
 
     return terrain
 
+# %% ../nbs/06_weather.ipynb #49bd4428
+@patch
+def aussie_map(self:TerraDemo):
+    """Load Maui terrain with proper geographic bounds."""
+    with resources.files('HexMagic').joinpath('data/templates/australia.txt').open() as f:
+        terrain = Terrain.decode(f.read())
+    
+    # Set Maui's geographic bounds
+    terrain.geo = GeoBounds(
+        lat_min=-44.0,  # 
+        lat_max=-10.0,   # 
+        lon_min= 113.0, # 
+        lon_max=154.97  # 
+    )
+    
+    # Compute hex coordinates
+    terrain._compute_hex_coordinates()
+    
+    terrain.climate =  ClimatePreset(
+            name='oceanic',
+            lat_range=(30, 45),
+            base_temp_range=(14, 18),
+            wind_speed=12.0,
+            wind_dir=270.0,  # Westerlies
+            precip_base=0.08,
+            nm=0.01,
+            hw=2000.0,
+            cw=0.0025,
+            conv_time=1500.0,
+            fall_time=1500.0,
+            lapse_rate=6.5,
+            description="Mild winters, dry summers. California-like."
+        )
+
+    return terrain
+
 # %% ../nbs/06_weather.ipynb #8517d8be
 @patch
 def california_map(self: TerraDemo):
