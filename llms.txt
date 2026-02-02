@@ -8,11 +8,13 @@
 - `docs/PROJECT_OVERVIEW.md` - Complete architecture, workflows, design patterns
 - `docs/CODE_PATTERNS.md` - Quick code reference for common operations
 - `docs/IMPLEMENTATION_CHECKLIST.md` - Development roadmap and status
+- `docs/DATABASE_EXTENSION_GUIDE.md` - How to extend database with game tables
 
-**Schema Documents (nbs/):**
+**Schema Documents (docs/):**
 - `schemaMain.md` - Core library database (TerrainDB, templates, multi-scale)
 - `TerrainSchema_FastLite.md` - Web game database (multi-user, viewstate)
 - `PieceDesign.md` - Game unit/agent system
+- `Game design.md` - Game mechanics and design overview
 
 ## Core Architecture (4 Layers)
 
@@ -42,7 +44,7 @@
 
 ## Databases (2 Schemas)
 
-### Core Library (schemaMain.md)
+### Core Library (docs/schemaMain.md)
 **Tables:** TerrainWorld, WorldTemplate, ScaleTransform, Viewport, HexData, Plate, Watershed
 
 **Key Features:**
@@ -51,7 +53,7 @@
 - Multi-scale: `db.save_downsampled_world(world_id, scale=0.25)` with bidirectional region mapping
 - Print crops: `db.extract_rectangle(..., width=60, height=40, orientation='landscape')`
 
-### Web Game (TerrainSchema_FastLite.md)
+### Web Game (docs/TerrainSchema_FastLite.md)
 **Tables:** World, Game, User, GamePlayer, ViewState, Kingdom, Territory, Piece
 
 **Key Features:**
