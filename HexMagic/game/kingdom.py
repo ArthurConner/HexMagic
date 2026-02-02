@@ -60,7 +60,6 @@ class TradeRoute:
     def destination(self)->HexPosition:
         return self.path[-1]
 
-    
     @staticmethod
     def decode(s: str) -> 'TradeRoute':
         """Decode TradeRoute from string format."""
@@ -80,10 +79,7 @@ class TradeRoute:
             elif key == 'cost':
                 cost = float(val)
             elif key == 'path':
-                for coord in val.split(','):
-                    if coord and ';' in coord:
-                        q, r, s = coord.split(';')
-                        path.append(HexPosition(int(q), int(r), int(s)))
+                path = [int(h) for h in val.split(',') if h]
         
         return TradeRoute(path=path, origin=origin, cost=cost, name=name)
 
@@ -91,9 +87,8 @@ class TradeRoute:
 # %% ../../nbs/game/Kingdoms.ipynb #56309caa
 @patch
 def encode(self: TradeRoute) -> str:
-    """Encode TradeRoute to string format. Stores HexPositions as q,r,s tuples."""
-    # Store each HexPosition as "q;r;s" (using semicolon to avoid comma conflicts)
-    path_str = ','.join(f"{h.q};{h.r};{h.s}" for h in self.path)
+    """Encode TradeRoute to string format."""
+    path_str = ','.join(str(h) for h in self.path)
     lines = [
         f"name:{self.name}",
         f"origin:{self.origin}",
@@ -101,6 +96,21 @@ def encode(self: TradeRoute) -> str:
         f"path:{path_str}"
     ]
     return '\n'.join(lines)
+
+# %% ../../nbs/game/Kingdoms.ipynb #3c007d45
+@patch
+def encode(self: HexRegion) -> str:
+    """Encode HexRegion as comma-separated hex indices."""
+    return ','.join(str(h) for h in sorted(self.hexes))
+
+@staticmethod
+def _decode_hexregion(s: str, hexGrid: HexGrid) -> HexRegion:
+    """Decode HexRegion from comma-separated hex indices."""
+    hexes = set(int(h) for h in s.split(',') if h)
+    return HexRegion(hexes=hexes, hexGrid=hexGrid)
+
+HexRegion.decode = _decode_hexregion
+
 
 # %% ../../nbs/game/Kingdoms.ipynb #63756197
 class Kingdom:
@@ -368,27 +378,6 @@ class GameBoard:
         board.watershed_map = watershed_map
         
         return board
-
-# %% ../../nbs/game/Kingdoms.ipynb #708e85d9
-@patch
-def encode(self: GameBoard) -> str:
-    """Encode GameBoard to string format."""
-    lines = []
-    
-    # We encode world (which contains terrain and basins)
-    lines.append("+world")
-    lines.append(self.world.encode())
-    lines.append("-world")
-    
-    # Kingdoms
-    lines.append(f"+kingdoms:{len(self.kingdoms)}")
-    for kingdom in self.kingdoms:
-        lines.append("+kingdom")
-        lines.append(kingdom.encode())
-        lines.append("-kingdom")
-    lines.append("-kingdoms")
-    
-    return '\n'.join(lines)
 
 # %% ../../nbs/game/Kingdoms.ipynb #c26aab1d
 @patch

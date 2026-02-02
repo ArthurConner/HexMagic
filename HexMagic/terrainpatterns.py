@@ -450,11 +450,14 @@ def single_pattern(self:PathPattern,fill=None) -> ([SVGDef], StyleCSS):
 
 @patch
 def toPattern(self:PathPattern,fill=None) -> tuple:
-    """Generate pattern - dispatches to clustered or single."""
-    if self.canvasMult is not None:
-        return self.clustered_pattern(symbol_id=f"{self.name}_symbol",fill = fill)
-    else:
-        return self.single_pattern(fill=fill)
+    """Generate pattern - dispatches to clustered or single.
+    This used to contain multiple patterns, but that wound up making the render engines very unhappy
+    
+    """
+    #if self.canvasMult is not None:
+    #    return self.clustered_pattern(symbol_id=f"{self.name}_symbol",fill = fill)
+    #else:
+    return self.single_pattern(fill=fill)
 
 # %% ../nbs/05_terrainpatterns.ipynb #772eb04f
 @patch
