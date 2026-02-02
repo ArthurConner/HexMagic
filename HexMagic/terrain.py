@@ -1163,6 +1163,200 @@ def field_sizes(self:Terrain):
         self.field_summary(field)
     print("-------------------------------")
 
+# %% ../nbs/03_terrain.ipynb #8ccc960f
+@patch
+def upsample(self: Terrain, scale: float = 2.0, method: str = 'bilinear') -> 'Terrain':
+    """Upsample terrain by scale factor using hex-aware interpolation.
+    
+    Args:
+        scale: Factor to increase resolution (2.0 = double resolution)
+        method: 'nearest', 'bilinear', or 'cubic'
+    
+    Returns:
+        New Terrain at higher resolution
+    """
+    old_grid = self.hexGrid
+    new_radius = old_grid.radius / scale
+    
+    # Calculate new grid dimensions
+    new_rows = int(old_grid.nRows * scale)
+    new_cols = int(old_grid.nCols * scale)
+    
+    # Create new grid
+    new_grid = HexGrid(
+        nRows=new_rows,
+        nCols=new_cols,
+        radius=new_radius,
+        style=old_grid.style,
+        offset=old_grid.offset
+    )
+    
+    # Create new terrain
+    new_terrain = Terrain.__new__(Terrain)
+    new_terrain.hexGrid = new_grid
+    new_terrain.elevations = np.zeros(len(new_grid.hexes))
+    new_terrain.fields = {}
+    new_terrain.seaLevel = self.seaLevel
+    new_terrain.elevationDelta = self.elevationDelta
+    new_terrain.climate = self.climate
+    new_terrain.geo = self.geo
+    new_terrain.colorLevels = self.colorLevels.copy() if self.colorLevels else None
+    new_terrain.path = ""
+    
+    # Upsample elevations
+    new_terrain.elevations = _upsample_field(
+        self.elevations, old_grid, new_grid, scale, method
+    )
+    
+    # Upsample all fields
+    for field_name, field_data in self.fields.items():
+        new_terrain.fields[field_name] = _upsample_field(
+            field_data, old_grid, new_grid, scale, method
+        )
+    
+    # Add styles to new builder
+    if new_terrain.colorLevels:
+        for color in new_terrain.colorLevels:
+            new_terrain.hexGrid.builder.add_style(color)
+    
+    return new_terrain
+
+
+def _upsample_field(field: np.ndarray, old_grid: HexGrid, new_grid: HexGrid, 
+                    scale: float, method: str) -> np.ndarray:
+    """Upsample a single field array."""
+    n_new = len(new_grid.hexes)
+    result = np.zeros(n_new)
+    
+    if method == 'nearest':
+        result = _upsample_nearest(field, old_grid, new_grid, scale)
+    elif method == 'bilinear':
+        result = _upsample_bilinear(field, old_grid, new_grid, scale)
+    elif method == 'cubic':
+        result = _upsample_cubic(field, old_grid, new_grid, scale)
+    else:
+        raise ValueError(f"Unknown method: {method}")
+    
+    return result
+
+
+def _upsample_nearest(field: np.ndarray, old_grid: HexGrid, new_grid: HexGrid, 
+                      scale: float) -> np.ndarray:
+    """Nearest neighbor upsampling - fast but blocky."""
+    n_new = len(new_grid.hexes)
+    result = np.zeros(n_new)
+    
+    # Build lookup: for each new hex, find nearest old hex
+    for new_idx in range(n_new):
+        new_center = new_grid.hexes[new_idx].center
+        
+        # Map new pixel position back to old grid coordinates
+        # Account for offset differences
+        old_row = int((new_center.y - old_grid.offset.y - old_grid.radius) / (1.5 * old_grid.radius))
+        old_col_offset = 0.5 if old_row % 2 == 1 else 0
+        old_col = int((new_center.x - old_grid.offset.x - old_grid.radius) / (np.sqrt(3) * old_grid.radius) - old_col_offset)
+        
+        old_idx = old_grid.row_col_to_index(old_row, old_col)
+        if 0 <= old_idx < len(field):
+            result[new_idx] = field[old_idx]
+    
+    return result
+
+
+def _upsample_bilinear(field: np.ndarray, old_grid: HexGrid, new_grid: HexGrid,
+                       scale: float) -> np.ndarray:
+    """Bilinear interpolation using 3 nearest hex neighbors."""
+    n_new = len(new_grid.hexes)
+    result = np.zeros(n_new)
+    
+    for new_idx in range(n_new):
+        new_center = new_grid.hexes[new_idx].center
+        
+        # Find fractional position in old grid space
+        # Convert pixel to approximate old grid row/col (fractional)
+        old_row_f = (new_center.y - old_grid.offset.y - old_grid.radius) / (1.5 * old_grid.radius)
+        old_col_offset = 0.5 if int(old_row_f) % 2 == 1 else 0
+        old_col_f = (new_center.x - old_grid.offset.x - old_grid.radius) / (np.sqrt(3) * old_grid.radius) - old_col_offset
+        
+        # Get integer and fractional parts
+        r0, c0 = int(np.floor(old_row_f)), int(np.floor(old_col_f))
+        fr, fc = old_row_f - r0, old_col_f - c0
+        
+        # Sample surrounding hexes with distance-based weights
+        samples = []
+        weights = []
+        
+        for dr in [0, 1]:
+            for dc in [0, 1]:
+                r, c = r0 + dr, c0 + dc
+                idx = old_grid.row_col_to_index(r, c)
+                if 0 <= idx < len(field):
+                    # Weight by inverse distance (bilinear formula)
+                    wr = (1 - fr) if dr == 0 else fr
+                    wc = (1 - fc) if dc == 0 else fc
+                    w = wr * wc
+                    if w > 0:
+                        samples.append(field[idx])
+                        weights.append(w)
+        
+        if samples:
+            result[new_idx] = np.average(samples, weights=weights)
+    
+    return result
+
+
+def _upsample_cubic(field: np.ndarray, old_grid: HexGrid, new_grid: HexGrid,
+                    scale: float) -> np.ndarray:
+    """Cubic interpolation using ring-1 neighbors (7 samples)."""
+    n_new = len(new_grid.hexes)
+    result = np.zeros(n_new)
+    
+    for new_idx in range(n_new):
+        new_center = new_grid.hexes[new_idx].center
+        
+        # Find nearest old hex
+        old_row = int((new_center.y - old_grid.offset.y - old_grid.radius) / (1.5 * old_grid.radius))
+        old_col_offset = 0.5 if old_row % 2 == 1 else 0
+        old_col = int((new_center.x - old_grid.offset.x - old_grid.radius) / (np.sqrt(3) * old_grid.radius) - old_col_offset)
+        
+        center_idx = old_grid.row_col_to_index(old_row, old_col)
+        if center_idx < 0 or center_idx >= len(field):
+            continue
+        
+        center_hex = old_grid.hexes[center_idx]
+        
+        # Gather center + ring-1 neighbors
+        samples = []
+        weights = []
+        
+        # Center hex
+        dist = _pixel_distance(new_center, center_hex.center)
+        if dist < 0.01:
+            result[new_idx] = field[center_idx]
+            continue
+        
+        samples.append(field[center_idx])
+        weights.append(1.0 / (dist + 0.1))  # Inverse distance weight
+        
+        # Ring-1 neighbors
+        for neighbor_idx in old_grid.neighborsOf(center_idx):
+            if 0 <= neighbor_idx < len(field):
+                neighbor_hex = old_grid.hexes[neighbor_idx]
+                dist = _pixel_distance(new_center, neighbor_hex.center)
+                samples.append(field[neighbor_idx])
+                weights.append(1.0 / (dist + 0.1))
+        
+        if samples:
+            result[new_idx] = np.average(samples, weights=weights)
+    
+    return result
+
+
+def _pixel_distance(p1: MapCord, p2: MapCord) -> float:
+    """Euclidean distance between two pixel coordinates."""
+    return np.sqrt((p1.x - p2.x)**2 + (p1.y - p2.y)**2)
+
+
 # %% ../nbs/03_terrain.ipynb #7df0b167
 @patch
 def growFromHex(self: Terrain, center_idx, origin=0):
