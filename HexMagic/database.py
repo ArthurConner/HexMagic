@@ -24,7 +24,6 @@ class TerrainWorld:
 # %% ../nbs/11_Database.ipynb #21f4c247
 @dataclass  
 class HexData:
-    """Per-hex spatial data."""
     id: int = None
     world_id: int = 0
     q: int = 0
@@ -32,8 +31,10 @@ class HexData:
     s: int = 0
     grid_index: int = 0
     elevation: float = 0.0
+    latitude: Optional[float] = None
+    longitude: Optional[float] = None
     distance_from_coast: Optional[float] = None
-    modified: int = 0  # Unix timestamp of last change
+    modified: int = 0
 
 
 # %% ../nbs/11_Database.ipynb #e3c63ae8
@@ -68,6 +69,8 @@ class GeoStorage:
         db.execute("CREATE INDEX IF NOT EXISTS idx_hex_world ON hex_data(world_id)")
         db.execute("CREATE INDEX IF NOT EXISTS idx_hex_coords ON hex_data(world_id, q, r, s)")
         db.execute("CREATE INDEX IF NOT EXISTS idx_hex_grid ON hex_data(world_id, grid_index)")
+
+        db.execute("CREATE INDEX IF NOT EXISTS idx_hex_temporal ON hex_data(world_id, q, r, s, modified DESC)")
         
 
         # Store table references using db.t notation
@@ -127,6 +130,21 @@ def reset_database(self:GeoStorage):
 
 
 
+# %% ../nbs/11_Database.ipynb #40dbcf6f
+@patch
+def _latest_hex_subquery(self: GeoStorage, world_id: int, as_of: int = None) -> str:
+    """SQL subquery for latest hex state, optionally at a point in time."""
+    time_clause = f"AND modified <= {as_of}" if as_of else ""
+    return f"""
+        SELECT world_id, q, r, s, MAX(modified) as max_mod
+        FROM hex_data
+        WHERE world_id = {world_id} {time_clause}
+        GROUP BY world_id, q, r, s
+    """
+
+
+
+
 # %% ../nbs/11_Database.ipynb #56693d18
 @patch
 def save_world(self: GeoStorage, terrain: Terrain, name: str = "") -> SaveResult:
@@ -164,6 +182,12 @@ def save_world(self: GeoStorage, terrain: Terrain, name: str = "") -> SaveResult
             for idx, hex_obj in enumerate(grid.hexes):
                 pos = grid.index_to_hexposition(idx)
                 
+                # Get lat/lon if geo bounds available
+                lat, lon = None, None
+                if terrain.geo and hasattr(terrain.geo, 'pixel_to_latlon'):
+                    center = hex_obj.center
+                    lat, lon = terrain.geo.pixel_to_latlon(center.x, center.y)
+                
                 dist_coast = None
                 if 'distance_to_ocean' in terrain.fields:
                     dist_coast = float(terrain.fields['distance_to_ocean'][idx])
@@ -175,6 +199,8 @@ def save_world(self: GeoStorage, terrain: Terrain, name: str = "") -> SaveResult
                     's': pos.s,
                     'grid_index': idx,
                     'elevation': float(terrain.elevations[idx]),
+                    'latitude': lat,
+                    'longitude': lon,
                     'distance_from_coast': dist_coast,
                     'modified': now
                 })
@@ -189,39 +215,39 @@ def save_world(self: GeoStorage, terrain: Terrain, name: str = "") -> SaveResult
         return SaveResult(None, 'error', str(e))
 
 
-# %% ../nbs/11_Database.ipynb #f3463555
+# %% ../nbs/11_Database.ipynb #7c809ec1
 @patch
-def load_world(self: GeoStorage, world_id: int) -> LoadResult:
-    """Load terrain from database. Returns LoadResult(terrain, status, context)."""
+def load_world(self: GeoStorage, world_id: int, as_of: int = None) -> LoadResult:
+    """Load terrain from database. 
+    
+    Args:
+        world_id: World to load
+        as_of: Optional Unix timestamp - load state at this point in time
+    
+    Returns LoadResult(terrain, status, context).
+    """
     try:
-        # Get world metadata
         world = self.worlds[world_id]
         if not world:
             return LoadResult(None, 'not_found', f'World {world_id} not found')
         
-        # Reconstruct bounds and grid
         radius = GeoStorage._get(world, 'hex_radius')
         nrows = GeoStorage._get(world, 'nrows')
         ncols = GeoStorage._get(world, 'ncols')
         
-        # Calculate bounds from grid dimensions
         width = ncols * radius * 1.5 + radius
         height = nrows * radius * math.sqrt(3) + radius
         bounds = MapRect(MapCord(0, 0), MapSize(width, height))
         
-        # Create terrain
         terrain = Terrain(bounds, radius=radius)
         terrain.hexGrid.nRows = nrows
         terrain.hexGrid.nCols = ncols
-        terrain.hexGrid.adjustRadius(radius)  # Rebuilds hexes with correct dimensions
-        terrain.elevations = np.zeros(len(terrain.hexGrid.hexes))  # <- Add this line
+        terrain.hexGrid.adjustRadius(radius)
+        terrain.elevations = np.zeros(len(terrain.hexGrid.hexes))
         terrain.elevationDelta = GeoStorage._get(world, 'elevation_delta')
-
         
-        
-        
-        # Load hex data
-        hex_rows = list(self.hexes.rows_where('world_id = ?', [world_id]))
+        # Use temporal query
+        hex_rows = self.query_hexes_latest(world_id, as_of=as_of)
         
         for row in hex_rows:
             idx = GeoStorage._get(row, 'grid_index')
@@ -233,44 +259,15 @@ def load_world(self: GeoStorage, world_id: int) -> LoadResult:
                     terrain.fields['distance_to_ocean'] = np.zeros(len(terrain.elevations))
                 terrain.fields['distance_to_ocean'][idx] = dist
         
-        # Restore extras
         extras_str = GeoStorage._get(world, 'extras')
         if extras_str:
             extras = json.loads(extras_str)
-            # TODO: decode geo and climate from extras
         
-        return LoadResult(terrain, 'loaded', f'{len(hex_rows)} hexes')
+        time_info = f" as of {as_of}" if as_of else ""
+        return LoadResult(terrain, 'loaded', f'{len(hex_rows)} hexes{time_info}')
     
     except Exception as e:
         return LoadResult(None, 'error', str(e))
-
-
-# %% ../nbs/11_Database.ipynb #7c809ec1
-@patch
-def query_hexes_in_radius(self: GeoStorage, world_id: int,
-                          center_q: int, center_r: int, center_s: int,
-                          radius: int) -> list:
-    """Query all hexes within radius of a center position."""
-    # Query with column names
-    rows = list(self.hexes.rows_where("""
-        world_id = ? AND q BETWEEN ? AND ? AND r BETWEEN ? AND ?
-    """, [
-        world_id,
-        center_q - radius, center_q + radius,
-        center_r - radius, center_r + radius
-    ]))
-    
-    # Filter to actual hex distance
-    result = []
-    for row in rows:
-        dq = abs(GeoStorage._get(row, 'q') - center_q)
-        dr = abs(GeoStorage._get(row, 'r') - center_r)
-        ds = abs(GeoStorage._get(row, 's') - center_s)
-        dist = max(dq, dr, ds)
-        if dist <= radius:
-            result.append(row)
-    
-    return result
 
 
 # %% ../nbs/11_Database.ipynb #1c4f6677
