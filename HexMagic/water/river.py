@@ -692,15 +692,30 @@ def find_local_minima(self: Terrain) -> list[int]:
             if directions[i] == -1 and self.elevations[i] > 0]
 
 
+
+
+
+
+
+# %% ../../nbs/water/river.ipynb #b0f68267
+#this is the more recent one
 @patch
 def find_drainage_path(self: Terrain, start: int) -> list[int]:
     """Find lowest-cost path from start to ocean using Dijkstra.
     
     Cost = elevation we'd need to carve (downhill = 0, uphill = diff).
+    If no ocean exists, uses lowest boundary hex as outlet.
     """
     
-    
     ocean = {i for i in range(len(self.elevations)) if self.elevations[i] <= 0}
+    
+    if not ocean:
+        # Find boundary hexes (those with < 6 valid neighbors)
+        boundary = [i for i in range(len(self.elevations)) 
+                    if len([n for n in self.hexGrid.neighborsOf(i) if n >= 0]) < 6]
+        # Use lowest boundary point as outlet
+        ocean = {min(boundary, key=lambda i: self.elevations[i])}
+    
     if start in ocean:
         return [start]
     
@@ -735,12 +750,10 @@ def find_drainage_path(self: Terrain, start: int) -> list[int]:
     return []  # No path found
 
 
-
-
 # %% ../../nbs/water/river.ipynb #6eeb3b81
 @patch
-def carve_to_ocean(self: Terrain, num_lakes: int = 5, max_iters: int = 10) ->  list[River]:
-    """Carve drainage using lowest-cost paths to ocean."""
+def carve_to_ocean(self: Terrain, num_lakes: int = 5, max_iters: int = 10) -> list[River]:
+    """Carve drainage using lowest-cost paths to ocean (or boundary if no ocean)."""
     paths = []
     
     for iteration in range(max_iters):
@@ -759,11 +772,10 @@ def carve_to_ocean(self: Terrain, num_lakes: int = 5, max_iters: int = 10) ->  l
                    
             # Create root node with the path as a single segment
             river.tree.create_node(tag="segment", identifier=0, data=path)
-            reversed(path)
+            path.reverse()
             river.hexes.update(path)
             paths.append(river)
            
-            
             if len(path) < 2:
                 continue
             
@@ -773,8 +785,6 @@ def carve_to_ocean(self: Terrain, num_lakes: int = 5, max_iters: int = 10) ->  l
                 
                 if self.elevations[next_hex] >= self.elevations[curr]:
                     self.elevations[next_hex] = self.elevations[curr] - 1
-        
-        new_count = len(find_local_minima(self))
-        
     
-    return  paths
+    return paths
+
