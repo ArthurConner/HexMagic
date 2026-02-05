@@ -1502,6 +1502,38 @@ def demoCoast(self:TerraDemo):
 
 
 
+# %% ../nbs/03_terrain.ipynb #afffff06
+@patch
+def assign_grid(self: Terrain, new_grid: HexGrid):
+    """Assign a new HexGrid to this terrain, resetting data arrays.
+    
+    This replaces the current hexGrid and resets:
+    - elevations: zeroed array matching new grid size
+    - fields: all field arrays zeroed to new grid size
+    
+    Use this when you need a differently-shaped grid but want to
+    keep the terrain's style settings (colorLevels, seaLevel, etc.)
+    
+    Args:
+        new_grid: The new HexGrid to use
+    """
+    self.hexGrid = new_grid
+    
+    # Reset elevations to match new grid size
+    num_hexes = len(new_grid.hexes)
+    self.elevations = np.zeros(num_hexes)
+    
+    # Reset all fields to match new grid size
+    for field_name in self.fields:
+        self.fields[field_name] = np.zeros(num_hexes)
+    
+    # Re-add styles to new grid's builder
+    self.hexGrid.builder.add_style(self.seaLevel)
+    for style in self.colorLevels:
+        hover = StyleCSS("hover", fill=style.desaturate().properties["fill"], cursor="pointer")
+        style.customize(hover)
+        self.hexGrid.builder.add_style(style)
+
 # %% ../nbs/03_terrain.ipynb #f7325a76
 @dataclass
 class USGSTerrainFetcher:

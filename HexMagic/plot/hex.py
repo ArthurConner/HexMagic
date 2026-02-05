@@ -369,6 +369,110 @@ class HexGrid:
     def midpoint(self):
         return int(len(self.hexes)/2)
 
+    @classmethod
+    def create_cropped_grid(cls, hexDim: int, radius: float, style: StyleCSS, ratio: float = 1.0) -> 'HexGrid':
+        """Create a centered HexGrid cropped to a target width/height ratio.
+        
+        Args:
+            hexDim: Initial grid dimension (creates hexDim x hexDim grid)
+            radius: Hex radius
+            style: Default StyleCSS for hexes
+            ratio: Target ratio of columns/rows (width/height)
+                - ratio < 1: fewer rows than columns (landscape)
+                - ratio = 1: square grid
+                - ratio > 1: fewer columns than rows (portrait)
+        
+        Returns:
+            HexGrid with odd dimensions, cropped evenly from edges
+        """
+        # Create initial centered grid
+        grid = HexGrid.centered(hexDim, radius, style)
+        
+        current_cols = grid.nCols
+        current_rows = grid.nRows
+        
+        if ratio < 1.0:
+            # Landscape: trim rows to make rows ≈ ratio * cols
+            target_rows = int(current_cols * ratio)
+            # Ensure odd
+            if target_rows % 2 == 0:
+                target_rows -= 1
+            target_rows = max(1, target_rows)
+            
+            rows_to_remove = current_rows - target_rows
+            trim_top = rows_to_remove // 2
+            trim_bottom = rows_to_remove - trim_top
+            
+            new_rows = target_rows
+            new_cols = current_cols
+            
+        elif ratio > 1.0:
+            # Portrait: trim columns to make cols ≈ rows / ratio
+            target_cols = int(current_rows / ratio)
+            # Ensure odd
+            if target_cols % 2 == 0:
+                target_cols -= 1
+            target_cols = max(1, target_cols)
+            
+            cols_to_remove = current_cols - target_cols
+            trim_left = cols_to_remove // 2
+            trim_right = cols_to_remove - trim_left
+            
+            new_rows = current_rows
+            new_cols = target_cols
+            trim_top = 0
+            trim_bottom = 0
+            
+        else:
+            # Square: no cropping needed, just ensure odd
+            new_rows = current_rows if current_rows % 2 == 1 else current_rows - 1
+            new_cols = current_cols if current_cols % 2 == 1 else current_cols - 1
+            trim_top = (current_rows - new_rows) // 2
+            trim_left = (current_cols - new_cols) // 2
+        
+        # Build new hex list from cropped region
+        if ratio < 1.0:
+            trim_left = 0
+        elif ratio > 1.0:
+            pass  # trim_left already set
+        else:
+            pass  # trim_left already set
+        
+        new_hexes = []
+        for row in range(new_rows):
+            for col in range(new_cols):
+                old_row = row + trim_top
+                old_col = col + (trim_left if ratio >= 1.0 else 0)
+                old_idx = old_row * current_cols + old_col
+                new_hexes.append(grid.hexes[old_idx])
+        
+        # Calculate offset to move grid so upper-left is at corner
+        if new_hexes:
+            min_x = min(h.center.x for h in new_hexes)
+            min_y = min(h.center.y for h in new_hexes)
+            
+            # Shift all hexes
+            shifted_hexes = []
+            for hex_obj in new_hexes:
+                new_center = MapCord(
+                    hex_obj.center.x - min_x + radius,
+                    hex_obj.center.y - min_y + radius
+                )
+                shifted_hexes.append(Hex(radius, new_center, hex_obj.style))
+            new_hexes = shifted_hexes
+        
+        # Update grid properties
+        grid.hexes = new_hexes
+        grid.nRows = new_rows
+        grid.nCols = new_cols
+        
+        # Update builder dimensions
+        if new_hexes:
+            grid.builder.width = max(h.center.x for h in new_hexes) + radius
+            grid.builder.height = max(h.center.y for h in new_hexes) + radius
+        
+        return grid
+
 
 
 # %% ../../nbs/plots/02c_hex.ipynb #7b88e224

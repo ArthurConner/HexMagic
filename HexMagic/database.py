@@ -84,6 +84,16 @@ class ChunkRef:
     
     def __hash__(self):
         return hash(self.key)
+    
+    @classmethod
+    def from_key(cls, key, chunk_rings: int) -> 'ChunkRef':
+        if isinstance(key, tuple):
+            q, r, s = key
+        else:
+            q, r, s = map(int, key.split(','))
+        return cls(HexPosition(q, r, s), chunk_rings)
+
+
 
 
 def chunk_to_world(chunk: ChunkRef, local_pos: HexPosition) -> HexPosition:
@@ -104,6 +114,7 @@ def world_to_chunk(world_pos: HexPosition, chunk_rings: int) -> tuple[HexPositio
     local_pos = world_pos - chunk_center
     
     return chunk_pos, local_pos
+
 
 # %% ../nbs/11_Database.ipynb #32243ceb
 class ChunkedTerrainGenerator:
@@ -158,42 +169,7 @@ class ChunkedTerrainGenerator:
         coarse_r = int(world_center.r / self.scale)
         return HexPosition(coarse_q, coarse_r, -coarse_q - coarse_r)
     
-    # ─────────────────────────────────────────────────────────
-    # Phase 1: Global coarse map
-    # ─────────────────────────────────────────────────────────
     
-    def generate_coarse(self, bounds: MapRect, 
-                        num_plates: int = 15,
-                        ocean_fraction: float = 0.4,
-                        oceanic_sides: list = None,
-                        name: str = "world_coarse",
-                        max_lakes = 0
-                        
-                        ) -> Terrain:
-        """Generate low-resolution global map for coastlines and plate structure."""
-        
-        terrain, plates = Terrain.fromSeeds(
-            bounds,
-            radius=self.coarse_radius,
-            num_plates=num_plates,
-            ocean_fraction=ocean_fraction,
-            oceanic_sides=oceanic_sides or [],
-            subdivisions=2,
-        )
-        
-        # Compute distance from coast at coarse level
-        terrain.compute_distance_from_coast()
-
-        if max_lakes is not None:
-            terrain.carve_to_ocean(num_lakes=max_lakes)
-        
-        # Save to storage
-        result = self.storage.save_world(terrain, name=name)
-        self.coarse_world_id = result.id
-        self._plates = plates
-        self._coarse_terrain = terrain  # Cache for chunk generation
-        
-        return terrain
     
     # ─────────────────────────────────────────────────────────
     # Phase 2: Chunk generation
@@ -385,6 +361,123 @@ class ChunkedTerrainGenerator:
     
 
 
+# %% ../nbs/11_Database.ipynb #0c287826
+# ─────────────────────────────────────────────────────────
+# Full pipeline
+# ─────────────────────────────────────────────────────────
+@patch
+def generate_world(self:ChunkedTerrainGenerator, bounds: MapRect, 
+                    num_plates: int = 15,
+                    ocean_fraction: float = 0.4,
+                    oceanic_sides: list = None,
+                    compute_weather: bool = True,
+                    compute_watersheds: bool = True,
+                    progress_callback=None) -> int:
+    """Generate complete chunked world.
+    
+    Args:
+        bounds: World bounds
+        num_plates: Number of tectonic plates
+        ocean_fraction: Fraction of plates that are oceanic
+        oceanic_sides: List of sides ['N','E','S','W'] that are ocean
+        compute_weather: Whether to compute weather for each chunk
+        progress_callback: Optional fn(current, total, message)
+    
+    Returns:
+        coarse_world_id for reference
+    """
+    print("Phase 1: Generating coarse map...")
+    coarse = self.generate_coarse(
+        bounds, 
+        num_plates=num_plates,
+        ocean_fraction=ocean_fraction,
+        oceanic_sides=oceanic_sides
+    )
+    
+    chunks = list(self.chunks_for_coarse(coarse.hexGrid))
+    total = len(chunks)
+    
+    print(f"Phase 2-4: Generating {total} chunks...")
+    for i, chunk in enumerate(chunks):
+        if progress_callback:
+            progress_callback(i, total, f"Chunk {chunk.position}")
+        elif i % 10 == 0:
+            print(f"  {i+1}/{total}: {chunk.position}")
+        
+        # Generate
+        chunk_terrain = self.generate_chunk(chunk, coarse)
+        
+        # Weather
+        if compute_weather:
+            self.compute_chunk_weather(chunk_terrain)
+
+        
+        # Save
+        self.save_chunk(chunk_terrain, chunk)
+
+        # Watersheds (after save, so world_id exists)
+        if compute_watersheds and 'precipitation' in chunk_terrain.fields:
+            basins = DrainageBasins(chunk_terrain)
+            self.storage.save_watersheds(chunk_terrain, basins.sheds, self.chunk_world_ids[chunk.key])
+
+    
+    print(f"Done! Generated {total} chunks.")
+    return self.coarse_world_id
+
+# %% ../nbs/11_Database.ipynb #5a9782e4
+@patch
+def generate_coarse(self:ChunkedTerrainGenerator, bounds: MapRect, 
+                    num_plates: int = 15,
+                    ocean_fraction: float = 0.4,
+                    oceanic_sides: list = None,
+                    name: str = "world_coarse",
+                    max_lakes = 0,
+                    climate: ClimatePreset = None,
+                    geo: GeoBounds = None, 
+                    compute_weather: bool = True  # NEW - default on
+                    ) -> Terrain:
+    """Generate low-resolution global map for coastlines and plate structure."""
+    
+    terrain, plates = Terrain.fromSeeds(
+        bounds,
+        radius=self.coarse_radius,
+        num_plates=num_plates,
+        ocean_fraction=ocean_fraction,
+        oceanic_sides=oceanic_sides or [],
+        subdivisions=2,elevation_scale=4,
+    )
+    
+    terrain.compute_distance_from_coast()
+    
+    if max_lakes is not None:
+        terrain.carve_to_ocean(num_lakes=max_lakes)
+    
+    # Set climate (required for weather)
+    if climate is not None:
+        terrain.climate = climate
+    elif compute_weather:
+        # Default to mediterranean or infer from geo bounds
+        terrain.climate = TerrainPatterns(terrain).weatherPatterns()["temperate"]
+
+    if geo is not None:
+        terrain.geo = geo
+    elif compute_weather:
+        # Default synthetic bounds (e.g., mid-latitudes)
+        terrain.geo = GeoBounds(lat_min=30, lat_max=50, lon_min=-10, lon_max=20)
+    
+    # Compute weather fields
+    if compute_weather and terrain.climate:
+        terrain.compute_weather()
+    
+    # Save to storage
+    result = self.storage.save_world(terrain, name=name)
+    self.coarse_world_id = result.id
+    self._plates = plates
+    self._coarse_terrain = terrain
+    
+    return terrain
+
+
 # %% ../nbs/11_Database.ipynb #21f4c247
 @dataclass  
 class HexData:
@@ -395,6 +488,7 @@ class HexData:
     s: int = 0
     grid_index: int = 0
     elevation: float = 0.0
+    plate_id:int = -1
     latitude: Optional[float] = None
     longitude: Optional[float] = None
     distance_from_coast: Optional[float] = None
@@ -678,7 +772,8 @@ def query_hexes_in_radius(self: GeoStorage, world_id: int,
     
     # Hardcode column order to avoid cursor.description issue
     cols = ['id', 'world_id', 'q', 'r', 's', 'grid_index', 'elevation', 
-            'latitude', 'longitude', 'distance_from_coast', 'watershed_id', 'modified']
+        'plate_id', 'latitude', 'longitude', 'distance_from_coast', 
+        'watershed_id', 'modified']
     
     rows = [dict(zip(cols, row)) for row in rows]
     
@@ -687,15 +782,15 @@ def query_hexes_in_radius(self: GeoStorage, world_id: int,
             if max(abs(row['q'] - center_q), abs(row['r'] - center_r), abs(row['s'] - center_s)) <= radius]
 
 
-# %% ../nbs/11_Database.ipynb #56693d18
+# %% ../nbs/11_Database.ipynb #b2f529fc
 @patch
 def save_world(self: GeoStorage, terrain: Terrain, name: str = "") -> SaveResult:
-    """Save terrain to database. Returns SaveResult(world_id, status, context)."""
+    """Save terrain to database, including plate_id if present."""
     now = int(datetime.now().timestamp())
     
     grid = terrain.hexGrid
     
-    # Build extras dict for non-field data
+    # Build extras dict
     extras = {}
     if terrain.geo:
         extras['geo'] = terrain.geo.encode() if hasattr(terrain.geo, 'encode') else str(terrain.geo)
@@ -703,8 +798,7 @@ def save_world(self: GeoStorage, terrain: Terrain, name: str = "") -> SaveResult
         extras['climate'] = terrain.climate.encode() if hasattr(terrain.climate, 'encode') else str(terrain.climate)
     
     try:
-        with self.db.conn:  # Transaction
-            # Insert world metadata
+        with self.db.conn:
             world_result = self.worlds.insert({
                 'name': name or f"World_{now}",
                 'hex_radius': grid.radius,
@@ -719,43 +813,39 @@ def save_world(self: GeoStorage, terrain: Terrain, name: str = "") -> SaveResult
             
             world_id = world_result['id'] if isinstance(world_result, dict) else world_result
             
-            # Insert hex data
-            hex_records = []
+            # Check for plate_id field
+            has_plates = 'plate_id' in terrain.fields
+            
             for idx, hex_obj in enumerate(grid.hexes):
                 pos = grid.index_to_hexposition(idx)
                 
-                # Get lat/lon if geo bounds available
                 lat, lon = None, None
                 if terrain.geo and hasattr(terrain.geo, 'pixel_to_latlon'):
                     center = hex_obj.center
-                    # Calculate grid pixel dimensions
                     width = grid.nCols * grid.radius * 1.5 + grid.radius
                     height = grid.nRows * grid.radius * math.sqrt(3) + grid.radius
                     lat, lon = terrain.geo.pixel_to_latlon(center.x, center.y, width, height)
-
                 
                 dist_coast = None
                 if 'distance_to_ocean' in terrain.fields:
                     dist_coast = float(terrain.fields['distance_to_ocean'][idx])
                 
-                hex_records.append({
+                # Include plate_id if available
+                plate_id = int(terrain.fields['plate_id'][idx]) if has_plates else -1
+                
+                self.hexes.insert({
                     'world_id': world_id,
-                    'q': pos.q,
-                    'r': pos.r,
-                    's': pos.s,
+                    'q': pos.q, 'r': pos.r, 's': pos.s,
                     'grid_index': idx,
                     'elevation': float(terrain.elevations[idx]),
+                    'plate_id': plate_id,
                     'latitude': lat,
                     'longitude': lon,
                     'distance_from_coast': dist_coast,
                     'modified': now
                 })
             
-            # Batch insert
-            for record in hex_records:
-                self.hexes.insert(record)
-            
-            return SaveResult(world_id, 'saved', f'{len(hex_records)} hexes')
+            return SaveResult(world_id, 'saved', f'{len(grid.hexes)} hexes')
     
     except Exception as e:
         return SaveResult(None, 'error', str(e))
@@ -764,14 +854,7 @@ def save_world(self: GeoStorage, terrain: Terrain, name: str = "") -> SaveResult
 # %% ../nbs/11_Database.ipynb #7c809ec1
 @patch
 def load_world(self: GeoStorage, world_id: int, as_of: int = None) -> LoadResult:
-    """Load terrain from database. 
-    
-    Args:
-        world_id: World to load
-        as_of: Optional Unix timestamp - load state at this point in time
-    
-    Returns LoadResult(terrain, status, context).
-    """
+    """Load terrain from database, including plate_id if present."""
     try:
         world = self.worlds[world_id]
         if not world:
@@ -792,12 +875,23 @@ def load_world(self: GeoStorage, world_id: int, as_of: int = None) -> LoadResult
         terrain.elevations = np.zeros(len(terrain.hexGrid.hexes))
         terrain.elevationDelta = GeoStorage._get(world, 'elevation_delta')
         
-        # Use temporal query
         hex_rows = self.query_hexes_latest(world_id, as_of=as_of)
+        
+        # Check if any row has plate_id
+        has_plates = any(GeoStorage._get(row, 'plate_id') is not None 
+                        and GeoStorage._get(row, 'plate_id') >= 0 for row in hex_rows)
+        
+        if has_plates:
+            terrain.fields['plate_id'] = np.full(len(terrain.elevations), -1, dtype=int)
         
         for row in hex_rows:
             idx = GeoStorage._get(row, 'grid_index')
             terrain.elevations[idx] = GeoStorage._get(row, 'elevation')
+            
+            # Restore plate_id
+            plate_id = GeoStorage._get(row, 'plate_id')
+            if has_plates and plate_id is not None:
+                terrain.fields['plate_id'][idx] = plate_id
             
             dist = GeoStorage._get(row, 'distance_from_coast')
             if dist is not None:
@@ -808,6 +902,7 @@ def load_world(self: GeoStorage, world_id: int, as_of: int = None) -> LoadResult
         extras_str = GeoStorage._get(world, 'extras')
         if extras_str:
             extras = json.loads(extras_str)
+            # Could also restore geo/climate from extras here
         
         time_info = f" as of {as_of}" if as_of else ""
         return LoadResult(terrain, 'loaded', f'{len(hex_rows)} hexes{time_info}')
@@ -1554,6 +1649,186 @@ def test_save_load_watersheds(self: GeoStorageDebugger):
         if ws_rows:
             hexes = self.server.query_watershed_hexes(world_id, ws_rows[0]['id'])
             print(f"✓ Query watershed hexes: {len(hexes)} hexes in watershed 0")
+
+
+# %% ../nbs/11_Database.ipynb #e7895b0b
+@patch
+def test_smallWs(self: GeoStorageDebugger):
+    """Generate a small world with a single watershed."""
+    # Set up the chunked generator
+    generator = ChunkedTerrainGenerator(
+        storage=self.server,
+        coarse_radius=100,     # Large hexes for overview (~40-60 visible)
+        fine_radius=10,        # Detailed hexes for chunks
+        chunk_rings=15,        # Rings per chunk
+        halo_rings=3
+    )
+
+    # Generate the coarse world overview
+    bounds = MapRect(MapCord(0, 0), MapSize(4000, 3000))
+    coarse_world = generator.generate_coarse(
+        bounds,
+        num_plates=12,
+        ocean_fraction=0.5,
+        oceanic_sides=['W', 'E'],  # Oceans on west and east
+        name="demo_coarse",
+        max_lakes=3
+    )
+
+    print(f"Coarse world: {len(coarse_world.hexGrid.hexes)} hexes, world_id={generator.coarse_world_id}")
+
+    # Generate a detailed chunk at the origin (or pick an interesting spot)
+    origin_chunk = generator.world_to_chunk_ref(HexPosition(0, 0, 0))
+    detail_terrain = generator.generate_chunk(origin_chunk, coarse_world)
+
+    # Add weather to the detail chunk
+    generator.compute_chunk_weather(detail_terrain)
+
+    # Save the chunk
+    chunk_id = generator.save_chunk(detail_terrain, origin_chunk)
+    print("Testing large world")
+    coarse_world.hexGrid.adjustRadius(15)
+    coarse_world.colorMap()
+    coarse_world.hexGrid.update()
+    print("Testing small world")
+    detail_terrain.hexGrid.adjustRadius(15)
+    detail_terrain.colorLevels = coarse_world.colorLevels
+    detail_terrain.seaLevel = coarse_world.seaLevel
+    detail_terrain.colorMap()
+    print("validating detail")
+    print(type(detail_terrain.hexGrid.hexes[0].style))
+    for i, hex in enumerate(detail_terrain.hexGrid.hexes):
+        if not hasattr(hex.style, 'name'):
+            print(f"Hex {i} has bad style: {hex.style} (type: {type(hex.style)})")
+            break
+
+    print(detail_terrain.hexGrid.hexes[0].style)
+    detail_terrain.hexGrid.update()
+    print(f"Detail chunk: {len(detail_terrain.hexGrid.hexes)} hexes, world_id={chunk_id}")
+
+# %% ../nbs/11_Database.ipynb #5a10fa45
+@patch
+def test_multiple_worlds(self: GeoStorageDebugger):
+    """Test saving and loading multiple independent worlds."""
+    td = TerraDemo()
+    
+    # Create two different terrains
+    terrain_a = td.aussie_map()
+    terrain_b = td.aussie_map()  # Different instance
+    terrain_b.elevations = terrain_b.elevations * 1.5  # Make it different
+    
+    # Save both
+    result_a = self.server.save_world(terrain_a, name="World A")
+    assert result_a.status == 'saved', f"World A save failed: {result_a.context}"
+    assert result_a.id == 1, f"Expected id=1, got {result_a.id}"
+    print(f"✓ Saved World A: id={result_a.id}")
+    
+    result_b = self.server.save_world(terrain_b, name="World B")
+    assert result_b.status == 'saved', f"World B save failed: {result_b.context}"
+    assert result_b.id == 2, f"Expected id=2, got {result_b.id}"
+    print(f"✓ Saved World B: id={result_b.id}")
+    
+    # Load both back
+    loaded_a = self.server.load_world(result_a.id)
+    loaded_b = self.server.load_world(result_b.id)
+    
+    assert loaded_a.status == 'loaded', f"World A load failed"
+    assert loaded_b.status == 'loaded', f"World B load failed"
+    
+    # Verify data is distinct
+    assert not np.allclose(loaded_a.data.elevations, loaded_b.data.elevations), \
+        "Worlds should have different elevations"
+    print(f"✓ Loaded both worlds with distinct data")
+    
+    # Verify hex queries are isolated
+    hexes_a = self.server.query_hexes_in_radius(result_a.id, 0, 0, 0, radius=3)
+    hexes_b = self.server.query_hexes_in_radius(result_b.id, 0, 0, 0, radius=3)
+    print(f"✓ World A has {len(hexes_a)} hexes near origin, World B has {len(hexes_b)}")
+
+
+# %% ../nbs/11_Database.ipynb #ce06f98d
+@patch
+def test_multiscale_watersheds(self: GeoStorageDebugger):
+    """Test watershed computation at coarse and fine scales."""
+    
+    # Set up chunked generator
+    generator = ChunkedTerrainGenerator(
+        storage=self.server,
+        coarse_radius=50,
+        fine_radius=10,
+        chunk_rings=15,
+        halo_rings=3
+    )
+    
+    # Generate coarse world with weather
+    bounds = MapRect(MapCord(0, 0), MapSize(1200, 900))
+    coarse = generator.generate_coarse(
+        bounds,
+        num_plates=8,
+        ocean_fraction=0.4,
+        oceanic_sides=['W'],
+        name="watershed_scale_test"
+    )
+    
+    # Compute weather on coarse
+    coarse.compute_distance_from_coast()
+    coarse.compute_weather()
+    
+    print(f"Coarse map: {len(coarse.hexGrid.hexes)} hexes")
+    print(f"  Precip range: {coarse.fields['precipitation'].min():.0f} - {coarse.fields['precipitation'].max():.0f} mm")
+    
+    # Compute watersheds on coarse
+    coarse_basins = DrainageBasins(coarse)
+    print(f"  Coarse watersheds: {len(coarse_basins.sheds)}")
+    for i, ws in enumerate(coarse_basins.sheds[:5]):
+        print(f"    WS {i}: {len(ws.region.hexes)} hexes, ocean={ws.is_ocean}")
+    
+    # Save coarse watersheds
+    save_ws = self.server.save_watersheds(coarse, coarse_basins.sheds, generator.coarse_world_id)
+    print(f"  Saved: {save_ws.context}")
+    
+    # Generate a detail chunk with weather
+    origin_chunk = generator.world_to_chunk_ref(HexPosition(0, 0, 0))
+    detail = generator.generate_chunk(origin_chunk, coarse)
+    generator.compute_chunk_weather(detail)
+    
+    print(f"\nDetail chunk: {len(detail.hexGrid.hexes)} hexes")
+    print(f"  Precip range: {detail.fields['precipitation'].min():.0f} - {detail.fields['precipitation'].max():.0f} mm")
+    
+    # Compute watersheds on detail
+    detail_basins = DrainageBasins(detail)
+    print(f"  Detail watersheds: {len(detail_basins.sheds)}")
+    for i, ws in enumerate(detail_basins.sheds[:5]):
+        print(f"    WS {i}: {len(ws.region.hexes)} hexes, ocean={ws.is_ocean}")
+    
+    # Save detail chunk and its watersheds
+    chunk_id = generator.save_chunk(detail, origin_chunk)
+    save_detail_ws = self.server.save_watersheds(detail, detail_basins.sheds, chunk_id)
+    print(f"  Saved: {save_detail_ws.context}")
+    
+    # Visualize both
+    print("\n--- Coarse Map ---")
+    coarse.hexGrid.adjustRadius(8)
+    coarse.colorMap()
+    coarse.hexGrid.update()
+    coarse.builder.adjust("rivers", coarse_basins.draw_watersheds(top_n=5))
+    #display(coarse.builder.show())
+    
+    print("\n--- Detail Chunk ---")
+    detail.hexGrid.adjustRadius(8)
+    detail.colorLevels = coarse.colorLevels
+    detail.seaLevel = coarse.seaLevel
+    detail.colorMap()
+    detail.hexGrid.update()
+    detail.builder.adjust("rivers", detail_basins.draw_watersheds(top_n=5))
+    #display(detail.builder.show())
+    
+    # Verify we can load them back
+    load_coarse_ws = self.server.load_watersheds(generator.coarse_world_id, coarse)
+    load_detail_ws = self.server.load_watersheds(chunk_id, detail)
+    
+    print(f"\n✓ Loaded coarse watersheds: {len(load_coarse_ws.data)}")
+    print(f"✓ Loaded detail watersheds: {len(load_detail_ws.data)}")
 
 
 # %% ../nbs/11_Database.ipynb #7d99067c
