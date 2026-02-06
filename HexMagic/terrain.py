@@ -228,6 +228,7 @@ class Terrain:
         self.hexGrid.builder.add_style(seaLevel)
         self.path = path
         self.climate = climate
+        
 
         for  x in self.colorLevels: 
             hover = StyleCSS("hover",fill=x.desaturate().properties["fill"],cursor="pointer" )

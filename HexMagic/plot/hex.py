@@ -300,6 +300,7 @@ class HexGrid:
             self.builder.add_style(x)
         
         self._build_hexes()
+        self.invalidRegion = set()
 
     @classmethod
     def from_bounds(cls, bounds: MapRect, radius: float=25, style: StyleCSS=StyleCSS("Hex")) -> 'HexGrid':
@@ -470,6 +471,8 @@ class HexGrid:
         if new_hexes:
             grid.builder.width = max(h.center.x for h in new_hexes) + radius
             grid.builder.height = max(h.center.y for h in new_hexes) + radius
+
+        
         
         return grid
 
@@ -749,13 +752,14 @@ def styledHexes(self:HexGrid,wrapper:HexWrapper = HexWrapper()):
         self.builder.height = exportSize.height
 
         for i, hex in enumerate(self.hexes):
-            testBody += "\t" +  hex.svg(hexWrap(self,i)) + "\n"
-            if len(hex.label) > 0:
-                testBody += f"\t\t<text x=\"{hex.center.x}\" y=\"{hex.center.y}\" text-anchor=\"middle\" dominant-baseline=\"middle\""
-                if len(hex.labelStyle) > 1:
-                    testBody += f" class=\"{hex.labelStyle}\""
-                
-                testBody += f">{hex.label}</text>\n"
+            if i not in self.invalidRegion:
+                testBody += "\t" +  hex.svg(hexWrap(self,i)) + "\n"
+                if len(hex.label) > 0:
+                    testBody += f"\t\t<text x=\"{hex.center.x}\" y=\"{hex.center.y}\" text-anchor=\"middle\" dominant-baseline=\"middle\""
+                    if len(hex.labelStyle) > 1:
+                        testBody += f" class=\"{hex.labelStyle}\""
+                    
+                    testBody += f">{hex.label}</text>\n"
         
         return testBody
 
