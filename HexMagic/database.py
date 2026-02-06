@@ -49,7 +49,7 @@ import numpy as np
 
 # %% ../nbs/11_Database.ipynb #7b40f653
 from .climate import TerrainPatterns, DrainageBasins, Geology, TerraDemo, Terrain, GeoBounds, ClimatePreset, TerrainFactory
-from .primitives import MapCord, MapSize, MapRect, MapPath, Hex, HexGrid, HexWrapper, HexPosition, hexBackground, HexRegion, unique_windy_edge
+from .primitives import MapCord, MapSize, MapRect, MapPath, Hex, HexGrid, HexWrapper, HexPosition, hexBackground, HexRegion, unique_windy_edge, HexChunk
 from .styles import StyleCSS, SVGBuilder
 
 # %% ../nbs/11_Database.ipynb #480e76c9
@@ -573,6 +573,100 @@ def load_world(self: GeoStorage, world_id: int, as_of: int = None) -> LoadResult
     
     except Exception as e:
         return LoadResult(None, 'error', str(e))
+
+
+# %% ../nbs/11_Database.ipynb #18d02666
+@patch
+def save_chunk(self: GeoStorage, chunk: HexChunk, coarse_world_id: int = None) -> SaveResult:
+    """Save HexChunk to database.
+    
+    Args:
+        chunk: The HexChunk to save
+        coarse_world_id: Optional parent world reference (for linking chunks to coarse map)
+    """
+    now = int(datetime.now().timestamp())
+    p = chunk.position
+    name = f"chunk_{p.q}_{p.r}_{p.s}"
+    
+    # Store in TerrainWorld (reusing schema)
+    extras = {'coarse_world_id': coarse_world_id, 'is_chunk': True}
+    
+    with self.db.conn:
+        world_result = self.worlds.insert({
+            'name': name,
+            'hex_radius': 0,  # Not used for chunks
+            'nrows': chunk.rings,  # Store rings here
+            'ncols': chunk.core_size,  # Store core_size here
+            'extras': json.dumps(extras),
+            'created': now,
+            'modified': now
+        })
+        
+        world_id = world_result['id'] if isinstance(world_result, dict) else world_result
+        
+        # Save hex data (core only, or all?)
+        for idx in chunk.iter_core():  # Save core only
+            local_pos = chunk.index_to_hexposition(idx)
+            
+            record = {
+                'world_id': world_id,
+                'q': local_pos.q,
+                'r': local_pos.r, 
+                's': local_pos.s,
+                'grid_index': idx,
+                'elevation': float(chunk.elevations[idx]),
+                'plate_id': int(chunk.fields.get('plate_id', [-1])[idx]) if 'plate_id' in chunk.fields else -1,
+                'modified': now
+            }
+            self.hexes.insert(record)
+        
+        return SaveResult(world_id, 'saved', f'{chunk.core_size} hexes')
+
+
+# %% ../nbs/11_Database.ipynb #a4c5c638
+@patch  
+def load_chunk(self: GeoStorage, chunk_ref: ChunkRef) -> LoadResult:
+    """Load HexChunk from database."""
+   
+
+    p = chunk_ref.position
+    name = f"chunk_{p.q}_{p.r}_{p.s}"
+    
+    # Find the most recent chunk by name - use id DESC since created has second precision
+    cursor = self.db.execute(
+        "SELECT * FROM terrain_world WHERE name = ? ORDER BY id DESC LIMIT 1",
+        [name]
+    )
+    
+    row = cursor.fetchone()
+    if not row:
+        return LoadResult(None, 'not_found', f'Chunk {name} not found')
+    
+    cols = [d[0] for d in cursor.description]
+    world = dict(zip(cols, row))
+    
+    world_id = world['id']
+    rings = world['nrows']
+    core_size = world['ncols']
+    
+    # Create HexChunk
+    chunk = HexChunk(chunk_ref.position, rings)
+    chunk.core_size = core_size
+    
+    # Load hex data
+    hex_rows = self.query_hexes_latest(world_id)
+    
+    for row in hex_rows:
+        pos = HexPosition(row['q'], row['r'], row['s'])
+        idx = chunk.hexposition_to_index(pos)
+        if idx >= 0:
+            chunk.elevations[idx] = row['elevation']
+            if row.get('plate_id', -1) >= 0:
+                if 'plate_id' not in chunk.fields:
+                    chunk.add_field('plate_id', default=-1)
+                chunk.fields['plate_id'][idx] = row['plate_id']
+    
+    return LoadResult(chunk, 'loaded', f'{len(hex_rows)} hexes')
 
 
 # %% ../nbs/11_Database.ipynb #51b9aa59
@@ -1297,4 +1391,159 @@ def test_multiple_worlds(self: GeoStorageDebugger):
     hexes_a = self.server.query_hexes_in_radius(result_a.id, 0, 0, 0, radius=3)
     hexes_b = self.server.query_hexes_in_radius(result_b.id, 0, 0, 0, radius=3)
     print(f"✓ World A has {len(hexes_a)} hexes near origin, World B has {len(hexes_b)}")
+
+
+# %% ../nbs/11_Database.ipynb #4a3626ac
+@patch
+def test_chunk_spiral_mapping(self: GeoStorageDebugger):
+    """Test HexChunk spiral indexing and core/halo boundaries."""
+    core_rings = 3
+    halo_rings = 2
+    position = HexPosition(0, 0, 0)
+    
+    chunk = HexChunk.with_halo(position, core_rings, halo_rings)
+    
+    # Test 1: Verify spiral size formula
+    expected_core_size = HexChunk.spiral_size(core_rings)
+    expected_total = HexChunk.spiral_size(core_rings + halo_rings)
+    assert chunk.core_size == expected_core_size, f"Core size: {chunk.core_size} vs {expected_core_size}"
+    assert len(chunk) == expected_total, f"Total size: {len(chunk)} vs {expected_total}"
+    print(f"✓ Spiral sizes: core={chunk.core_size}, total={len(chunk)}")
+    
+    # Test 2: Index 0 is always origin
+    center_pos = chunk.index_to_hexposition(0)
+    assert center_pos == HexPosition(0, 0, 0), f"Index 0 should be origin, got {center_pos}"
+    print(f"✓ Index 0 is origin")
+    
+    # Test 3: Bidirectional mapping is consistent
+    for idx in range(len(chunk)):
+        pos = chunk.index_to_hexposition(idx)
+        back_idx = chunk.hexposition_to_index(pos)
+        assert back_idx == idx, f"Round-trip failed: {idx} -> {pos} -> {back_idx}"
+    print(f"✓ All {len(chunk)} indices round-trip through position")
+    
+    # Test 4: Core/halo boundary
+    last_core_idx = chunk.core_size - 1
+    first_halo_idx = chunk.core_size
+    
+    assert chunk.is_core(last_core_idx), f"Index {last_core_idx} should be core"
+    assert chunk.is_halo(first_halo_idx), f"Index {first_halo_idx} should be halo"
+    
+    last_core_pos = chunk.index_to_hexposition(last_core_idx)
+    first_halo_pos = chunk.index_to_hexposition(first_halo_idx)
+    
+    # Core boundary should be at distance == core_rings from center
+    assert last_core_pos.distance(HexPosition(0,0,0)) == core_rings, \
+        f"Last core hex should be at distance {core_rings}"
+    assert first_halo_pos.distance(HexPosition(0,0,0)) == core_rings + 1, \
+        f"First halo hex should be at distance {core_rings + 1}"
+    print(f"✓ Core/halo boundary at ring {core_rings}")
+    
+    # Test 5: Save/load preserves position-based data
+    # Set unique values at specific positions
+    test_positions = [
+        HexPosition(0, 0, 0),      # center
+        HexPosition(1, -1, 0),     # ring 1
+        HexPosition(core_rings, -core_rings, 0),  # core edge
+    ]
+    
+    for i, pos in enumerate(test_positions):
+        idx = chunk.hexposition_to_index(pos)
+        chunk.elevations[idx] = (i + 1) * 100.0
+    
+    # Save
+    result = self.server.save_chunk(chunk)
+    assert result.status == 'saved', f"Save failed: {result.context}"
+    
+    # Load into fresh chunk
+    chunk_ref = ChunkRef(position, core_rings + halo_rings)
+    loaded_result = self.server.load_chunk(chunk_ref)
+    assert loaded_result.status == 'loaded'
+    loaded = loaded_result.data
+    
+    # Verify by position, not index
+    for i, pos in enumerate(test_positions):
+        loaded_idx = loaded.hexposition_to_index(pos)
+        expected = (i + 1) * 100.0
+        actual = loaded.elevations[loaded_idx]
+        assert np.isclose(actual, expected), \
+            f"Position {pos}: expected {expected}, got {actual}"
+    print(f"✓ Position-based data preserved through save/load")
+
+
+# %% ../nbs/11_Database.ipynb #ac73a936
+@patch
+def test_chunk_halo_overlap(self: GeoStorageDebugger):
+    """Test that adjacent chunks' halos overlap correctly."""
+    core_rings = 3
+    halo_rings = 2
+    
+    # Two adjacent chunks
+    chunk_a = HexChunk.with_halo(HexPosition(0, 0, 0), core_rings, halo_rings)
+    chunk_b = HexChunk.with_halo(HexPosition(1, -1, 0), core_rings, halo_rings)
+    
+    # Set elevations in chunk_a
+    for idx in chunk_a.iter_core():
+        chunk_a.elevations[idx] = idx * 10.0
+    
+    # Copy overlapping data to chunk_b's halo
+    chunk_b.copy_from(chunk_a)
+    
+    # Find hexes that should overlap (chunk_b's halo ∩ chunk_a's core)
+    overlap_count = 0
+    for idx in chunk_b.iter_halo():
+        world_pos = chunk_b.index_to_world(idx)
+        a_idx = chunk_a.world_to_index(world_pos)
+        if a_idx >= 0 and chunk_a.is_core(a_idx):
+            assert chunk_b.elevations[idx] == chunk_a.elevations[a_idx]
+            overlap_count += 1
+    
+    print(f"✓ {overlap_count} halo hexes copied from adjacent chunk")
+
+
+# %% ../nbs/11_Database.ipynb #ba21aa63
+@patch
+def test_load_chunk_gets_latest(self: GeoStorageDebugger):
+    """Test that load_chunk retrieves the most recent version when multiple exist."""
+    
+    position = HexPosition(0, 0, 0)
+    core_rings = 3
+    halo_rings = 2
+    
+    # Create and save first chunk
+    chunk1 = HexChunk.with_halo(position, core_rings, halo_rings)
+    chunk1.elevations[0] = 100.0  # Center elevation
+    chunk1.elevations[1] = 111.0  # Marker value
+    
+    result1 = self.server.save_chunk(chunk1)
+    assert result1.status == 'saved'
+    print(f"✓ Saved chunk v1 with center elevation 100.0")
+    
+    # Small delay to ensure different timestamp (or we could mock time)
+    import time
+    time.sleep(0.1)
+    
+    # Create and save second chunk at SAME position with different data
+    chunk2 = HexChunk.with_halo(position, core_rings, halo_rings)
+    chunk2.elevations[0] = 200.0  # Different center elevation
+    chunk2.elevations[1] = 222.0  # Different marker
+    
+    result2 = self.server.save_chunk(chunk2)
+    assert result2.status == 'saved'
+    assert result2.id != result1.id, "Should create new world entry"
+    print(f"✓ Saved chunk v2 with center elevation 200.0 (different world_id)")
+    
+    # Load chunk - should get the LATEST (v2)
+    chunk_ref = ChunkRef(position, core_rings + halo_rings)
+    load_result = self.server.load_chunk(chunk_ref)
+    
+    assert load_result.status == 'loaded'
+    loaded = load_result.data
+    
+    # Verify we got v2, not v1
+    assert np.isclose(loaded.elevations[0], 200.0), \
+        f"Expected 200.0 (v2), got {loaded.elevations[0]} - loaded old version!"
+    assert np.isclose(loaded.elevations[1], 222.0), \
+        f"Expected 222.0 (v2), got {loaded.elevations[1]}"
+    print(f"✓ load_chunk returned latest version (elevation={loaded.elevations[0]})")
 
