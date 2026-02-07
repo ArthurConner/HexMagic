@@ -154,6 +154,18 @@ class HexWeather:
     distance_from_coast: Optional[float] = None  # hex units
     # Temporal
     season: str = ""                   # e.g., "annual", "summer", "winter"
+
+     # NEW: Chunk identification (NULL for coarse-level weather)
+    chunk_q: Optional[int] = None
+    chunk_r: Optional[int] = None
+    chunk_s: Optional[int] = None
+    
+    # NEW: For cache invalidation
+    scale_level: int = 0        # 0=coarse, 1=fine chunk
+    climate_name: str = ""      # e.g., "mediterranean" - invalidate if changed
+    wind_dir: Optional[float] = None  # Wind direction used in computation
+
+
     modified: int = 0
 
 
@@ -176,6 +188,12 @@ class WatershedMeta:
     river_tree: str = ""   # River.encode()
     style: str = ""        # StyleCSS.encode()
     created: int = 0
+
+    # NEW: Chunk identification (NULL for coarse-level watershed)
+    chunk_q: Optional[int] = None
+    chunk_r: Optional[int] = None
+    chunk_s: Optional[int] = None
+
     modified: int = 0
 
 # %% ../nbs/11_Database.ipynb #4698a4e4
@@ -274,6 +292,9 @@ class GeoStorage:
         db.execute("CREATE INDEX IF NOT EXISTS idx_weather_coords ON hex_weather(world_id, q, r, s)")
         db.execute("CREATE INDEX IF NOT EXISTS idx_weather_temporal ON hex_weather(world_id, q, r, s, modified DESC)")
         db.execute("CREATE INDEX IF NOT EXISTS idx_weather_season ON hex_weather(world_id, season)")
+        db.execute("CREATE INDEX IF NOT EXISTS idx_weather_chunk ON hex_weather(world_id, chunk_q, chunk_r, chunk_s)")
+        db.execute("CREATE INDEX IF NOT EXISTS idx_weather_scale ON hex_weather(world_id, scale_level)")
+
 
         self.weather = db.t.hex_weather
 
@@ -932,6 +953,170 @@ def load_weather(self: GeoStorage, world_id: int, terrain: Terrain,
     except Exception as e:
         return LoadResult(None, 'error', str(e))
 
+# %% ../nbs/11_Database.ipynb #a4c59a52
+@patch
+def load_chunk_weather(self: GeoStorage, world_id: int,
+                       chunk: HexChunk, chunk_ref: ChunkRef,
+                       season: str = "annual") -> LoadResult:
+    """Load weather for a specific chunk from database.
+    
+    Args:
+        world_id: World ID
+        chunk: HexChunk to populate with weather fields
+        chunk_ref: ChunkRef identifying the chunk
+        season: Season to load
+    
+    Returns:
+        LoadResult(chunk, status, context)
+    """
+    try:
+        p = chunk_ref.position
+        
+        cursor = self.db.execute("""
+            SELECT hw.* FROM hex_weather hw
+            INNER JOIN (
+                SELECT world_id, q, r, s, MAX(modified) as max_mod
+                FROM hex_weather
+                WHERE world_id = ? AND season = ?
+                  AND chunk_q = ? AND chunk_r = ? AND chunk_s = ?
+                GROUP BY world_id, q, r, s
+            ) latest 
+                ON hw.world_id = latest.world_id 
+                AND hw.q = latest.q AND hw.r = latest.r AND hw.s = latest.s
+                AND hw.modified = latest.max_mod
+            WHERE hw.season = ?
+        """, [world_id, season, p.q, p.r, p.s, season])
+        
+        cols = [d[0] for d in cursor.description]
+        rows = [dict(zip(cols, row)) for row in cursor.fetchall()]
+        
+        if not rows:
+            return LoadResult(chunk, 'not_found', 
+                            f'No weather for chunk ({p.q},{p.r},{p.s}), season={season}')
+        
+        # Initialize fields if needed
+        if 'temperature' not in chunk.fields:
+            chunk.add_field('temperature', default=15.0)
+        if 'precipitation' not in chunk.fields:
+            chunk.add_field('precipitation', default=500.0)
+        
+        filled = 0
+        for row in rows:
+            # Convert world coords to local chunk position
+            world_pos = HexPosition(row['q'], row['r'], row['s'])
+            idx = chunk.world_to_index(world_pos)
+            
+            if idx >= 0:
+                chunk.fields['temperature'][idx] = row['temperature'] or 15.0
+                chunk.fields['precipitation'][idx] = row['precipitation'] or 500.0
+                filled += 1
+        
+        return LoadResult(chunk, 'loaded', f'{filled} weather records for chunk ({p.q},{p.r},{p.s})')
+    
+    except Exception as e:
+        return LoadResult(None, 'error', str(e))
+
+
+@patch
+def has_chunk_weather(self: GeoStorage, world_id: int, 
+                      chunk_ref: ChunkRef, 
+                      season: str = "annual",
+                      climate_name: str = None,
+                      min_count: int = 1) -> bool:
+    """Check if valid cached weather exists for chunk.
+    
+    Args:
+        world_id: World ID
+        chunk_ref: ChunkRef identifying the chunk
+        season: Season to check
+        climate_name: If provided, verify weather was computed with this climate
+        min_count: Minimum number of weather records to consider valid
+    
+    Returns:
+        True if valid cached weather exists
+    """
+    try:
+        p = chunk_ref.position
+        
+        # Build query
+        if climate_name:
+            cursor = self.db.execute("""
+                SELECT COUNT(*) FROM hex_weather
+                WHERE world_id = ? AND season = ?
+                  AND chunk_q = ? AND chunk_r = ? AND chunk_s = ?
+                  AND climate_name = ?
+            """, [world_id, season, p.q, p.r, p.s, climate_name])
+        else:
+            cursor = self.db.execute("""
+                SELECT COUNT(*) FROM hex_weather
+                WHERE world_id = ? AND season = ?
+                  AND chunk_q = ? AND chunk_r = ? AND chunk_s = ?
+            """, [world_id, season, p.q, p.r, p.s])
+        
+        count = cursor.fetchone()[0]
+        return count >= min_count
+    
+    except Exception:
+        return False
+
+
+@patch
+def save_chunk_weather(self: GeoStorage, chunk: HexChunk, 
+                       chunk_ref: ChunkRef, world_id: int,
+                       climate_name: str = "",
+                       wind_dir: float = None,
+                       season: str = "annual") -> SaveResult:
+    """Save weather for a single chunk.
+    
+    Args:
+        chunk: HexChunk with computed weather fields
+        chunk_ref: ChunkRef identifying the chunk
+        world_id: World ID
+        climate_name: Climate preset name (for cache invalidation)
+        wind_dir: Wind direction used in computation
+        season: Season identifier
+    
+    Returns:
+        SaveResult(count, status, context)
+    """
+    now = int(datetime.now().timestamp())
+    p = chunk_ref.position
+    
+    if 'temperature' not in chunk.fields or 'precipitation' not in chunk.fields:
+        return SaveResult(None, 'error', 'Chunk missing weather fields')
+    
+    try:
+        with self.db.conn:
+            count = 0
+            for idx in chunk.iter_core():  # Save core only
+                world_pos = chunk.index_to_world(idx)
+                
+                record = {
+                    'world_id': world_id,
+                    'q': world_pos.q,
+                    'r': world_pos.r,
+                    's': world_pos.s,
+                    'chunk_q': p.q,
+                    'chunk_r': p.r,
+                    'chunk_s': p.s,
+                    'temperature': float(chunk.fields['temperature'][idx]),
+                    'precipitation': float(chunk.fields['precipitation'][idx]),
+                    'climate_name': climate_name,
+                    'wind_dir': wind_dir,
+                    'season': season,
+                    'scale_level': 1,  # Fine/chunk level
+                    'modified': now
+                }
+                self.weather.insert(record)
+                count += 1
+            
+            return SaveResult(count, 'saved', 
+                            f'{count} weather records for chunk ({p.q},{p.r},{p.s})')
+    
+    except Exception as e:
+        return SaveResult(None, 'error', str(e))
+
+
 # %% ../nbs/11_Database.ipynb #ec2c7516
 @patch
 def save_watersheds(self: GeoStorage, terrain: Terrain, 
@@ -1106,6 +1291,104 @@ def load_watersheds(self: GeoStorage, world_id: int,
     
     except Exception as e:
         return LoadResult(None, 'error', str(e))
+
+# %% ../nbs/11_Database.ipynb #eb7508b6
+# === WATERSHED PERSISTENCE ===
+
+@patch
+def save_chunk_watersheds(self: GeoStorage, chunk: HexChunk, 
+                          chunk_ref: ChunkRef, world_id: int) -> SaveResult:
+    """Save watershed assignments for a chunk."""
+    now = int(datetime.now().timestamp())
+    p = chunk_ref.position
+    
+    if 'watershed_id' not in chunk.fields:
+        return SaveResult(None, 'error', 'Chunk missing watershed_id field')
+    
+    try:
+        with self.db.conn:
+            count = 0
+            for idx in chunk.iter_core():
+                world_pos = chunk.index_to_world(idx)
+                ws_id = int(chunk.fields['watershed_id'][idx])
+                
+                if ws_id < 0:
+                    continue  # Skip unassigned/ocean
+                
+                # Update hex_data with watershed_id
+                self.hexes.insert({
+                    'world_id': world_id,
+                    'q': world_pos.q,
+                    'r': world_pos.r,
+                    's': world_pos.s,
+                    'grid_index': idx,
+                    'elevation': float(chunk.elevations[idx]),
+                    'watershed_id': ws_id,
+                    'modified': now
+                })
+                count += 1
+            
+            return SaveResult(count, 'saved', 
+                            f'{count} watershed assignments for chunk ({p.q},{p.r},{p.s})')
+    except Exception as e:
+        return SaveResult(None, 'error', str(e))
+
+
+@patch
+def load_chunk_watersheds(self: GeoStorage, world_id: int,
+                          chunk: HexChunk, chunk_ref: ChunkRef) -> LoadResult:
+    """Load watershed assignments for a chunk."""
+    try:
+        p = chunk_ref.position
+        
+        # Query hexes with watershed_id for this chunk's world positions
+        hex_rows = []
+        for idx in chunk.iter_core():
+            world_pos = chunk.index_to_world(idx)
+            rows = self.query_hexes_in_radius(world_id, world_pos.q, world_pos.r, world_pos.s, radius=0)
+            if rows:
+                hex_rows.append((idx, rows[0]))
+        
+        if not hex_rows:
+            return LoadResult(chunk, 'not_found', 
+                            f'No watershed data for chunk ({p.q},{p.r},{p.s})')
+        
+        # Initialize field if needed
+        if 'watershed_id' not in chunk.fields:
+            chunk.add_field('watershed_id', default=-1)
+        
+        filled = 0
+        for idx, row in hex_rows:
+            ws_id = row.get('watershed_id')
+            if ws_id is not None and ws_id >= 0:
+                chunk.fields['watershed_id'][idx] = ws_id
+                filled += 1
+        
+        return LoadResult(chunk, 'loaded', 
+                         f'{filled} watershed assignments for chunk ({p.q},{p.r},{p.s})')
+    except Exception as e:
+        return LoadResult(None, 'error', str(e))
+
+
+# %% ../nbs/11_Database.ipynb #4ea23db8
+@patch
+def has_chunk_watersheds(self: GeoStorage, world_id: int, 
+                         chunk_ref: ChunkRef,
+                         min_count: int = 1) -> bool:
+    """Check if watershed data exists for chunk."""
+    try:
+        center = chunk_ref.center_hex
+        # Use larger radius to cover more of the chunk
+        radius = chunk_ref.rings  # Full chunk radius, not just 3
+        
+        rows = self.query_hexes_in_radius(world_id, center.q, center.r, center.s, radius=radius)
+        
+        ws_count = sum(1 for r in rows if r.get('watershed_id') is not None and r.get('watershed_id') >= 0)
+        return ws_count >= min_count
+    except Exception:
+        return False
+
+
 
 # %% ../nbs/11_Database.ipynb #1c4f6677
 class GeoStorageDebugger:
