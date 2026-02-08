@@ -44,6 +44,7 @@ from .watershed import Watershed
 class DrainageBasins:
 
     def __init__(self,terrain: Terrain,debug=False):
+        """ The standard init is n^2 so use carefully"""
         self.terrain = terrain
         self.sheds = Watershed.compute_all(terrain,debug=debug)
 
@@ -74,6 +75,109 @@ class DrainageBasins:
         basins.terrain = terrain
         basins.sheds = sheds
         return basins
+
+    @classmethod
+    def from_regions(cls, terrain: Terrain, regions: list[tuple[set[int], int]], 
+                    styles: list[StyleCSS] = None) -> 'DrainageBasins':
+        """Build DrainageBasins from pre-assigned hex sets.
+        
+        Args:
+            terrain: The terrain (will be modified to carve paths)
+            regions: List of (hex_set, mouth_idx) tuples
+            styles: Optional list of styles, defaults to tab20 palette
+        """
+        if styles is None:
+            styles = StyleCSS.seaborn("tab20", levels=len(regions))
+        
+        sheds = []
+        for i, (hex_set, mouth_idx) in enumerate(regions):
+            style = styles[i % len(styles)]
+            ws = cls._watershed_from_set(terrain, hex_set, mouth_idx, style)
+            sheds.append(ws)
+        
+        basins = object.__new__(cls)
+        basins.terrain = terrain
+        basins.sheds = sheds
+        return basins
+
+    @classmethod
+    def _watershed_from_set(cls, terrain: Terrain, hex_set: set[int], 
+                            mouth_idx: int, style: StyleCSS) -> Watershed:
+        """
+                            s there a way to guarentee that things connect. yoo wrote ``` The issue is that _watershed_from_set assumes all hexes connect to the mouth, but after projection some hexes may be disconnected or the mouth may not be the absolute lowest hex. Multiple hexes end up with parent_id=None, causing the MultipleRootError.
+
+    Fix: use BFS from mouth, only adding hexes that actually drain to an already-added hex:
+    Copied!
+
+    the point of the carve to get everthing going to a single spot
+
+    This still could have multiple roots if the carving didn't fully connect everything. If you need guaranteed single root, combine with the BFS approach:
+
+    this is that bfs approach
+
+                            """
+        # Step 1: Carve
+        for idx in hex_set:
+            if idx != mouth_idx:
+                cls._carve_to_target(terrain, idx, mouth_idx, hex_set)
+        
+        # Step 2: BFS from mouth - guarantees single root
+        river = River(terrain)
+        river.ocean_outlet = mouth_idx if terrain.elevations[mouth_idx] <= 0 else None
+        
+        hex_to_node = {mouth_idx: 0}
+        river.tree.create_node(tag="segment", identifier=0, parent=None, data=[mouth_idx])
+        river.hexes.add(mouth_idx)
+        node_id = 1
+        
+        queue = [mouth_idx]
+        while queue:
+            current = queue.pop(0)
+            for neighbor in terrain.ring(current, 1):
+                if neighbor not in hex_set or neighbor in hex_to_node:
+                    continue
+                # Does neighbor drain to current?
+                neighbors_in_set = [n for n in terrain.ring(neighbor, 1) if n in hex_set]
+                lowest = min(neighbors_in_set, key=lambda n: terrain.elevations[n])
+                if lowest == current:
+                    river.tree.create_node(tag="segment", identifier=node_id,
+                                        parent=hex_to_node[current], data=[neighbor])
+                    hex_to_node[neighbor] = node_id
+                    river.hexes.add(neighbor)
+                    node_id += 1
+                    queue.append(neighbor)
+        
+        region = HexRegion(hexes=hex_set, hexGrid=terrain.hexGrid)
+        return Watershed(region=region, tributary=river, style=style)
+
+
+    @staticmethod
+    def _carve_to_target(terrain: Terrain, start_idx: int, target_idx: int, 
+                        allowed: set[int], max_iters: int = 1000):
+        """Carve elevation path from start to target, staying within allowed hexes."""
+        current = start_idx
+        visited = {current}
+        
+        for _ in range(max_iters):
+            if current == target_idx:
+                return
+            
+            # Find lowest neighbor in allowed set
+            neighbors = [n for n in terrain.ring(current, 1) if n in allowed]
+            if not neighbors:
+                return
+            
+            lowest = min(neighbors, key=lambda n: terrain.elevations[n])
+            
+            # Carve if needed
+            if terrain.elevations[lowest] >= terrain.elevations[current]:
+                terrain.elevations[lowest] = terrain.elevations[current] - 1
+            
+            if lowest in visited:
+                return  # Stuck
+            visited.add(lowest)
+            current = lowest
+
 
 # %% ../../nbs/water/basin.ipynb #516efec2
 @patch

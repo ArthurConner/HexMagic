@@ -751,6 +751,8 @@ class SVGBuilder(Generatable):
         - Use show() in Jupyter/solveit for interactive preview
     """
 
+    BUILDERHIDE = False
+    
     def __init__(self):
         self.styles = {}
         self.definitions: List[Generatable] = []
@@ -1235,9 +1237,21 @@ def get_preview(app):
     return partial(HTMX, app=app, host=None, port=5002)
 preview = get_preview(app)
 
+# %% ../nbs/01_styles.ipynb #9e28d967
+@patch
+def show(self:SVGBuilder,dim=None):
+    if SVGBuilder.BUILDERHIDE:
+        return self.xml()[:100]
+    if dim is None:
+        return preview(Div(NotStr(self.xml())))
+    return preview(Div(NotStr(self.to_icon(dim))))
+
 # %% ../nbs/01_styles.ipynb #09226550
 @patch
-def show(self: SVGBuilder, dim=None, output_dir="outputs", name=None):
+def showSave(self: SVGBuilder, dim=None, output_dir="outputs", name=None):
+
+    if SVGBuilder.BUILDERHIDE:
+        return self.xml()[:100]
     os.makedirs(output_dir, exist_ok=True)
     content = self.to_icon(dim) if dim else self.xml()
     
