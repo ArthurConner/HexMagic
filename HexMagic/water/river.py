@@ -92,6 +92,130 @@ class River:
         return river
 
     
+    def _find_path_to_river(self, start_hex, river_region, allowed_hexes=None):
+        """Find path from start_hex to nearest river hex, staying within allowed_hexes.
+        
+        Args:
+            start_hex: Starting hex index
+            river_region: HexRegion of current river network
+            allowed_hexes: Set of hex indices path must stay within (optional)
+        
+        Returns:
+            List of hex indices from start_hex to a river hex (inclusive)
+        """
+        terrain = self.terrain
+        path = [start_hex]
+        current = start_hex
+        visited = {start_hex}
+        
+        max_steps = 1000  # Safety limit
+        
+        for _ in range(max_steps):
+            # Check if we've reached the river
+            if current in river_region.hexes:
+                return path
+            
+            # Get neighbors, filtered by allowed_hexes if provided
+            neighbors = list(terrain.ring(current, 1))
+            if allowed_hexes is not None:
+                neighbors = [n for n in neighbors if n in allowed_hexes or n in river_region.hexes]
+            
+            if not neighbors:
+                return path  # Dead end
+            
+            # Prefer neighbors already in river
+            river_neighbors = [n for n in neighbors if n in river_region.hexes]
+            if river_neighbors:
+                lowest = min(river_neighbors, key=lambda n: terrain.elevations[n])
+                path.append(lowest)
+                return path
+            
+            # Otherwise follow lowest unvisited neighbor
+            unvisited = [n for n in neighbors if n not in visited]
+            if not unvisited:
+                return path  # Stuck
+            
+            lowest = min(unvisited, key=lambda n: terrain.elevations[n])
+            path.append(lowest)
+            visited.add(lowest)
+            current = lowest
+        
+        return path
+
+
+    @classmethod
+    def from_region(cls, terrain, region: HexRegion, start_hex: int = None):
+        """Build river system from region by iteratively carving paths.
+        
+        Args:
+            terrain: Terrain object
+            region: HexRegion defining the watershed boundary
+            start_hex: Optional starting hex (defaults to lowest non-ocean hex)
+        
+        Returns:
+            River object with tree structure
+        """
+        # 1. Find start point (lowest non-ocean hex in region)
+        if start_hex is None:
+            candidates = [h for h in region.hexes if terrain.elevations[h] > 0]
+            if not candidates:
+                return None
+            start_hex = min(candidates, key=lambda h: terrain.elevations[h])
+
+        # 2. Initialize river
+        river = cls(terrain)
+        river_region = HexRegion({start_hex}, region.hexGrid)
+        river.tree.create_node(tag="segment", identifier=0, data=[start_hex])
+        river.hexes.add(start_hex)
+
+        # 3. Main loop
+        max_iterations = len(region.hexes)  # Safety limit
+        for iteration in range(max_iterations):
+            # Build priority queue of draining hexes
+            draining = river._find_draining_hexes(region, river_region)
+
+            if not draining:
+                break
+
+            # Pop closest hex (lowest distance)
+            closest_hex, distance = draining[0]
+
+            # Find path from closest_hex to nearest river hex, constrained to region
+            path = river._find_path_to_river(closest_hex, river_region, allowed_hexes=region.hexes)
+
+            if not path or len(path) < 2:
+                continue
+
+            # Carve the path (lower elevations)
+            river._carve_path(path)
+
+            # Find junction point (last hex in path, which is already in river)
+            junction_hex = path[-1]
+
+            # Find which tree node contains the junction
+            parent_node_id = None
+            for node in river.tree.all_nodes():
+                if junction_hex in node.data:
+                    parent_node_id = node.identifier
+                    break
+
+            # Add tributary (path excluding junction) as child
+            tributary = path[:-1]
+            if tributary:
+                node_id = river.tree.size()
+                river.tree.create_node(
+                    tag="segment", 
+                    identifier=node_id, 
+                    parent=parent_node_id,
+                    data=tributary
+                )
+                river.hexes.update(tributary)
+                river_region.hexes.update(tributary)
+
+        return river
+
+
+    
     @staticmethod
     def combine_rivers(rivers):
         """Merge intersecting rivers, return list with no intersections."""
@@ -787,4 +911,42 @@ def carve_to_ocean(self: Terrain, num_lakes: int = 5, max_iters: int = 10) -> li
                     self.elevations[next_hex] = self.elevations[curr] - 1
     
     return paths
+
+
+# %% ../../nbs/water/river.ipynb #e373604c
+@patch
+def _find_draining_hexes(self: River, region: HexRegion, river_region: HexRegion):
+    """Find all hexes in region not yet in river, sorted by distance to river."""
+    
+    
+    # Get hexes outside river but inside region
+    candidates = region.hexes - river_region.hexes
+    
+    draining = []
+    for hex_idx in candidates:
+        # Calculate distance to nearest river hex
+        min_dist = min(
+            region.hexGrid.index_to_hexposition(hex_idx, origin_index=r_hex).distance(HexPosition.origin())
+            for r_hex in river_region.hexes
+        )
+        heapq.heappush(draining, (min_dist, hex_idx))
+    
+    return [(hex_idx, dist) for dist, hex_idx in draining]
+
+
+# %% ../../nbs/water/river.ipynb #b81560d8
+@patch
+def _carve_path(self: River, path: list[int]):
+    """Lower elevations along path to ensure downhill flow."""
+    if len(path) < 2:
+        return
+    
+    # Make sure path flows downhill
+    for i in range(len(path) - 1):
+        current = path[i]
+        next_hex = path[i + 1]
+        
+        # Ensure next hex is lower than current
+        if self.terrain.elevations[next_hex] >= self.terrain.elevations[current]:
+            self.terrain.elevations[next_hex] = self.terrain.elevations[current] - 1
 

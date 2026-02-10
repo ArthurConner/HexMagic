@@ -77,106 +77,78 @@ class DrainageBasins:
         return basins
 
     @classmethod
-    def from_regions(cls, terrain: Terrain, regions: list[tuple[set[int], int]], 
-                    styles: list[StyleCSS] = None) -> 'DrainageBasins':
-        """Build DrainageBasins from pre-assigned hex sets.
+    def from_regions(cls, terrain: Terrain, regions: list[HexRegion], 
+                    mouths: list[int] = None, styles: list[StyleCSS] = None) -> 'DrainageBasins':
+        """Build DrainageBasins from pre-assigned regions by carving to mouth.
         
         Args:
-            terrain: The terrain (will be modified to carve paths)
-            regions: List of (hex_set, mouth_idx) tuples
-            styles: Optional list of styles, defaults to tab20 palette
+            terrain: Terrain (will be modified to carve drainage)
+            regions: List of HexRegion objects
+            mouths: Optional list of mouth indices (defaults to lowest hex per region)
+            styles: Optional styles
         """
         if styles is None:
             styles = StyleCSS.seaborn("tab20", levels=len(regions))
         
         sheds = []
-        for i, (hex_set, mouth_idx) in enumerate(regions):
+        for i, region in enumerate(regions):
             style = styles[i % len(styles)]
-            ws = cls._watershed_from_set(terrain, hex_set, mouth_idx, style)
-            sheds.append(ws)
+            
+            # Find mouth (lowest hex in region)
+            if mouths and i < len(mouths):
+                mouth_idx = mouths[i]
+            else:
+                mouth_idx = min(region.hexes, key=lambda h: terrain.elevations[h])
+            
+            # Step 1: Carve ALL hexes to flow toward mouth
+            cls._carve_region_to_mouth(terrain, region.hexes, mouth_idx)
+            
+            # Step 2: Build river from carved terrain
+            river = River.from_region(terrain, region, start_hex=mouth_idx)
+            if river is None:
+                river = River(terrain)
+            river.ocean_outlet = mouth_idx if terrain.elevations[mouth_idx] <= 0 else None
+            
+            sheds.append(Watershed(region=region, tributary=river, style=style))
         
         basins = object.__new__(cls)
         basins.terrain = terrain
         basins.sheds = sheds
         return basins
 
-    @classmethod
-    def _watershed_from_set(cls, terrain: Terrain, hex_set: set[int], 
-                            mouth_idx: int, style: StyleCSS) -> Watershed:
-        """
-                            s there a way to guarentee that things connect. yoo wrote ``` The issue is that _watershed_from_set assumes all hexes connect to the mouth, but after projection some hexes may be disconnected or the mouth may not be the absolute lowest hex. Multiple hexes end up with parent_id=None, causing the MultipleRootError.
-
-    Fix: use BFS from mouth, only adding hexes that actually drain to an already-added hex:
-    Copied!
-
-    the point of the carve to get everthing going to a single spot
-
-    This still could have multiple roots if the carving didn't fully connect everything. If you need guaranteed single root, combine with the BFS approach:
-
-    this is that bfs approach
-
-                            """
-        # Step 1: Carve
-        for idx in hex_set:
-            if idx != mouth_idx:
-                cls._carve_to_target(terrain, idx, mouth_idx, hex_set)
-        
-        # Step 2: BFS from mouth - guarantees single root
-        river = River(terrain)
-        river.ocean_outlet = mouth_idx if terrain.elevations[mouth_idx] <= 0 else None
-        
-        hex_to_node = {mouth_idx: 0}
-        river.tree.create_node(tag="segment", identifier=0, parent=None, data=[mouth_idx])
-        river.hexes.add(mouth_idx)
-        node_id = 1
-        
-        queue = [mouth_idx]
-        while queue:
-            current = queue.pop(0)
-            for neighbor in terrain.ring(current, 1):
-                if neighbor not in hex_set or neighbor in hex_to_node:
-                    continue
-                # Does neighbor drain to current?
-                neighbors_in_set = [n for n in terrain.ring(neighbor, 1) if n in hex_set]
-                lowest = min(neighbors_in_set, key=lambda n: terrain.elevations[n])
-                if lowest == current:
-                    river.tree.create_node(tag="segment", identifier=node_id,
-                                        parent=hex_to_node[current], data=[neighbor])
-                    hex_to_node[neighbor] = node_id
-                    river.hexes.add(neighbor)
-                    node_id += 1
-                    queue.append(neighbor)
-        
-        region = HexRegion(hexes=hex_set, hexGrid=terrain.hexGrid)
-        return Watershed(region=region, tributary=river, style=style)
-
-
     @staticmethod
-    def _carve_to_target(terrain: Terrain, start_idx: int, target_idx: int, 
-                        allowed: set[int], max_iters: int = 1000):
-        """Carve elevation path from start to target, staying within allowed hexes."""
-        current = start_idx
-        visited = {current}
+    def _carve_region_to_mouth(terrain: Terrain, hex_set: set[int], mouth_idx: int):
+        """Carve terrain so every hex in set drains to mouth."""
+        # Process hexes from highest to lowest elevation
+        sorted_hexes = sorted(hex_set, key=lambda h: terrain.elevations[h], reverse=True)
         
-        for _ in range(max_iters):
-            if current == target_idx:
-                return
+        for idx in sorted_hexes:
+            if idx == mouth_idx:
+                continue
             
-            # Find lowest neighbor in allowed set
-            neighbors = [n for n in terrain.ring(current, 1) if n in allowed]
-            if not neighbors:
-                return
+            # Trace path to mouth, carving as we go
+            current = idx
+            visited = {idx}
             
-            lowest = min(neighbors, key=lambda n: terrain.elevations[n])
-            
-            # Carve if needed
-            if terrain.elevations[lowest] >= terrain.elevations[current]:
-                terrain.elevations[lowest] = terrain.elevations[current] - 1
-            
-            if lowest in visited:
-                return  # Stuck
-            visited.add(lowest)
-            current = lowest
+            while current != mouth_idx:
+                # Find lowest neighbor in hex_set
+                neighbors = [n for n in terrain.ring(current, 1) if n in hex_set]
+                if not neighbors:
+                    break
+                
+                lowest = min(neighbors, key=lambda n: terrain.elevations[n])
+                
+                # Carve if needed (make sure we flow downhill)
+                if terrain.elevations[lowest] >= terrain.elevations[current]:
+                    terrain.elevations[lowest] = terrain.elevations[current] - 1
+                
+                if lowest in visited:
+                    break  # Avoid infinite loop
+                visited.add(lowest)
+                current = lowest
+
+
+
 
 
 # %% ../../nbs/water/basin.ipynb #516efec2
