@@ -408,7 +408,7 @@ def hex_in_cone(hex_pos: HexPosition, flow_dir: HexPosition, allowed_rotations: 
 
 # %% ../../nbs/plots/02b_Position.ipynb #b4323ed6
 @patch
-def spiral(self: HexPosition, radius: int,clockwise=True) -> list[HexPosition]:
+def spiral(self: HexPosition, radius: int,clockwise=True,distance=1) -> list[HexPosition]:
     """Get all hexes in a true spiral pattern from center out to radius.
     
     Returns hexes in order where each hex is adjacent to the previous one,
@@ -425,7 +425,7 @@ def spiral(self: HexPosition, radius: int,clockwise=True) -> list[HexPosition]:
     
     for ring in range(1, radius + 1):
         # Move out one step to start the new ring
-        current = current + last_direction
+        current = current + ( distance * last_direction)
         results.append(current)
         
         # Walk around this ring - 6 sides, 'ring' steps per side
@@ -440,7 +440,7 @@ def spiral(self: HexPosition, radius: int,clockwise=True) -> list[HexPosition]:
             # (but skip the first step on first side since we already moved out)
             steps = ring if side > 0 else ring - 1
             for step in range(steps):
-                current = current + last_direction
+                current = current + ( distance * last_direction)
                 results.append(current)
     
     return results

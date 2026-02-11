@@ -27,4 +27,4 @@ from .plot.hex import Hex, hexSVG, hexBackground, HexGrid, HexWrapper, LinearGra
 from .plot.cube import HexPosition, GosperCurve
 from .plot.region import HexRegion, windy_edge, variable_windy_edge,unique_windy_edge
 
-from .plot.chunk import HexChunk, render_chunk
+from .plot.chunk import HexChunk

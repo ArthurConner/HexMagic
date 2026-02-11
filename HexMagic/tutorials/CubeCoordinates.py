@@ -300,9 +300,9 @@ rotation_demo(12)
 
 
 # %% ../../nbs/tutorials/coordinates.ipynb #b0056772
-def demo_region_spiral_with_arrows():
+def demo_region_spiral_with_arrows(distance=1):
     """Demo showing a region growing in a spiral pattern with arrows"""
-    grid = PrimitiveDemo().sampleGrid(4, fill="lightgray")
+    grid = PrimitiveDemo().sampleGrid(4*distance, fill="lightgray")
     
     # Create gradient of colors
     colors = StyleCSS.seaborn("BuGn",37)
@@ -316,7 +316,7 @@ def demo_region_spiral_with_arrows():
     center = grid.midpoint
     
     # Use the spiral method from HexPosition
-    spiral_positions = HexPosition.origin().spiral(3)
+    spiral_positions = HexPosition.origin().spiral(3,distance=distance)
     
     arrow_layer = ""
     prev_idx = None
@@ -340,4 +340,4 @@ def demo_region_spiral_with_arrows():
 
 
 # %% ../../nbs/tutorials/coordinates.ipynb #08b91002
-demo_region_spiral_with_arrows()
+demo_region_spiral_with_arrows(distance=2)
