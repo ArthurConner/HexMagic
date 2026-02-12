@@ -349,8 +349,8 @@ def encode(self: Watershed) -> str:
 def calculate_flow(self: Watershed) -> dict[int, float]:
     """Calculate water flow at each hex accounting for soil and precipitation.
     
-    Runoff = precipitation * (1 - permeability)
-    Flow accumulates downstream from high to low elevation.
+    Flow accumulates downstream from high to low elevation,
+    staying within the watershed region.
     
     Returns:
         {hex_index: flow_volume}
@@ -377,8 +377,17 @@ def calculate_flow(self: Watershed) -> dict[int, float]:
     flow = {h: local_runoff[h] for h in sorted_hexes}
     
     for h in sorted_hexes:
-        lowest = terrain.lowest_neighbor(h)
-        if lowest is not None and lowest in flow:
+        # Find lowest neighbor WITHIN the watershed region
+        neighbors = [n for n in terrain.hexGrid.neighborsOf(h) 
+                     if n >= 0 and n in self.region.hexes]
+        
+        if not neighbors:
+            continue
+            
+        lowest = min(neighbors, key=lambda n: terrain.elevations[n])
+        
+        # Only flow downhill
+        if terrain.elevations[lowest] < terrain.elevations[h] and lowest in flow:
             flow[lowest] += flow[h]
     
     return flow

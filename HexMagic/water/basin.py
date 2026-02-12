@@ -43,10 +43,13 @@ from .watershed import Watershed
 # %% ../../nbs/water/basin.ipynb #8c18e5b1
 class DrainageBasins:
 
-    def __init__(self,terrain: Terrain,debug=False):
+    def __init__(self,terrain: Terrain,debug=False,compute=True):
         """ The standard init is n^2 so use carefully"""
         self.terrain = terrain
-        self.sheds = Watershed.compute_all(terrain,debug=debug)
+        if compute:
+            self.sheds = Watershed.compute_all(terrain,debug=debug)
+        else:
+            self.sheds = []
 
     @staticmethod
     def decode(s: str, terrain: Terrain, system: SoilSystem = None) -> 'DrainageBasins':
