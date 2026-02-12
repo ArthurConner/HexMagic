@@ -11,10 +11,16 @@
 - `docs/DATABASE_EXTENSION_GUIDE.md` - How to extend database with game tables
 
 **Schema Documents (docs/):**
-- `schemaMain.md` - Core library database (TerrainDB, templates, multi-scale)
-- `TerrainSchema_FastLite.md` - Web game database (multi-user, viewstate)
+- `DatabaseSchema.md` - **Current implementation** (GeoStorage, tables, API)
+- `ChunkCover_System.md` - **Upscaling system** (master terrain + zoom)
+- `DATABASE_QUICK_REF.md` - Quick reference for common operations
+- `schema.md` - Database design overview and status
+- `schemaMain.md` - Proposed TerrainDB schema (design doc)
+- `TerrainSchema.md` - Database-centric architecture (design doc)
+- `TerrainSchema_FastLite.md` - Web game schema (design doc)
 - `PieceDesign.md` - Game unit/agent system
 - `Game design.md` - Game mechanics and design overview
+- `DATABASE_EXTENSION_GUIDE.md` - How to extend database
 
 ## Core Architecture (4 Layers)
 
@@ -23,6 +29,8 @@
 - `HexGrid` - Grid with index↔position conversions
 - `Terrain` - Elevation + fields (temperature, precipitation, climate)
 - `Geology` - Tectonic plates, watersheds
+- `ChunkCover` - Chunk extraction and upsampling from master terrain
+- `HFFT` - Hexagonal FFT for smooth upsampling with detail
 - Procedural: `Terrain.fromSeeds(bounds, num_plates=12)`
 - Real-world: `TerraDemo().bayArea_map()` (7+ locations)
 
@@ -42,24 +50,40 @@
 - Multi-user hosting
 - Per-user viewport state
 
-## Databases (2 Schemas)
+## Database Schema (HexMagic/database.py)
 
-### Core Library (docs/schemaMain.md)
-**Tables:** TerrainWorld, WorldTemplate, ScaleTransform, Viewport, HexData, Plate, Watershed
+### Core Tables (GeoStorage)
+**Tables:** TerrainWorld, HexData, HexWeather, User
+
+**TerrainWorld:**
+- Metadata for stored terrains (name, hex_radius, nrows, ncols)
+- Sea level and elevation parameters
+- Encoded extras (climate, geo bounds)
+
+**HexData:**
+- Individual hex terrain data (elevation, lat/lon)
+- Indexed by (world_id, q, r, s) - cube coordinates
+- Grid index for array access
+- Distance from coast
+- Temporal versioning (modified timestamp)
+
+**HexWeather:**
+- Weather/climate data per hex
+- Temperature, precipitation, humidity
+- Climate metrics (PET, aridity, seasonality)
+- Seasonal variations (annual, summer, winter)
+- Temporal versioning
+
+**User:**
+- Username, email, password
+- Session ID and active world
 
 **Key Features:**
-- Template library (Bay Area, California, Maui, etc.)
-- Regional extraction: `db.extract_region(world_id, center_q, center_r, center_s, rings=20)`
-- Multi-scale: `db.save_downsampled_world(world_id, scale=0.25)` with bidirectional region mapping
-- Print crops: `db.extract_rectangle(..., width=60, height=40, orientation='landscape')`
-
-### Web Game (docs/TerrainSchema_FastLite.md)
-**Tables:** World, Game, User, GamePlayer, ViewState, Kingdom, Territory, Piece
-
-**Key Features:**
-- Separate world from game state
-- Per-user UI state (center, zoom, overlays)
-- Multi-player support
+- Temporal data: Version history via modified timestamps
+- Spatial indexing: Fast queries by coordinates
+- Multi-scale terrain: ChunkedTerrainGenerator for large worlds
+- Region extraction: `extract_region(world_id, center_q, center_r, center_s, rings=20)`
+- Weather persistence: Separate table for climate data
 
 ## Coordinate Systems
 
@@ -101,40 +125,77 @@ terrain.colorMap()
 terrain.add_climate_overlay()
 ```
 
-### Multi-Scale Analysis
+### Master Terrain + Upscaling (NEW)
 ```python
-db = TerrainDB()
+from HexMagic.cover import ChunkCover
 
-# Create large world
-large_id = db.save_world(large_terrain, name="Continent")
+# Create coarse master terrain
+master = TerraDemo().sanFran()  # 100×120 hexes
 
-# Downsample for faster climate work
-small_id, transform_id = db.save_downsampled_world(large_id, scale=0.25)
+# Setup chunk cover for upsampling
+cover = ChunkCover(master, rings=5, halo_rings=1)
 
-# Work on small version
-small_terrain, _ = db.load_world(small_id)
-small_terrain.compute_climate()
+# Zoom into specific location (4× resolution)
+zoomed = cover.zoomChunk(origin=master.hexGrid.middle, scale=4)
+# Result: ~40×48 hexes @ 4× smaller radius with added detail
 
-# Define regions on small terrain
-tropical_hexes = set(np.where(small_terrain.fields['climate'] == 0)[0])
-
-# Map back to large terrain
-transform = db.transforms[transform_id]
-large_tropical = db.map_region_from_scale(transform, tropical_hexes, expand=True)
+# Database integration (planned):
+# storage.save_master_terrain(master)
+# zoomed = storage.zoom_chunk_cached(master_id, origin, scale=4)
 ```
 
-### Regional Extraction
+### Multi-Scale Terrain Generation
 ```python
-# Centered circular region
-detail, mapper = db.extract_region(world_id=1, center_q=10, center_r=-5, center_s=-5, rings=20)
+from HexMagic.database import GeoStorage, ChunkedTerrainGenerator
 
-# Rectangular for printing
-print_map, mapper = db.extract_rectangle(world_id=1, center_q=0, center_r=0, center_s=0, 
-                                         width_hexes=60, height_hexes=40, orientation='landscape')
+storage = GeoStorage()
+gen = ChunkedTerrainGenerator(
+    storage,
+    coarse_radius=100,    # Overview map hex size
+    fine_radius=10,       # Detail chunk hex size
+    chunk_rings=20,       # Hexes per chunk
+    halo_rings=5          # Extra for edge computation
+)
 
-# Save viewport
-viewport_id = db.create_viewport(world_id=1, name="Detail", center_q=10, center_r=-5, center_s=-5,
-                                 shape="circle", rings=20)
+# Generate world in phases
+bounds = MapRect(MapCord(0,0), MapSize(2000, 2000))
+coarse_id = gen.generate_world(
+    bounds,
+    num_plates=15,
+    ocean_fraction=0.4,
+    compute_weather=True
+)
+
+# Load chunks as needed
+chunk = gen.world_to_chunk_ref(HexPosition(10, -5, -5))
+chunk_terrain = gen.load_chunk(chunk)
+```
+
+### Terrain Save/Load
+```python
+storage = GeoStorage()
+
+# Save terrain
+result = storage.save_world(terrain, name="My World")
+world_id = result.id
+print(f"Saved {result.context}")  # "5000 hexes"
+
+# Load terrain (with temporal query)
+result = storage.load_world(world_id, as_of=timestamp)
+terrain = result.data
+
+# Save/load weather
+storage.save_weather(terrain, world_id, season="annual")
+storage.load_weather(world_id, terrain, season="annual")
+
+# Extract region
+result = storage.extract_region(
+    world_id,
+    center_q=10, center_r=-5, center_s=-5,
+    rings=20,
+    padding=1
+)
+region_terrain = result.data
 ```
 
 ## Design Patterns
@@ -196,9 +257,9 @@ Access: `db.get_template(1)` for Bay Area
 ✅ downsample_climate()
 
 **In Progress:**
-🔄 TerrainDB implementation
-🔄 ScaleTransform table
-🔄 Game database classes
+🔄 Game database extension (kingdoms, pieces)
+🔄 Template system
+🔄 Web interface (FastHTML)
 
 **Planned:**
 📋 Web routes (FastHTML)
