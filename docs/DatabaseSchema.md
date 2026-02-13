@@ -90,9 +90,15 @@ class HexData:
     s: int = 0
     grid_index: int = 0
     elevation: float = 0.0
+    plate_id: int = -1
     latitude: Optional[float] = None
     longitude: Optional[float] = None
     distance_from_coast: Optional[float] = None
+    watershed_id: Optional[int] = None  # NEW: FK to WatershedMeta
+    chunk_q: Optional[int] = None       # NEW: Chunk origin position
+    chunk_r: Optional[int] = None
+    chunk_s: Optional[int] = None
+    scale_level: int = 0                # NEW: 0=coarse, >0=zoomed
     modified: int = 0
 ```
 
@@ -112,6 +118,8 @@ CREATE INDEX idx_hex_world ON hex_data(world_id)
 CREATE INDEX idx_hex_coords ON hex_data(world_id, q, r, s)
 CREATE INDEX idx_hex_grid ON hex_data(world_id, grid_index)
 CREATE INDEX idx_hex_temporal ON hex_data(world_id, q, r, s, modified DESC)
+CREATE INDEX idx_hex_watershed ON hex_data(world_id, watershed_id)
+CREATE INDEX idx_hex_chunk ON hex_data(world_id, chunk_q, chunk_r, chunk_s, scale_level)
 ```
 
 **Temporal Queries:**
@@ -182,6 +190,8 @@ CREATE INDEX idx_weather_world ON hex_weather(world_id)
 CREATE INDEX idx_weather_coords ON hex_weather(world_id, q, r, s)
 CREATE INDEX idx_weather_temporal ON hex_weather(world_id, q, r, s, modified DESC)
 CREATE INDEX idx_weather_season ON hex_weather(world_id, season)
+CREATE INDEX idx_weather_chunk ON hex_weather(world_id, chunk_q, chunk_r, chunk_s)
+CREATE INDEX idx_weather_scale ON hex_weather(world_id, scale_level)
 ```
 
 **Seasonal Data:**
@@ -201,7 +211,94 @@ storage.load_weather(world_id, terrain, season="summer")
 
 ---
 
-### 4. User
+### 4. WatershedMeta
+
+Watershed topology and metadata persistence.
+
+```python
+@dataclass
+class WatershedMeta:
+    """Metadata for a stored watershed."""
+    id: int = None
+    world_id: int = 0
+    name: str = ""
+    terminal_q: int = 0  # Outlet hex position
+    terminal_r: int = 0
+    terminal_s: int = 0
+    is_ocean: bool = True
+    total_flow: float = 0.0
+    area_hexes: int = 0
+    river_tree: str = ""         # River.encode()
+    style: str = ""              # StyleCSS.encode()
+    chunk_q: Optional[int] = None  # Chunk-level watersheds
+    chunk_r: Optional[int] = None
+    chunk_s: Optional[int] = None
+    created: int = 0
+    modified: int = 0
+```
+
+**Fields:**
+- `river_tree`: Encoded river tributary tree
+- `style`: Visualization style
+- `terminal_*`: Watershed outlet position
+- `chunk_*`: NULL for coarse watersheds, set for chunk-level
+- `total_flow`, `area_hexes`: Computed statistics
+
+**Indices:**
+```sql
+CREATE INDEX idx_watershed_world ON watershed_meta(world_id)
+```
+
+**Usage:**
+```python
+# Save watersheds
+storage.save_watersheds(terrain, watersheds, world_id)
+
+# Query by watershed
+hexes = storage.query_watershed_hexes(world_id, watershed_id)
+
+# Save chunk-level watersheds
+storage.save_zoomed_watersheds(cover_id, origin_pos, scale, terrain, watersheds)
+```
+
+---
+
+### 5. ChunkBorder
+
+Track drainage across chunk boundaries for distributed watershed computation.
+
+```python
+@dataclass
+class ChunkBorder:
+    """Track drainage across chunk boundaries."""
+    id: int = None
+    world_id: int = 0
+    chunk_q: int = 0             # Source chunk
+    chunk_r: int = 0
+    chunk_s: int = 0
+    border_hex_q: int = 0        # Local hex at border
+    border_hex_r: int = 0
+    border_hex_s: int = 0
+    downstream_chunk_q: int = 0  # Destination chunk
+    downstream_chunk_r: int = 0
+    downstream_chunk_s: int = 0
+    flow_volume: float = 0.0     # Accumulated upstream area
+```
+
+**Purpose:**
+- Enable distributed watershed computation
+- Track water flow between chunks
+- Support parallel chunk processing
+
+**Indices:**
+```sql
+CREATE INDEX idx_border_chunk ON chunk_border(world_id, chunk_q, chunk_r, chunk_s)
+CREATE INDEX idx_border_downstream ON chunk_border(world_id, downstream_chunk_q, downstream_chunk_r, downstream_chunk_s)
+```
+
+---
+
+### 6. User
 
 User authentication and session data.
 
@@ -260,6 +357,43 @@ result = storage.save_weather(terrain, world_id, season="annual")
 # Load weather data
 result = storage.load_weather(world_id, terrain, season="annual", as_of=timestamp)
 ```
+
+### ChunkCover Operations (NEW)
+
+**ChunkCover** provides master terrain + zoom pattern for efficient multi-scale terrain.
+
+```python
+# Save ChunkCover (stores coarse master terrain)
+cover = ChunkCover(master_terrain, rings=5, halo_rings=1)
+cover.db = storage
+result = cover.save(name="SF Master")
+cover_id = cover.ident
+
+# Load ChunkCover
+result = storage.load_cover(cover_id)
+cover = result.data
+
+# Zoom with caching (automatic)
+zoomed = cover.zoom_cached(origin=middle, scale=4)  # Generates if needed
+zoomed2 = cover.zoom_cached(origin=middle, scale=4) # Cache hit!
+
+# Full data zoom (terrain + weather + watersheds)
+full = cover.zoom_with_full_data(
+    origin=middle,
+    scale=4,
+    compute_weather=True,
+    compute_watersheds=True
+)
+
+# Cache management
+storage.invalidate_all_caches(cover_id)  # Clear all cached chunks
+```
+
+**Caching Strategy:**
+- Cache key: `(cover_id, origin_q, origin_r, origin_s, scale)`
+- Terrain, weather, watersheds cached separately
+- Automatic invalidation when coarse data changes
+- Cache hit: 50ms load vs 280ms compute (5.6× faster)
 
 ### Region Extraction
 
