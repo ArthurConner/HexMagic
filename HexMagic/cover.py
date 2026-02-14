@@ -20,7 +20,7 @@ from .climate import TerrainPatterns, DrainageBasins, Geology, TerraDemo, Terrai
 from .primitives import MapCord, MapSize, MapRect, MapPath, Hex, HexGrid, HexWrapper, HexPosition, hexBackground, HexRegion, unique_windy_edge, PrimitiveDemo, HexChunk
 from .styles import StyleCSS, SVGBuilder
 from .geology import Plate
-from .geology import River, Watershed
+from .geology import River, Watershed, DrainageBasins
 from scipy.ndimage import uniform_filter
 
 
@@ -32,6 +32,7 @@ class ChunkCover:
     def __init__(self, terrain, rings, halo_rings=1,
         ident:int=None, # an identity for the database
         db = None, # this is a reference for a future datase holding
+        basin:DrainageBasins = None
         ):
         self.terrain = terrain
         self.rings = rings
@@ -40,6 +41,7 @@ class ChunkCover:
         self.chunks = []
         self.position_to_index = {}  # {CoverPosition: chunk_index}
         self.origin_index = self._compute_origin_index()
+        self.basin = basin
         if ident is None:
             ident = -1
         
@@ -174,6 +176,10 @@ class ChunkCover:
         ret += f"+terrain:\n"
         ret += self.terrain.encode()
         ret += f"-terrain:\n"
+        if self.basin is not None:
+            ret += f"+basin:\n"
+            ret += self.basin.encode()
+            ret += f"\n-basin:\n"
         ret += f"-cover:\n"
         return ret
 
@@ -185,7 +191,9 @@ class ChunkCover:
         rings = None
         halo_rings = None
         terrain_lines = []
+        basin_lines = []
         in_terrain = False
+        in_basin = False
         in_cover = False
         ident = None
         
@@ -205,9 +213,17 @@ class ChunkCover:
             if line.startswith('-terrain:'):
                 in_terrain = False
                 continue
+            if line.startswith('+basin:'):
+                in_basin = True
+                continue
+            if line.startswith('-basin:'):
+                in_basin = False
+                continue
                 
             if in_terrain:
                 terrain_lines.append(line)
+            elif in_basin:
+                basin_lines.append(line)
             elif line.startswith('rings:'):
                 rings = int(line.split(':')[1])
             elif line.startswith('halo_rings:'):
@@ -216,8 +232,13 @@ class ChunkCover:
                 ident = int(line.split(':')[1])
         
         terrain = Terrain.decode('\n'.join(terrain_lines))
-        cover = ChunkCover(terrain, rings=rings, halo_rings=halo_rings,ident=ident)
+        cover = ChunkCover(terrain, rings=rings, halo_rings=halo_rings, ident=ident)
+        
+        if basin_lines:
+            cover.basin = DrainageBasins.decode('\n'.join(basin_lines), terrain)
+        
         return cover
+
 
 
 
@@ -632,8 +653,21 @@ def zoomChunkCombined(self: ChunkCover, origin=None, scale: int = 2,
             scale=scale, octaves=octaves, persistence=persistence
         )
     
+
+    # Step 3: Extract high-frequency detail (HFFT - interpolated)
+    # Align sizes - HFFT may produce slightly different dimensions due to padding
+    target_size = len(up_terrain.elevations)
+    if len(hfft_elev) > target_size:
+        hfft_elev = hfft_elev[:target_size]  # crop
+    elif len(hfft_elev) < target_size:
+        hfft_elev = np.pad(hfft_elev, (0, target_size - len(hfft_elev)), mode='edge')
+
+
+
     # Step 3: Extract high-frequency detail (HFFT - interpolated)
     detail = hfft_elev - up_terrain.elevations
+
+    
     
     # Step 4: Blend
     up_terrain.elevations = up_terrain.elevations + detail_strength * detail
@@ -839,7 +873,7 @@ def upscaleWater(self:TerraDemo,demoTerr:Terrain,useSimple=True):
     if useSimple:
         zoomed = cover.zoomChunkSimple(origin=coastal_origin, scale=2)
     else:
-        zoomed = cover.zoomChunk(origin=coastal_origin,progressive=True, scale=4)
+        zoomed = cover.zoomChunkCombined(origin=coastal_origin, scale=4)
         
     zoomed.climate = demoTerr.climate
     zoomed.geo = demoTerr.geo # this is wrong, but close enough
