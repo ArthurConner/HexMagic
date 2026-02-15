@@ -2,7 +2,8 @@
 
 # %% auto #0
 __all__ = ['LoadResult', 'SaveResult', 'ChunkRef', 'chunk_to_world', 'world_to_chunk', 'HexData', 'HexWeather', 'World', 'User',
-           'ChunkBorder', 'GeoStorage', 'GeoStorageDebugger']
+           'ChunkBorder', 'GeoStorage', 'GeoStorageDebugger', 'ZoomResult', 'region_bounding_box', 'bbox_to_chunk_refs',
+           'stitch_chunks', 'build_fine_to_coarse_mapper']
 
 # %% ../nbs/12_Database.ipynb #604269fa
 import numpy as np
@@ -1288,4 +1289,307 @@ class GeoStorageDebugger:
         if exc_type is not None:
             self.failed = True
         self.close()
+
+
+# %% ../nbs/12_Database.ipynb #ec136fe9
+from dataclasses import dataclass
+from typing import Callable
+
+@dataclass
+class ZoomResult:
+    """Result of zooming into a region."""
+    terrain: Terrain
+    basins: DrainageBasins
+    mapper: Callable[[int], int]  # fine_idx → coarse_idx (-1 if invalid)
+    chunks_loaded: int
+
+
+def region_bounding_box(region: HexRegion) -> tuple[int, int, int, int]:
+    """Get (min_row, max_row, min_col, max_col) for a region."""
+    grid = region.hexGrid
+    rows = []
+    cols = []
+    for idx in region.hexes:
+        row, col = grid.index_to_row_col(idx)
+        rows.append(row)
+        cols.append(col)
+    return min(rows), max(rows), min(cols), max(cols)
+
+
+def bbox_to_chunk_refs(min_row: int, max_row: int, min_col: int, max_col: int,
+                       cover: ChunkCover) -> set[ChunkRef]:
+    """Find all ChunkRefs that overlap a bounding box."""
+    grid = cover.terrain.hexGrid
+    chunk_rings = cover.rings
+    spacing = chunk_rings * 2
+    
+    chunks = set()
+    
+    # Convert row/col range to indices, then to chunk positions
+    for row in range(min_row, max_row + 1, spacing):
+        for col in range(min_col, max_col + 1, spacing):
+            idx = grid.row_col_to_index(row, col)
+            if idx < 0:
+                continue
+            
+            # Convert to HexPosition, then to chunk position
+            world_pos = grid.index_to_hexposition(idx, origin_index=0)
+            chunk_pos, _ = world_to_chunk(world_pos, chunk_rings)
+            chunks.add(ChunkRef(chunk_pos, chunk_rings))
+    
+    # Also check corners and edges to ensure coverage
+    for row in [min_row, max_row]:
+        for col in [min_col, max_col]:
+            idx = grid.row_col_to_index(row, col)
+            if idx >= 0:
+                world_pos = grid.index_to_hexposition(idx, origin_index=0)
+                chunk_pos, _ = world_to_chunk(world_pos, chunk_rings)
+                chunks.add(ChunkRef(chunk_pos, chunk_rings))
+    
+    return chunks
+
+
+def stitch_chunks(chunks: set[ChunkRef], cover: ChunkCover, 
+                  storage: GeoStorage, scale: int) -> tuple[Terrain, dict[tuple, tuple]]:
+    """Load chunks and stitch into single terrain.
+    
+    Returns (merged_terrain, chunk_offsets) where chunk_offsets maps
+    chunk.key → (row_offset, col_offset) in merged grid.
+    """
+    if not chunks:
+        return None, {}
+    
+    # Load all chunk terrains
+    chunk_terrains = {}
+    for chunk in chunks:
+        origin_idx = cover.terrain.hexGrid.hexposition_to_index(chunk.center_hex, origin_index=0)
+        if origin_idx < 0:
+            # Chunk center is outside grid, skip
+            continue
+        result = storage.load_or_generate_chunk(cover, origin=origin_idx, scale=scale)
+        if result.data is not None:
+            chunk_terrains[chunk.key] = result.data
+    
+    if not chunk_terrains:
+        return None, {}
+    
+    # Get chunk grid dimensions (all should be same size)
+    sample_terrain = next(iter(chunk_terrains.values()))
+    chunk_rows = sample_terrain.hexGrid.nRows
+    chunk_cols = sample_terrain.hexGrid.nCols
+    chunk_radius = sample_terrain.hexGrid.radius
+    
+    # Find bounding box of chunks in chunk-space
+    chunk_qs = [k[0] for k in chunk_terrains.keys()]
+    chunk_rs = [k[1] for k in chunk_terrains.keys()]
+    
+    min_q, max_q = min(chunk_qs), max(chunk_qs)
+    min_r, max_r = min(chunk_rs), max(chunk_rs)
+    
+    # Calculate merged grid size
+    n_chunks_q = max_q - min_q + 1
+    n_chunks_r = max_r - min_r + 1
+    
+    merged_rows = n_chunks_r * chunk_rows
+    merged_cols = n_chunks_q * chunk_cols
+    
+    # Create merged terrain
+    merged_grid = HexGrid(
+        nRows=merged_rows, 
+        nCols=merged_cols, 
+        radius=chunk_radius, 
+        style=sample_terrain.hexGrid.style
+    )
+    
+    merged_terrain = Terrain(bounds=merged_grid.bounds, radius=chunk_radius)
+    merged_terrain.hexGrid = merged_grid
+    merged_terrain.elevations = np.full(merged_rows * merged_cols, -100.0)  # Default to water
+    merged_terrain.fields = {}
+    
+    # Initialize fields from sample
+    for field_name in sample_terrain.fields:
+        merged_terrain.fields[field_name] = np.zeros(merged_rows * merged_cols)
+    
+    # Copy climate/geo if present
+    if hasattr(sample_terrain, 'climate'):
+        merged_terrain.climate = sample_terrain.climate
+    if hasattr(sample_terrain, 'geo'):
+        merged_terrain.geo = sample_terrain.geo
+    
+    # Track chunk offsets
+    chunk_offsets = {}
+    
+    # Copy each chunk into merged terrain
+    for key, chunk_terrain in chunk_terrains.items():
+        q, r, s = key
+        
+        # Offset in merged grid
+        row_offset = (r - min_r) * chunk_rows
+        col_offset = (q - min_q) * chunk_cols
+        chunk_offsets[key] = (row_offset, col_offset)
+        
+        chunk_grid = chunk_terrain.hexGrid
+        
+        for local_idx in range(len(chunk_terrain.elevations)):
+            local_row, local_col = chunk_grid.index_to_row_col(local_idx)
+            
+            merged_row = row_offset + local_row
+            merged_col = col_offset + local_col
+            merged_idx = merged_row * merged_cols + merged_col
+            
+            if 0 <= merged_idx < len(merged_terrain.elevations):
+                merged_terrain.elevations[merged_idx] = chunk_terrain.elevations[local_idx]
+                for field_name, field_data in chunk_terrain.fields.items():
+                    merged_terrain.fields[field_name][merged_idx] = field_data[local_idx]
+    
+    return merged_terrain, chunk_offsets
+
+
+def build_fine_to_coarse_mapper(cover: ChunkCover, 
+                                merged_terrain: Terrain,
+                                chunk_offsets: dict,
+                                scale: int) -> Callable[[int], int]:
+    """Build function mapping fine terrain index → coarse terrain index."""
+    coarse_grid = cover.terrain.hexGrid
+    fine_grid = merged_terrain.hexGrid
+    
+    # Precompute for efficiency
+    chunk_rows = fine_grid.nRows // len(set(k[1] for k in chunk_offsets.keys())) if chunk_offsets else fine_grid.nRows
+    chunk_cols = fine_grid.nCols // len(set(k[0] for k in chunk_offsets.keys())) if chunk_offsets else fine_grid.nCols
+    
+    # Invert chunk_offsets for lookup
+    offset_to_chunk = {v: k for k, v in chunk_offsets.items()}
+    
+    def mapper(fine_idx: int) -> int:
+        fine_row, fine_col = fine_grid.index_to_row_col(fine_idx)
+        
+        # Which chunk is this in?
+        chunk_row_idx = fine_row // chunk_rows
+        chunk_col_idx = fine_col // chunk_cols
+        
+        # Find corresponding chunk key
+        row_offset = chunk_row_idx * chunk_rows
+        col_offset = chunk_col_idx * chunk_cols
+        
+        chunk_key = offset_to_chunk.get((row_offset, col_offset))
+        if chunk_key is None:
+            return -1
+        
+        q, r, s = chunk_key
+        chunk_center = HexPosition(q, r, s) * (cover.rings * 2)
+        
+        # Local position within chunk
+        local_row = fine_row - row_offset
+        local_col = fine_col - col_offset
+        
+        # Scale down to coarse
+        coarse_local_row = local_row // scale
+        coarse_local_col = local_col // scale
+        
+        # Convert to coarse grid index
+        # The chunk center in coarse grid
+        center_idx = coarse_grid.hexposition_to_index(chunk_center, origin_index=0)
+        if center_idx < 0:
+            return -1
+        
+        center_row, center_col = coarse_grid.index_to_row_col(center_idx)
+        
+        # Offset from chunk center
+        half_chunk = cover.rings
+        coarse_row = center_row - half_chunk + coarse_local_row
+        coarse_col = center_col - half_chunk + coarse_local_col
+        
+        return coarse_grid.row_col_to_index(coarse_row, coarse_col)
+    
+    return mapper
+
+
+@patch
+def zoom_region(self: ChunkCover, 
+                region: HexRegion,
+                scale: int = 2,
+                compute_weather: bool = True) -> ZoomResult:
+    """Zoom into a region with stitched chunks and projected watersheds.
+    
+    Args:
+        region: HexRegion on the coarse terrain
+        scale: Zoom factor
+        compute_weather: Whether to compute weather on zoomed terrain
+    
+    Returns:
+        ZoomResult with terrain, basins, and fine→coarse mapper
+    """
+    if self.db is None:
+        raise ValueError("ChunkCover.db must be set for zoom_region")
+    
+    # Step 1: Get bounding box
+    min_row, max_row, min_col, max_col = region_bounding_box(region)
+    
+    # Add padding for halo
+    padding = self.halo_rings + 1
+    min_row = max(0, min_row - padding)
+    max_row = min(self.terrain.hexGrid.nRows - 1, max_row + padding)
+    min_col = max(0, min_col - padding)
+    max_col = min(self.terrain.hexGrid.nCols - 1, max_col + padding)
+    
+    # Step 2: Find chunks
+    chunks = bbox_to_chunk_refs(min_row, max_row, min_col, max_col, self)
+    
+    # Step 3 & 4: Load and stitch
+    merged_terrain, chunk_offsets = stitch_chunks(chunks, self, self.db, scale)
+    
+    if merged_terrain is None:
+        return ZoomResult(None, None, lambda x: -1, 0)
+    
+    # Mark invalid regions (outside original terrain bounds)
+    coarse_grid = self.terrain.hexGrid
+    fine_grid = merged_terrain.hexGrid
+    
+    for fine_idx in range(len(merged_terrain.elevations)):
+        fine_row, fine_col = fine_grid.index_to_row_col(fine_idx)
+        coarse_row = fine_row // scale
+        coarse_col = fine_col // scale
+        
+        # Check if corresponding coarse hex exists
+        if coarse_row < 0 or coarse_row >= coarse_grid.nRows or \
+           coarse_col < 0 or coarse_col >= coarse_grid.nCols:
+            fine_grid.invalidRegion.add(fine_idx)
+    
+    # Step 5: Weather
+    if compute_weather and hasattr(self.terrain, 'climate'):
+        merged_terrain.climate = self.terrain.climate
+        merged_terrain.geo = getattr(self.terrain, 'geo', None)
+        merged_terrain.compute_weather()
+    
+    # Step 6: Lazy init coarse basin if needed
+    if self.basin is None:
+        self.basin = DrainageBasins(self.terrain)
+        self.save()
+    
+    # Build fine_regions for watershed projection
+    fine_regions = {}
+    mapper = build_fine_to_coarse_mapper(self, merged_terrain, chunk_offsets, scale)
+    
+    for fine_idx in range(len(merged_terrain.elevations)):
+        if fine_idx in fine_grid.invalidRegion:
+            continue
+        coarse_idx = mapper(fine_idx)
+        if coarse_idx >= 0:
+            if coarse_idx not in fine_regions:
+                fine_regions[coarse_idx] = set()
+            fine_regions[coarse_idx].add(fine_idx)
+    
+    # Step 7: Project watersheds
+    zoomed_sheds = self.project_watersheds(self.basin, fine_regions, merged_terrain)
+    
+    # Build DrainageBasins
+    zoomed_basins = DrainageBasins(merged_terrain, compute=False)
+    zoomed_basins.sheds = zoomed_sheds
+    
+    return ZoomResult(
+        terrain=merged_terrain,
+        basins=zoomed_basins,
+        mapper=mapper,
+        chunks_loaded=len(chunk_offsets)
+    )
 
