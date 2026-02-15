@@ -22,47 +22,72 @@
 - `Game design.md` - Game mechanics and design overview
 - `DATABASE_EXTENSION_GUIDE.md` - How to extend database
 
-## Core Architecture (4 Layers)
+## Core Architecture: MVC-Like Pattern
 
-### 1. Foundation (HexMagic/*.py)
+### Model: Database (HexMagic/database.py)
+- **GeoStorage** - Persistent storage layer
+- **Tables**: HexData, HexWeather, WatershedMeta, ChunkBorder, World, User
+- **Persistence**: Terrain, weather, watersheds, chunk cache
+- **Queries**: Spatial (q,r,s), temporal (as_of), chunk-scoped
+- **Caching**: Automatic chunk caching with invalidation
+
+### ViewModel: Terrain & ChunkCover
+- **Terrain** - Working data structure (elevations, fields)
+- **ChunkCover** - Master terrain + zoom pattern (top view)
+- **HexChunk** - Viewport extraction with halo (regional view)
+- **Bidirectional sync**: ViewModel ↔ Model via GeoStorage
+- **On-demand loading**: Generate detail only when needed
+
+### View: Visualization (HexMagic/plots/*.py)
+- **SVGBuilder** - Pattern-based rendering
+- **TerrainPatterns** - Dots, waves, climate patterns
+- **crop_to_centered_grid()** - Regional extraction with index mapping
+
+### Controller: Game Logic (HexMagic/game/*.py)
+- **GameBoard** - Game state management
+- **Kingdom** - Civilizations
+- **Piece** - Units (movement, vision, AI)
+- **Actions**: Modify ViewModel → sync to Model
+
+### Web Layer (Planned)
+- FastHTML + HTMX interface
+- Multi-user hosting with per-user viewports
+- Real-time sync: DB → ViewModel → View
+
+---
+
+## Foundation Components (HexMagic/*.py)
+
+### Coordinates & Grids
 - `HexPosition` (q,r,s) - Universal cube coordinates
 - `HexGrid` - Grid with index↔position conversions
+- `HexChunk` - Viewport with core + halo regions
+
+### Terrain Generation
 - `Terrain` - Elevation + fields (temperature, precipitation, climate)
 - `Geology` - Tectonic plates, watersheds
-- `ChunkCover` - Chunk extraction and upsampling from master terrain
-- `HFFT` - Hexagonal FFT for smooth upsampling with detail
 - Procedural: `Terrain.fromSeeds(bounds, num_plates=12)`
 - Real-world: `TerraDemo().bayArea_map()` (7+ locations)
 
-### 2. Visualization (HexMagic/plots/*.py)
-- `SVGBuilder` - Pattern-based rendering
-- `TerrainPatterns` - Dots, waves, climate patterns
-- `crop_to_centered_grid()` - Regional extraction with index mapping
-
-### 3. Game (HexMagic/game/*.py)
-- `GameBoard` - Game state
-- `Kingdom` - Civilizations
-- `Piece` - Units (movement, vision, AI)
-- FastLite database backing
-
-### 4. Web (Planned)
-- FastHTML + HTMX interface
-- Multi-user hosting
-- Per-user viewport state
+### Multi-Scale System
+- `ChunkCover` - Chunk extraction and upsampling from master terrain
+- `HFFT` - Hexagonal FFT for smooth upsampling with detail
+- **Pattern**: Store coarse master, generate fine detail on-demand
+- **Caching**: Database-backed automatic caching
 
 ## Database Schema (HexMagic/database.py)
 
 ### Core Tables (GeoStorage)
-**Tables:** TerrainWorld, HexData, HexWeather, User
+**Tables:** World, HexData, HexWeather, WatershedMeta, ChunkBorder, User
 
-**TerrainWorld:**
-- Metadata for stored terrains (name, hex_radius, nrows, ncols)
-- Sea level and elevation parameters
-- Encoded extras (climate, geo bounds)
+**World:**
+- Stores ChunkCover instances via `cover_data` (encoded)
+- Metadata: name, created, modified
 
 **HexData:**
-- Individual hex terrain data (elevation, lat/lon)
+- Individual hex terrain data (elevation, plate_id, lat/lon)
 - Indexed by (world_id, q, r, s) - cube coordinates
+- NEW: `watershed_id`, `chunk_q/r/s`, `scale_level`
 - Grid index for array access
 - Distance from coast
 - Temporal versioning (modified timestamp)
@@ -72,18 +97,32 @@
 - Temperature, precipitation, humidity
 - Climate metrics (PET, aridity, seasonality)
 - Seasonal variations (annual, summer, winter)
+- NEW: `chunk_q/r/s`, `scale_level`, `climate_name`, `wind_dir`
 - Temporal versioning
+
+**WatershedMeta (NEW):**
+- Watershed topology and river trees
+- Terminal hex (outlet), flow statistics
+- Encoded river tree and style
+- Chunk-level watersheds supported
+
+**ChunkBorder (NEW):**
+- Track drainage across chunk boundaries
+- Enable distributed watershed computation
+- Source/destination chunk coordinates
 
 **User:**
 - Username, email, password
 - Session ID and active world
 
 **Key Features:**
+- ChunkCover persistence: Save/load master terrain with zoom
+- Chunk caching: Automatic caching of zoomed terrain/weather/watersheds
 - Temporal data: Version history via modified timestamps
 - Spatial indexing: Fast queries by coordinates
-- Multi-scale terrain: ChunkedTerrainGenerator for large worlds
+- Multi-scale support: `scale_level` distinguishes coarse vs zoomed
+- Cache invalidation: Clear derived data when master changes
 - Region extraction: `extract_region(world_id, center_q, center_r, center_s, rings=20)`
-- Weather persistence: Separate table for climate data
 
 ## Coordinate Systems
 
@@ -125,23 +164,44 @@ terrain.colorMap()
 terrain.add_climate_overlay()
 ```
 
-### Master Terrain + Upscaling (NEW)
+### ChunkCover: Master Terrain + Zoom with Caching (NEW)
 ```python
 from HexMagic.cover import ChunkCover
+from HexMagic.database import GeoStorage
 
 # Create coarse master terrain
 master = TerraDemo().sanFran()  # 100×120 hexes
 
-# Setup chunk cover for upsampling
+# Setup chunk cover
 cover = ChunkCover(master, rings=5, halo_rings=1)
 
-# Zoom into specific location (4× resolution)
-zoomed = cover.zoomChunk(origin=master.hexGrid.middle, scale=4)
-# Result: ~40×48 hexes @ 4× smaller radius with added detail
+# Attach database for persistence
+storage = GeoStorage()
+cover.db = storage
 
-# Database integration (planned):
-# storage.save_master_terrain(master)
-# zoomed = storage.zoom_chunk_cached(master_id, origin, scale=4)
+# Save master terrain
+result = cover.save(name="SF Master")
+cover_id = cover.ident  # Auto-assigned
+
+# Zoom with automatic caching (4× resolution)
+zoomed = cover.zoom_cached(origin=master.hexGrid.middle, scale=4)
+# First call: ⚙ Generated (80ms compute + cache save)
+# Second call: ✓ Cached (50ms load) - 5.6× faster!
+
+# Full data zoom (terrain + weather + watersheds)
+full = cover.zoom_with_full_data(
+    origin=master.hexGrid.middle,
+    scale=4,
+    compute_weather=True,
+    compute_watersheds=True
+)
+
+# Cache management
+storage.invalidate_all_caches(cover_id)  # Clear when master changes
+
+# Load cover later
+cover2 = storage.load_cover(cover_id).data
+zoomed2 = cover2.zoom_cached(origin=middle, scale=4)  # Uses cache
 ```
 
 ### Multi-Scale Terrain Generation

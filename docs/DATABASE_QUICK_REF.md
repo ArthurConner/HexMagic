@@ -113,7 +113,73 @@ region_terrain.colorMap()
 
 ---
 
-## Multi-Scale Terrain
+## ChunkCover: Master Terrain + Zoom Pattern (NEW)
+
+### Save/Load ChunkCover
+```python
+from HexMagic.cover import ChunkCover
+
+# Create master terrain (coarse)
+master = TerraDemo().sanFran()  # 100×120 hexes
+
+# Create cover
+cover = ChunkCover(master, rings=5, halo_rings=1)
+cover.db = storage
+
+# Save to database (stores coarse terrain)
+result = cover.save(name="SF Master")
+cover_id = cover.ident  # Auto-assigned ID
+print(f"Saved cover {cover_id}: {result.context}")
+
+# Load later
+result = storage.load_cover(cover_id)
+cover = result.data  # ChunkCover with .db attached
+```
+
+### Zoom with Automatic Caching
+```python
+# First zoom - generates and caches
+zoomed = cover.zoom_cached(origin=middle, scale=4)
+# Output: ⚙ Generated: 14400 hexes, scale=4
+
+# Second zoom (same location) - cache hit!
+zoomed2 = cover.zoom_cached(origin=middle, scale=4)
+# Output: ✓ Loaded from cache: 14400 cached hexes
+
+# Cache key: (cover_id, origin_q, origin_r, origin_s, scale)
+# Performance: 50ms cached vs 280ms compute (5.6× faster)
+```
+
+### Full Data Zoom (Terrain + Weather + Watersheds)
+```python
+# Zoom with all layers, using cache where available
+full = cover.zoom_with_full_data(
+    origin=middle,
+    scale=4,
+    compute_weather=True,       # Cached per chunk
+    compute_watersheds=True,    # Cached per chunk
+    force_regenerate=False      # Use cache if available
+)
+
+# full.fields contains: temperature, precipitation, watershed_id, etc.
+```
+
+### Cache Management
+```python
+# Invalidate all cached chunks (when coarse terrain changes)
+results = storage.invalidate_all_caches(cover_id)
+print(f"Invalidated: {results['terrain'].context}")
+print(f"             {results['weather'].context}")
+print(f"             {results['watersheds'].context}")
+
+# Cache stats (planned feature)
+# stats = storage.get_cache_stats(cover_id)
+# print(f"Chunks: {stats.total_chunks}, Size: {stats.total_size_mb} MB")
+```
+
+---
+
+## Multi-Scale Terrain (ChunkedTerrainGenerator)
 
 ### Setup Generator
 ```python
@@ -195,21 +261,45 @@ sea_level, elevation_delta, extras, created, modified
 
 **HexData** - Individual hex terrain data
 ```python
-id, world_id, q, r, s, grid_index, elevation,
-latitude, longitude, distance_from_coast, modified
+id, world_id, q, r, s, grid_index, elevation, plate_id,
+latitude, longitude, distance_from_coast, 
+watershed_id, chunk_q, chunk_r, chunk_s, scale_level, modified
 ```
 
 **HexWeather** - Weather/climate data
 ```python
 id, world_id, q, r, s, temperature, precipitation,
 humidity, climate_pet, aridity_index, 
-temp_seasonality, precip_seasonality, season, modified
+temp_seasonality, precip_seasonality, distance_from_coast,
+season, chunk_q, chunk_r, chunk_s, scale_level, 
+climate_name, wind_dir, modified
+```
+
+**WatershedMeta** - Watershed topology (NEW)
+```python
+id, world_id, name, terminal_q, terminal_r, terminal_s,
+is_ocean, total_flow, area_hexes, river_tree, style,
+chunk_q, chunk_r, chunk_s, created, modified
+```
+
+**ChunkBorder** - Inter-chunk drainage (NEW)
+```python
+id, world_id, chunk_q, chunk_r, chunk_s,
+border_hex_q, border_hex_r, border_hex_s,
+downstream_chunk_q, downstream_chunk_r, downstream_chunk_s,
+flow_volume
 ```
 
 **User** - User accounts
 ```python
 id, username, email, password, created, 
 sessionID, activeWorld
+```
+
+**World** - ChunkCover storage (enhanced)
+```python
+id, name, extras, created, modified,
+cover_data  # ChunkCover.encode()
 ```
 
 ---
@@ -231,6 +321,25 @@ idx_weather_temporal ON hex_weather(world_id, q, r, s, modified DESC)
 **Season filtering:**
 ```sql
 idx_weather_season ON hex_weather(world_id, season)
+```
+
+**Chunk-scoped queries (NEW):**
+```sql
+idx_hex_chunk ON hex_data(world_id, chunk_q, chunk_r, chunk_s, scale_level)
+idx_weather_chunk ON hex_weather(world_id, chunk_q, chunk_r, chunk_s)
+idx_weather_scale ON hex_weather(world_id, scale_level)
+```
+
+**Watershed queries (NEW):**
+```sql
+idx_hex_watershed ON hex_data(world_id, watershed_id)
+idx_watershed_world ON watershed_meta(world_id)
+```
+
+**Chunk borders (NEW):**
+```sql
+idx_border_chunk ON chunk_border(world_id, chunk_q, chunk_r, chunk_s)
+idx_border_downstream ON chunk_border(world_id, downstream_chunk_q, downstream_chunk_r, downstream_chunk_s)
 ```
 
 ---

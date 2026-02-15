@@ -1,71 +1,709 @@
-Game design
+# Game Design
 
-Things we need to build
+> Strategy game mechanics for HexMagic - turn-based gameplay, autonomous units, territorial control
 
-Pieces. if we are going to have battles we need troops.
+## Architecture Overview
 
-a piece is going to need the following
+The game follows an **MVC-like pattern**:
+- **Model**: GeoStorage database (persistent game state)
+- **ViewModel**: Terrain, HexRegion, Kingdom (working data structures)
+- **View**: SVG visualization with overlays
+- **Controller**: GameBoard, Piece AI (game logic)
 
-```Python
+See `docs/PROJECT_OVERVIEW.md` for complete architecture and `docs/PieceDesign.md` for detailed unit specifications.
+
+## Core Concepts
+
+### Multi-Scale Gameplay
+
+The game leverages the **ChunkCover** system for efficient multi-scale gameplay:
+
+1. **Master World**: Coarse-resolution terrain (e.g., 100×120 hexes) stored in database
+2. **Regional Zoom**: Fine-detail chunks generated on-demand using HFFT upsampling (4× resolution)
+3. **Country Views**: Each kingdom operates on a cropped region extracted via `crop_to_centered_grid()`
+
+**Benefits:**
+- Large worlds without massive memory/compute costs
+- Players see high detail only in their active regions
+- Database caching speeds up repeated regional access
+- Natural "fog of war" boundary at region edges
+
+### Territory Control
+
+Control is **watershed-based** rather than hex-by-hex:
+- Conquering a capital city conquers its entire watershed region
+- Watersheds are natural strategic units (valleys, river basins)
+- Pieces move within regions; battles occur at region boundaries
+- More like **Risk** than **Civilization** (region-level, not hex-level commands)
+
+## Resources
+
+### Health
+Each piece has health points (0-100). When health drops below threshold:
+- Piece may retreat automatically
+- Combat effectiveness decreases
+- Risk of piece destruction
+
+### Food & Population
+Food drives population growth and piece spawning:
+- **Types**: Grains (farms), Meat (pastures), Fruits (orchards)
+- **Production**: Based on terrain quality, climate, and proximity to water
+- **Storage**: Cities store food reserves for lean seasons
+- **Transport**: Trade routes move food between settlements
+
+**Future Enhancement**: Different terrain hexes could be converted to specific farm types based on climate (temperate → grains, tropical → fruits).
+
+## Pieces (Game Units)
+
+**See `docs/PieceDesign.md` for complete specification.**
+
+Pieces are autonomous agents representing military units/populations. Key features:
+
+### Core Attributes
+- **Size**: Number of units (affects combat strength)
+- **Health**: Hit points (0-100)
+- **Sight**: Vision range in hex rings
+- **Memory**: Knowledge retention rate (affects fog of war)
+- **Movement Range**: Max hexes per turn (terrain-weighted)
+- **Goal**: Current objective (explore, settle, attack, defend, harvest)
+- **Personality**: AI behavior weights (aggressive, defensive, economic, explorer)
+
+### Key Behaviors
+1. **Movement**: Pathfinding with terrain costs (elevation, forests, roads)
+2. **Vision**: Line-of-sight with fog of war and knowledge decay
+3. **Combat**: Strength-based resolution with terrain modifiers
+4. **Settlement**: Multi-turn process to establish bases
+5. **Harvesting**: Spawn new pieces at rate based on terrain quality
+6. **AI Planning**: Personality-driven goal selection and execution
+
+### Visualization
+Pieces render as SVG circles on the map:
+- Size scaled by unit count
+- Color indicates health (green → yellow → red)
+- Icons show current goal (arrow for attack, house for settle)
+- Pattern fills use kingdom flag colors
+
+**Note**: Full implementation details (methods, combat system, knowledge sharing, etc.) are in PieceDesign.md to avoid duplication.
+
+## Movement & Trade Routes
+
+### Movement Costs
+
+Movement accounts for multiple terrain factors:
+
+1. **Elevation Changes**:
+   - Uphill: Significant penalty (steep = expensive)
+   - Downhill: Minor penalty (controlled descent)
+   - Flat: Base cost
+
+2. **Terrain Types**:
+   - Forests/Jungles: 1.5× cost (reduced visibility, difficult terrain)
+   - Swamps: 2× cost (extremely slow)
+   - Roads: 0.8× cost (improved infrastructure)
+   - Water: Impassable (unless naval units added later)
+
+3. **Weather/Season** (future):
+   - Snow, rain, fog modify movement and visibility
+
+4. **Visibility**:
+   - Line-of-sight blocked by high terrain and dense forests
+   - Pieces have memory that decays over time (old intel becomes stale)
+
+### Trade Routes
+
+Trade routes connect settlements and enable faster movement/resource transport:
+
+```python
+class TradeRoute:
+    """Path between settlements with movement bonuses."""
+    
+    def __init__(self, path: List[HexPosition], origin: int = 0, 
+                 cost: float = 0, name: str = ""):
+        self.path = path  # List of HexPosition waypoints
+        self.cost = cost  # Construction/maintenance cost
+        self.name = name  # Route identifier
+        self.origin = origin  # Origin hex index for coordinate conversion
+        self.level = 1  # Route quality (1=path, 2=road, 3=highway)
+    
+    def destination(self) -> HexPosition:
+        return self.path[-1]
+    
+    def movement_multiplier(self) -> float:
+        """Movement speed bonus on this route."""
+        return {1: 0.8, 2: 0.6, 3: 0.4}[self.level]
+```
+
+**Route Mechanics**:
+- Routes between parent settlements and spawned children form naturally
+- Route capacity limited by distance (longer = lower capacity)
+- Upgrading routes (path → road → highway) costs resources but increases speed
+- Enemy pieces can cut/raid supply routes
+
+**Implementation Note**: Movement cost calculation is in `GameBoard.movement_cost()` and `Piece.movement_cost()` (see PieceDesign.md).
+
+### Pathfinding
+
+Uses **Dijkstra's algorithm** with terrain-weighted costs:
+- Accounts for elevation, terrain type, weather
+- Prefers established roads when available  
+- Can compute partial paths if full path exceeds movement range
+- Caches frequently-used paths for performance
+
+## Cities & Settlements
+
+### City Placement
+
+Cities are strategically located within **watersheds**:
+- **Ideal location**: Computed based on terrain quality, water access, defensibility
+- **Capital per watershed**: One major city controls each watershed region
+- **Conquest**: Capturing a capital conquers the entire watershed
+
+**Placement Algorithm**:
+1. Identify watershed boundaries via `Geology.compute_watersheds()`
+2. Score hexes by: elevation (not too high/low), water proximity, flat terrain
+3. Place capital at highest-scoring hex
+4. Secondary settlements at strategic points (mountain passes, river crossings)
+
+### City Functions
+
+**Resource Storage**:
+- Cities accumulate food from surrounding tiles
+- Reserves sustain population during lean seasons
+- Can trade excess food to other cities via routes
+
+**Piece Spawning**:
+- Settled pieces spawn new pieces at cities
+- Spawn rate based on: terrain quality, food reserves, city size
+- Newly spawned pieces inherit partial knowledge from parent
+
+**Defense**:
+- Cities provide defensive bonuses in combat (1.5× defender strength)
+- Fortifications can be built to increase defense further
+- Siege mechanics for attacking fortified positions (future)
+
+### Country/Kingdom Structure
+
+**CountryFlag** - Visual identity:
+```python
+class CountryFlag:
+    def __init__(self, color, name, year):
+        self.primary = color  # Main color
+        self.comp = complementary(color)  # Complementary color
+        self.tri1, self.tri2 = triadic(color)  # Triadic colors
+        self.name = name
+        self.year = year
+        self.countryPrefix = generate_country_name(name)
+        self.capital = generate_city_name(name)
+```
+
+**Kingdom/Country** - Playable faction:
+```python
+class Kingdom:
+    """Territory controlled by a single government."""
+    def __init__(self, capital_hex: int, region: HexRegion, 
+                 world: Geology, countryId: int = 0, flag: CountryFlag = None):
+        self.settlements: List[int] = [capital_hex]  # Hex indices
+        self.region: HexRegion = region  # Controlled territory
+        self.world: Geology = world  # Reference to world data
+        self.countryId: int = countryId
+        self.captured: List[Watershed] = []  # Conquered watersheds
+        self.routes: List[TradeRoute] = []  # Trade network
+        self.flag: CountryFlag = flag  # Visual identity
+        self.countryName: str = ""
+        self.pieces: List[Piece] = []  # Military units
+        self.personality: PersonalityTrait = None  # AI behavior
+        self.food_reserves: Dict[str, int] = {}  # Stored resources
+```
+
+**Territory Management** via `CountryDetails`:
+```python
+class CountryDetails:
+    """Manages regional view of a kingdom using crop_to_centered_grid()."""
+    def __init__(self, country: Kingdom):
+        self.country = country
+        self.updateParent(country.world.terrain)
+    
+    def updateParent(self, parent: Terrain):
+        """Extract kingdom region from master terrain."""
+        # Use crop_to_centered_grid for efficient regional extraction
+        grid, subregion, regionMapper = self.country.region.crop_to_centered_grid(
+            style=StyleCSS("base", fill="lightgray", stroke="blue")
+        )
+        
+        self.subregion = subregion
+        self.regionMapper = regionMapper  # Maps local → master grid indices
+        
+        # Create terrain view for this kingdom
+        self.countryMap = Terrain(
+            bounds=grid.bounds,
+            radius=grid.radius,
+            colorLevels=parent.colorLevels,
+            seaLevel=parent.seaLevel,
+            elevationDelta=parent.elevationDelta,
+            geo=parent.geo,
+            climate=parent.climate
+        )
+        self.countryMap.hexGrid = grid
+        
+        # Copy relevant data from master terrain
+        numHexes = len(grid.hexes)
+        self.countryMap.elevations = np.zeros(numHexes)
+        for field_name in parent.fields.keys():
+            self.countryMap.fields[field_name] = np.zeros(numHexes)
+        
+        # Map data using regionMapper
+        self.mapper = {}
+        for dest in range(numHexes):
+            source = regionMapper(dest)
+            if source >= 0:
+                self.countryMap.elevations[dest] = parent.elevations[source]
+                self.mapper[source] = dest
+                for field_name in parent.fields.keys():
+                    self.countryMap.fields[field_name][dest] = parent.fields[field_name][source]
+```
+
+**Key Insight**: `crop_to_centered_grid()` enables efficient kingdom-level views:
+- Each player sees only their region at high detail
+- Index mapper allows syncing changes back to master terrain
+- Reduces memory and rendering costs
+- Natural mechanism for "fog of war" at region boundaries
+
+## Database Storage
+
+**See `docs/DatabaseSchema.md` for current implementation.**
+
+The game uses **GeoStorage** (FastLite + SQLite) for persistence:
+
+### Core Tables (Existing)
+
+**World** - Master terrain storage:
+- `cover_data`: Encoded ChunkCover (master terrain + zoom capability)
+- `name`, `created`, `modified`: Metadata
+
+**HexData** - Individual hex terrain:
+- `(world_id, q, r, s)`: Cube coordinates
+- `elevation`, `plate_id`, `lat`, `lon`: Terrain data
+- `watershed_id`: Which watershed this hex belongs to
+- `chunk_q/r/s`, `scale_level`: For chunk-based caching
+- `grid_index`: Array access index
+
+**HexWeather** - Climate data per hex:
+- `temperature`, `precipitation`, `humidity`
+- `climate_pet`, `aridity_index`: Climate metrics
+- `season`: Annual/summer/winter variations
+- Temporal versioning via `modified` timestamp
+
+**WatershedMeta** - Region definitions:
+- `terminal_hex`: Outlet/mouth hex
+- `flow_stats`: River topology
+- `river_tree`: Encoded drainage network
+
+### Game Tables (To Be Added)
+
+**Game** - Game instance:
+```python
 @dataclass
-def piece:
-	id:int # maybe a uuid
-	size:int # how many are inside
-	health:int # our hit points
-	sight:int # how many hexregion they can go 
-	memory:float # how much they forget
-	thoughts: #see below
-	range:int # how many weighted hexpositions can they go
-	goal:enum # explore, harvest,attack, move, settle
-	targetHex:hexpostion # where they want to go relative to them. can be none
-	target: #uuid a player piece they want to go after:
-	personality: #if left on their own are what are their tendenceis towards doing a goal
-	spans:pieces that you created
-	path: a shape of the item like SVGDef pattern. It takes Flag colour scheme.
-```
-functions/methods that we will need.
-```
-def encode
-
-def decode
-
-def merge:
-	pieces can merge into other pieces to make larger pieces" the intial piece is destroyed
-	
-def knoweledge:
-	pieces know around them based upon their sight. they can be passed a certain number of hexes from their parent to know about and they will forget a certain number based upon their memory to pass to their descendents. and also forget a cerain amount they send to their bosses.
-
-def harvest:
-	if a piece has settled (which will take a certian number of turns) it can harvest an area which will cause it to create new pieces at a rate based upon the terrain and the size of the item.
-	
-def move:
-	go to a hex.
-	
-det attack:
-	we need some combat system to figure out who wins between items.
-	
-def plan:
-uses knowlege to figure out what to do next
+class Game:
+    id: int = None
+    world_id: int = 0  # References World table
+    name: str = ""
+    turn_number: int = 0
+    created: int = 0
+    modified: int = 0
 ```
 
-we need to figure out how to move and see, some thoughts
-1. we have uphill and down hill.
-2. things like forrest and jungles can be harder to see  and move through
-3. we should have routes between parents and their children. but these routes can only be a certain size based upon distance. movement should be increased.
+**Kingdom** - Player civilizations:
+```python
+@dataclass  
+class KingdomRecord:
+    id: int = None
+    game_id: int = 0
+    name: str = ""
+    flag_data: str = ""  # Encoded CountryFlag
+    capital_hex_q: int = 0  # Capital location
+    capital_hex_r: int = 0
+    capital_hex_s: int = 0
+    region_data: str = ""  # Encoded HexRegion
+    food_reserves: str = ""  # JSON dict
+    personality: str = ""  # PersonalityTrait enum value
+```
 
-## Storeage and Turns
+**Piece** - Game units:
+```python
+@dataclass
+class PieceRecord:
+    id: str = None  # UUID
+    game_id: int = 0
+    kingdom_id: int = 0
+    piece_data: str = ""  # Encoded Piece (see PieceDesign.md)
+    turn_number: int = 0  # Turn when this state was saved
+    created: int = 0
+```
 
-right now we have  things stored at the game board level. we need to add a turn field to it. Then the question is do we store all of the pieces there. I am tempted to store them all in a separate table and track their moves there. The issue is with the web is that we need to go back and forth on each indivual move for a turn and the terrain will only change at most at the end of a turn (if new countries are created). 
+**TradeRoute** - Economic connections:
+```python
+@dataclass
+class TradeRouteRecord:
+    id: int = None
+    game_id: int = 0
+    kingdom_id: int = 0
+    path_data: str = ""  # Encoded List[HexPosition]
+    route_level: int = 1  # 1=path, 2=road, 3=highway
+    name: str = ""
+```
 
-## Interface 
+### Ownership Tracking
 
-we will need to have various routes for our web sever. I am thinking about 5 panels
-1. left side top - a menu system (we would have file (load,duplicate,new) countires something that would navigate). we should also let it you toggle between unmoved pieces and potentially list them (so we could have sub menus)
-2. left  side bottom - a detail sceen base upon side top. so clicking on a country would have the country detials, a piece the piece details
-3. the map
-4. below the map things that we might want to toggle - are we showing routes or climates flos, watershed etx
-5. right side a debug info. Maybe some sort of log console
+Two approaches for tracking territory control:
 
-we will need to build out these overlays.
+1. **Hex-Level** (fine-grained):
+   - Add `owner_kingdom_id` to HexData
+   - Pros: Precise control, supports hex-by-hex conquest
+   - Cons: More storage, complex queries
+
+2. **Watershed-Level** (coarse, recommended):
+   - Add `owner_kingdom_id` to WatershedMeta  
+   - Pros: Simpler, matches region-based gameplay
+   - Cons: All-or-nothing control per watershed
+
+**Recommended**: Watershed-level ownership aligns with the game's region-based strategy model.
+
+### Encoding/Decoding
+
+All major game objects support string encoding:
+```python
+# Save
+piece_str = piece.encode()
+db.pieces.insert({"piece_data": piece_str, ...})
+
+# Load
+row = db.pieces[piece_id]
+piece = Piece.decode(row.piece_data)
+```
+
+**Performance Notes**:
+- Use delta encoding for turn-by-turn changes (only store what changed)
+- Periodic checkpoints for fast game loading
+- Cache frequently-accessed regions in memory
+
+
+### GeoStorage Implementation Example
+
+```python
+class GeoStorage:
+    """Database interface for HexMagic worlds and games."""
+    
+    def __init__(self, custom_path=None):
+        path = GeoStorage.get_db_path(custom_path)
+        self.path = path
+        self.createDB()
+    
+    def createDB(self):
+        db = database(self.path)
+        self.db = db
+        
+        # Core terrain tables
+        db.create(TerrainWorld, pk='id', if_not_exists=True, transform=True)
+        db.create(HexData, pk='id', if_not_exists=True, transform=True)
+        db.create(HexWeather, pk='id', if_not_exists=True, transform=True)
+        db.create(WatershedMeta, pk='id', if_not_exists=True, transform=True)
+        db.create(ChunkBorder, pk='id', if_not_exists=True, transform=True)
+        
+        # User/game tables
+        db.create(User, pk='id', if_not_exists=True, transform=True)
+        db.create(Game, pk='id', if_not_exists=True, transform=True)
+        db.create(KingdomRecord, pk='id', if_not_exists=True, transform=True)
+        db.create(PieceRecord, pk='id', if_not_exists=True, transform=True)
+        db.create(TradeRouteRecord, pk='id', if_not_exists=True, transform=True)
+        
+        # Spatial indices
+        db.execute("CREATE INDEX IF NOT EXISTS idx_hex_coords ON hex_data(world_id, q, r, s)")
+        db.execute("CREATE INDEX IF NOT EXISTS idx_hex_watershed ON hex_data(world_id, watershed_id)")
+        db.execute("CREATE INDEX IF NOT EXISTS idx_weather_coords ON hex_weather(world_id, q, r, s)")
+        
+        # Game indices
+        db.execute("CREATE INDEX IF NOT EXISTS idx_kingdom_game ON kingdom_record(game_id)")
+        db.execute("CREATE INDEX IF NOT EXISTS idx_piece_game ON piece_record(game_id, turn_number)")
+        db.execute("CREATE INDEX IF NOT EXISTS idx_piece_kingdom ON piece_record(kingdom_id)")
+        
+        # Store table references
+        self.worlds = db.t.terrain_world
+        self.hexes = db.t.hex_data
+        self.weather = db.t.hex_weather
+        self.watersheds = db.t.watershed_meta
+        self.users = db.t.user
+        self.games = db.t.game
+        self.kingdoms = db.t.kingdom_record
+        self.pieces = db.t.piece_record
+```
+
+## Turn System
+
+### Game Flow
+
+The game uses **region-based, Risk-style turns** rather than hex-by-hex micromanagement:
+
+1. **Strategic Phase** (Player Input):
+   - Issue high-level orders: "Attack Region X", "Settle in Region Y"
+   - Set piece goals and priorities
+   - Manage trade routes and resource allocation
+
+2. **Execution Phase** (AI/Automated):
+   - Each piece executes its assigned goal
+   - Pieces use AI planning for tactical decisions within strategic goals
+   - Movement, combat, settlement happen automatically
+
+3. **Resolution Phase**:
+   - Combat results calculated
+   - Territory control updated
+   - Resources harvested and distributed
+   - New pieces spawned
+
+4. **End Phase**:
+   - Knowledge decays (fog of war)
+   - Turn number increments
+   - Game state saved to database
+
+### Turn Processing
+
+```python
+@patch
+def process_turn(self: GameBoard, turn_number: int):
+    """Execute one complete turn for all kingdoms."""
+    all_pieces = []
+    for kingdom in self.kingdoms:
+        all_pieces.extend(kingdom.pieces)
+    
+    # Phase 1: Knowledge decay
+    for kingdom in self.kingdoms:
+        for piece in kingdom.pieces:
+            piece.decay_knowledge(turn_number)
+    
+    # Phase 2: Planning
+    for kingdom in self.kingdoms:
+        for piece in kingdom.pieces:
+            piece.plan_next_action(self.terrain, all_pieces, turn_number)
+    
+    # Phase 3: Execution (simultaneous movement)
+    for kingdom in self.kingdoms:
+        for piece in kingdom.pieces:
+            piece.execute_goal(self.terrain, all_pieces, turn_number)
+    
+    # Phase 4: Combat resolution
+    self.resolve_all_combat(turn_number)
+    
+    # Phase 5: Harvesting and spawning
+    for kingdom in self.kingdoms:
+        new_pieces = []
+        for piece in kingdom.pieces:
+            spawned = piece.harvest_and_spawn(self.terrain, turn_number)
+            if spawned:
+                new_pieces.append(spawned)
+        kingdom.pieces.extend(new_pieces)
+    
+    # Phase 6: Cleanup
+    for kingdom in self.kingdoms:
+        kingdom.pieces = [p for p in kingdom.pieces if p.size > 0]  # Remove destroyed
+    
+    # Phase 7: Save state
+    self.save_turn_state(turn_number)
+```
+
+### Region-Based Operations with HexRegion
+
+**HexRegion** provides powerful region manipulation:
+
+```python
+# Extract kingdom's view
+grid, subregion, mapper = kingdom.region.crop_to_centered_grid(
+    style=StyleCSS("base", fill="lightgray", stroke="blue"),
+    padding=5  # Extra rings for border context
+)
+
+# mapper(local_idx) -> master_idx allows bidirectional sync
+for local_idx in range(len(grid.hexes)):
+    master_idx = mapper(local_idx)
+    if master_idx >= 0:
+        # Sync changes back to master terrain
+        master_terrain.elevations[master_idx] = kingdom_terrain.elevations[local_idx]
+```
+
+**Benefits of HexRegion approach**:
+- Players operate on manageable regional views
+- Changes propagate back to master world via index mapper
+- Natural "fog of war" boundary at region edges
+- Efficient rendering (only draw active regions)
+- Database queries scoped to relevant regions
+
+## Web Interface
+
+### Layout (5-Panel Design)
+
+```
+┌─────────────┬───────────────────────────┬──────────────┐
+│   Menu      │                           │   Debug      │
+│   Panel     │       Map Viewport        │   Console    │
+│   (Top)     │                           │              │
+├─────────────┤                           │              │
+│   Detail    │                           │              │
+│   Panel     │                           │              │
+│  (Bottom)   │                           │              │
+└─────────────┴───────────────────────────┴──────────────┘
+               Overlay Toggles
+```
+
+#### 1. Menu Panel (Left Top)
+**File Operations**:
+- New Game / Load Game / Save Game
+- Duplicate World
+- Export Map (SVG, PNG)
+
+**Navigation**:
+- Kingdom selector dropdown
+- Jump to capital / settlements
+- Center on selected piece
+
+**Piece Management**:
+- List unmoved pieces (clickable)
+- Filter by goal type (explore, attack, settle)
+- Batch assign goals
+
+#### 2. Detail Panel (Left Bottom)
+**Context-Sensitive Display**:
+- **Kingdom Selected**: Territory size, food reserves, piece count, trade routes
+- **Piece Selected**: Size, health, goal, position, known hexes count
+- **Hex Selected**: Elevation, climate, watershed, owner, resources
+- **City Selected**: Population, food storage, production rate, defensive bonus
+
+**Quick Actions**:
+- Set piece goal
+- Build trade route
+- Upgrade settlement
+
+#### 3. Map Viewport (Center)
+**Primary Game View**:
+- SVG-rendered terrain with zoom/pan
+- Pieces rendered as circles with health colors
+- Selected piece highlighted
+- Fog of war overlay (gray out unknown hexes)
+
+**Interactions**:
+- Click hex: Show details, move piece
+- Click piece: Select and show details
+- Right-click: Context menu (attack, settle, etc.)
+- Drag: Pan map
+- Scroll: Zoom in/out
+
+#### 4. Overlay Toggles (Below Map)
+**Checkboxes to show/hide**:
+- [ ] Climate zones (color overlay)
+- [ ] Watersheds (boundary lines)
+- [ ] Trade routes (lines with thickness = level)
+- [ ] Elevation contours
+- [ ] Piece vision ranges (circles)
+- [ ] Territory borders
+- [ ] Fog of war
+
+**Rendering**:
+Each overlay is an SVG layer that can be toggled on/off via CSS class.
+
+#### 5. Debug Console (Right Side)
+**Log Output**:
+- Turn events ("Piece A23 settled", "Kingdom 1 conquered Watershed 5")
+- Combat results ("Battle: Attacker 45 → 30, Defender 50 → 20")
+- AI decisions ("Piece A23: Goal EXPLORE → SETTLE (size threshold)")
+- Errors and warnings
+
+**Dev Tools** (if debug mode enabled):
+- Database query inspector
+- Terrain field values at cursor
+- Performance metrics (render time, turn time)
+
+### Web Routes (FastHTML)
+
+```python
+# Game management
+GET  /games                    # List all games
+GET  /games/{game_id}          # Game view (main interface)
+POST /games/new                # Create new game
+POST /games/{game_id}/save     # Save current state
+POST /games/{game_id}/turn     # Process turn
+
+# Kingdom operations
+GET  /games/{game_id}/kingdoms/{kingdom_id}  # Kingdom details
+POST /games/{game_id}/kingdoms/{kingdom_id}/goal  # Set kingdom-wide goal
+
+# Piece operations
+GET  /games/{game_id}/pieces/{piece_id}           # Piece details
+POST /games/{game_id}/pieces/{piece_id}/move      # Move piece
+POST /games/{game_id}/pieces/{piece_id}/goal      # Set piece goal
+
+# Map rendering
+GET  /games/{game_id}/map           # Full map SVG
+GET  /games/{game_id}/region        # Regional crop (query params: q, r, s, rings)
+GET  /games/{game_id}/overlays/{type}  # Climate, watersheds, routes, etc.
+
+# User
+GET  /login
+POST /login
+GET  /logout
+```
+
+### HTMX Integration
+
+**Real-Time Updates**:
+```html
+<!-- Piece list updates when turn processes -->
+<div hx-get="/games/{game_id}/pieces" 
+     hx-trigger="every 5s" 
+     hx-swap="innerHTML">
+  <!-- Piece list here -->
+</div>
+
+<!-- Detail panel updates on click -->
+<div hx-get="/games/{game_id}/pieces/123" 
+     hx-trigger="click from:#piece-123" 
+     hx-target="#detail-panel">
+</div>
+```
+
+**Overlay Toggles**:
+```html
+<input type="checkbox" 
+       hx-post="/games/{game_id}/toggle-overlay" 
+       hx-vals='{"layer": "climate"}'
+       hx-target="#map-viewport"
+       hx-swap="outerHTML">
+Show Climate
+```
+
+### Performance Considerations
+
+1. **Viewport Culling**: Only render hexes in visible region
+2. **Overlay Caching**: Pre-generate overlay SVGs, toggle via CSS
+3. **Incremental Updates**: Use HTMX to update only changed elements
+4. **Progressive Loading**: Load base terrain first, overlays async
+5. **Database Queries**: Use spatial indices for fast hex lookups
+
+### Multi-User Support
+
+**Per-User View State** (stored in database):
+```python
+@dataclass
+class ViewState:
+    user_id: int
+    game_id: int
+    center_q: int  # Current viewport center
+    center_r: int
+    center_s: int
+    zoom_level: float
+    overlays_visible: str  # JSON list: ["climate", "routes"]
+    selected_piece_id: Optional[str]
+```
+
+**Benefits**:
+- Each player has independent viewport
+- Return to exact view on reconnect
+- Spectators can browse without affecting players
 	
 	
