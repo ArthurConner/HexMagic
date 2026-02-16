@@ -170,6 +170,10 @@ def __rmul__(self: HexPosition, scalar: int) -> 'HexPosition':
     return HexPosition(*(self._coords * scalar))
 
 @patch
+def __mul__(self: HexPosition, scalar: int) -> 'HexPosition':
+    return HexPosition(*(self._coords * scalar))
+
+@patch
 def __neg__(self: HexPosition) -> 'HexPosition':
     return HexPosition(*(-self._coords))
 
