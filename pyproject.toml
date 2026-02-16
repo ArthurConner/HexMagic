@@ -1,3 +1,30 @@
 [build-system]
-requires = ["setuptools>=64.0"]
+requires = ["setuptools>=64"]
 build-backend = "setuptools.build_meta"
+
+[project]
+name = "HexMagic"
+dynamic = ["version"]
+description = "This is a hex map generation system that outputs svg files"
+readme = "README.md"
+requires-python = ">=3.9"
+license = {text = "Apache-2.0"}
+authors = [{name = "Arthur Conner", email = "ArthurConner@me.com"}]
+keywords = ['nbdev', 'jupyter', 'notebook', 'python']
+classifiers = ["Natural Language :: English", "Intended Audience :: Developers", "Development Status :: 3 - Alpha", "Programming Language :: Python :: 3", "Programming Language :: Python :: 3 :: Only"]
+dependencies = []
+
+[project.urls]
+Repository = "https://github.com/ArthurConner/HexMagic"
+Documentation = "https://ArthurConner.github.io/HexMagic"
+
+[project.entry-points.nbdev]
+HexMagic = "HexMagic._modidx:d"
+
+[tool.setuptools.dynamic]
+version = {attr = "HexMagic.__version__"}
+
+[tool.setuptools.packages.find]
+include = ["HexMagic"]
+
+[tool.nbdev]

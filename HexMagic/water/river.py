@@ -874,7 +874,7 @@ def find_drainage_path(self: Terrain, start: int) -> list[int]:
     return []  # No path found
 
 
-# %% ../../nbs/water/river.ipynb #6eeb3b81
+# %% ../../nbs/water/river.ipynb #e34fde39
 @patch
 def carve_to_ocean(self: Terrain, num_lakes: int = 5, max_iters: int = 10) -> list[River]:
     """Carve drainage using lowest-cost paths to ocean (or boundary if no ocean)."""
@@ -886,15 +886,12 @@ def carve_to_ocean(self: Terrain, num_lakes: int = 5, max_iters: int = 10) -> li
             print(f"Done at iter {iteration}: {len(minima)} lakes")
             break
         
-        # Keep highest elevation minima as lakes
         minima.sort(key=lambda i: self.elevations[i], reverse=True)
         drain_these = minima[num_lakes:]
         
         for lake_idx in drain_these:
             path = self.find_drainage_path(lake_idx)
             river = River(terrain=self)
-                   
-            # Create root node with the path as a single segment
             river.tree.create_node(tag="segment", identifier=0, data=path)
             path.reverse()
             river.hexes.update(path)
@@ -903,12 +900,15 @@ def carve_to_ocean(self: Terrain, num_lakes: int = 5, max_iters: int = 10) -> li
             if len(path) < 2:
                 continue
             
-            # Carve monotonically decreasing along path
-            for i in range(len(path) - 1):
-                curr, next_hex = path[i], path[i + 1]
-                
-                if self.elevations[next_hex] >= self.elevations[curr]:
-                    self.elevations[next_hex] = self.elevations[curr] - 1
+            # Interpolate a gentle slope from source to mouth
+            start_elev = self.elevations[path[0]]
+            end_elev = max(self.elevations[path[-1]], 0)
+            
+            for i, hex_idx in enumerate(path):
+                t = i / (len(path) - 1)  # 0 at source, 1 at mouth
+                target = start_elev + t * (end_elev - start_elev)
+                # Only lower, never raise
+                self.elevations[hex_idx] = min(self.elevations[hex_idx], target)
     
     return paths
 
