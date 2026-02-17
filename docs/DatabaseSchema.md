@@ -665,6 +665,255 @@ with GeoStorageDebugger(keep_on_error=True) as debugger:
 
 ---
 
+## Game Tables (NEW)
+
+The `GameStorage` class extends `GeoStorage` with game-specific tables for pieces, settlements, and kingdoms.
+
+**Module:** `nbs/game/property.ipynb` → `HexMagic/game/property.py`
+
+---
+
+### 7. PieceRecord
+
+Game units/troops with full state persistence.
+
+```python
+@dataclass
+class PieceRecord:
+    id: str = ""              # UUID primary key
+    kingdom_id: int = 0       # Owning kingdom
+    settlement_id: str = ""   # If stationed at a settlement
+    location: int = 0         # Current hex grid_index
+    owner_id: int = 0         # Player/kingdom ID
+    size: int = 100           # Unit count
+    health: int = 100
+    max_health: int = 100
+    sight: int = 3            # Vision range in hex rings
+    memory: float = 0.8       # Knowledge retention rate
+    movement_range: int = 4   # Max hexes per turn
+    harvest_goal: str = ""    # Resources enum value (GRAIN, FISH, etc.)
+    settle_progress: int = 0
+    settle_threshold: int = 3
+    world_id: int = 0
+```
+
+**Indices:**
+```sql
+CREATE INDEX idx_piece_world ON piece_record(world_id)
+CREATE INDEX idx_piece_kingdom ON piece_record(kingdom_id)
+CREATE INDEX idx_piece_settlement ON piece_record(settlement_id)
+CREATE INDEX idx_piece_location ON piece_record(world_id, location)
+```
+
+**Usage:**
+```python
+# Save piece
+piece.db = storage
+piece.save(world_id=cover.ident, settlement_id="", kingdom_id=1)
+
+# Load piece
+piece = storage.piece_from_id(piece_id)
+```
+
+---
+
+### 8. SettlementRecord
+
+Cities/towns within kingdoms.
+
+```python
+@dataclass
+class SettlementRecord:
+    id: str = ""              # UUID primary key
+    kingdom_id: int = 0       # Owning kingdom
+    location: int = 0         # Hex grid_index
+    name: str = ""
+    size: int = 100           # Population
+    health: int = 100         # Fortification strength
+    world_id: int = 0
+```
+
+**Cascade Behavior:**
+- Saving a Settlement also saves all its `citizens` (Piece list)
+- Loading a Settlement queries PieceRecord by `settlement_id`
+
+**Usage:**
+```python
+# Save settlement with citizens
+settlement.db = storage
+settlement.save(world_id=cover.ident)
+
+# Load settlement
+settlement = storage.settlement_from_id(settlement_id)
+```
+
+---
+
+### 9. KingdomRecord
+
+Player civilizations/factions.
+
+```python
+@dataclass
+class KingdomRecord:
+    id: int = None            # Auto-increment pk
+    world_id: int = 0
+    country_id: int = 0       # countryId within this world
+    country_name: str = ""
+    flag_data: str = ""       # CountryFlag.encode()
+    capital_settlement_id: str = ""
+```
+
+**Indices:**
+```sql
+CREATE INDEX idx_kr_world ON kingdom_record(world_id)
+CREATE INDEX idx_kr_country ON kingdom_record(world_id, country_id)
+```
+
+**Note:** Kingdom metadata is stored here, but territory is stored in `KingdomHex`.
+
+---
+
+### 10. KingdomHex
+
+Territory ownership - which hexes belong to which kingdom.
+
+```python
+@dataclass
+class KingdomHex:
+    id: int = None
+    world_id: int = 0
+    kingdom_id: int = 0       # Matches country_id in KingdomRecord
+    grid_index: int = 0       # For fast terrain array access
+    q: int = 0                # Cube coordinates for spatial queries
+    r: int = 0
+    s: int = 0
+```
+
+**Design Rationale:**
+- `grid_index` enables fast "paint the terrain array" operations
+- `(q,r,s)` enables spatial queries like "find border hexes"
+- Join-free ownership lookup: `WHERE world_id=? AND grid_index=?`
+
+**Indices:**
+```sql
+CREATE INDEX idx_kh_kingdom ON kingdom_hex(world_id, kingdom_id)
+CREATE INDEX idx_kh_grid ON kingdom_hex(world_id, grid_index)
+CREATE INDEX idx_kh_coords ON kingdom_hex(world_id, q, r, s)
+```
+
+**Usage:**
+```python
+# Save kingdom (cascades to settlements, pieces, and region hexes)
+kingdom.db = storage
+kingdom.save(db=storage, world_id=cover.ident)
+
+# Query ownership
+owner = storage.hex_owner(world_id, grid_index)  # Returns kingdom_id or 0
+
+# Rebuild terrain.fields["country"] from DB
+storage.load_country_field(terrain, world_id)
+```
+
+---
+
+### GameStorage Class
+
+Extends `GeoStorage` with game tables:
+
+```python
+class GameStorage(GeoStorage):
+    def createDB(self):
+        super().createDB()
+
+        # Game tables
+        self.db.create(PieceRecord, pk='id', if_not_exists=True, transform=True)
+        self.pieces = self.db.t.piece_record
+        self.db.create(SettlementRecord, pk='id', if_not_exists=True, transform=True)
+        self.settlements = self.db.t.settlement_record
+        self.db.create(KingdomRecord, pk='id', if_not_exists=True, transform=True)
+        self.kingdom_records = self.db.t.kingdom_record
+        self.db.create(KingdomHex, pk='id', if_not_exists=True, transform=True)
+        self.kingdom_hexes = self.db.t.kingdom_hex
+
+        # Create indices...
+```
+
+**Key Methods:**
+- `piece_from_id(piece_id)` → `Piece`
+- `settlement_from_id(settlement_id)` → `Settlement`
+- `kingdom_from_db(country_id, world_id, world)` → `Kingdom`
+- `gameboard(world_id, terrain)` → `GameBoard`
+- `hex_owner(world_id, grid_index)` → `int`
+- `load_country_field(terrain, world_id)` → rebuilds terrain.fields["country"]
+
+**Overlay Methods:**
+- `pieceOverlay(terrain, world_id, mapper)` → SVG circles for pieces
+- `settlementOverlay(terrain, world_id, mapper)` → SVG circles for settlements
+
+---
+
+## Save/Load Cascade Pattern
+
+Game entities save in a hierarchical cascade:
+
+```
+GameBoard.save()
+  └── Kingdom.save() (for each kingdom)
+        ├── KingdomRecord (upsert)
+        ├── KingdomHex (delete old, insert new for region)
+        └── Settlement.save() (for each settlement)
+              ├── SettlementRecord (upsert)
+              └── Piece.save() (for each citizen)
+                    └── PieceRecord (upsert)
+```
+
+**Transactional Safety:**
+Kingdom.save() wraps all operations in `with db.db.conn:` for atomicity.
+
+---
+
+## Schema Design Notes
+
+### Strengths
+
+1. **Spatial + Index Dual Keys**: `KingdomHex` stores both `grid_index` (fast array access) and `(q,r,s)` (spatial queries). This avoids expensive joins.
+
+2. **Cascade Saves**: `Kingdom.save()` handles all nested entities, ensuring consistency.
+
+3. **Flexible Piece Ownership**: Pieces can be in a settlement (`settlement_id`) or roaming (`location`), making state transitions clean.
+
+4. **Enum-as-String**: `harvest_goal` stores Resources enum values as strings—simple, readable, no foreign key overhead.
+
+### Potential Improvements
+
+1. **Turn History**: Add `turn_number` to `PieceRecord` for replays/undo:
+   ```python
+   turn_number: int = 0  # Turn when this state was recorded
+   ```
+
+2. **Game Table**: For multi-game support:
+   ```python
+   @dataclass
+   class Game:
+       id: int = None
+       world_id: int = 0
+       name: str = ""
+       turn_number: int = 0
+       created: int = 0
+   ```
+
+3. **Piece Location Index**: Add index for "who's at hex X?" queries:
+   ```sql
+   CREATE INDEX idx_piece_location ON piece_record(world_id, location)
+   ```
+
+4. **Trade Routes**: Currently only in `Kingdom.encode()`—consider a `TradeRouteRecord` table for caching expensive pathfinding.
+
+5. **Watershed Caching**: `WatershedFlow` values are computed on load. Consider caching in `WatershedMeta.total_flow`.
+
+---
+
 ## Schema Differences from Design Docs
 
 This implementation differs from the proposed schemas in design docs:
@@ -673,10 +922,10 @@ This implementation differs from the proposed schemas in design docs:
 |---------|-------------|------------------------|
 | Templates | WorldTemplate table | Not implemented |
 | Plates | Plate table | Not implemented |
-| Watersheds | Watershed table | Not implemented |
+| Watersheds | Watershed table | Partial (WatershedMeta) |
 | Viewports | Viewport table | Not implemented |
 | Scale transforms | ScaleTransform table | In ChunkedTerrainGenerator |
-| Game tables | Kingdom, Piece, etc. | Not implemented |
+| Game tables | Kingdom, Piece, etc. | ✅ Implemented in GameStorage |
 | Wide field table | HexFieldsWide | Not implemented |
 | Chunks | Chunk table | Logic in ChunkedTerrainGenerator |
 
@@ -687,13 +936,14 @@ This implementation differs from the proposed schemas in design docs:
 - ✅ Spatial indexing (q,r,s coordinates)
 - ✅ Multi-scale terrain (ChunkedTerrainGenerator)
 - ✅ User management (User table)
+- ✅ Game state persistence (PieceRecord, SettlementRecord, KingdomRecord, KingdomHex)
 
 **Not Yet Implemented:**
 - ❌ Template library system
-- ❌ Geological features (plates, watersheds)
+- ❌ Full geological features (plates partially done)
 - ❌ Viewport management
-- ❌ Game state persistence
-- ❌ Additional field storage
+- ❌ Turn history/replay
+- ❌ Trade route caching
 
 For proposed extensions, see:
 - `schemaMain.md` - Template and viewport system

@@ -272,120 +272,115 @@ class CountryDetails:
 
 **See `docs/DatabaseSchema.md` for current implementation.**
 
-The game uses **GeoStorage** (FastLite + SQLite) for persistence:
+The game uses **GameStorage** (extends GeoStorage with FastLite + SQLite) for persistence.
 
-### Core Tables (Existing)
+### Implementation Status
 
-**World** - Master terrain storage:
-- `cover_data`: Encoded ChunkCover (master terrain + zoom capability)
-- `name`, `created`, `modified`: Metadata
+**✅ Implemented** (in `nbs/game/property.ipynb`):
+- `PieceRecord` - Full piece state with location, health, size, goals
+- `SettlementRecord` - Cities with population and fortification
+- `KingdomRecord` - Kingdom metadata and flag
+- `KingdomHex` - Territory ownership (hex-level, not watershed-level)
+- Cascade save/load pattern (GameBoard → Kingdom → Settlement → Piece)
+- Overlay methods for visualization
 
-**HexData** - Individual hex terrain:
-- `(world_id, q, r, s)`: Cube coordinates
-- `elevation`, `plate_id`, `lat`, `lon`: Terrain data
-- `watershed_id`: Which watershed this hex belongs to
-- `chunk_q/r/s`, `scale_level`: For chunk-based caching
-- `grid_index`: Array access index
+**❌ Not Yet Implemented**:
+- `Game` table for multi-game support
+- Turn history/replay
+- `TradeRouteRecord` (routes still use Kingdom.encode())
 
-**HexWeather** - Climate data per hex:
-- `temperature`, `precipitation`, `humidity`
-- `climate_pet`, `aridity_index`: Climate metrics
-- `season`: Annual/summer/winter variations
-- Temporal versioning via `modified` timestamp
+### Actual Schema (Implemented)
 
-**WatershedMeta** - Region definitions:
-- `terminal_hex`: Outlet/mouth hex
-- `flow_stats`: River topology
-- `river_tree`: Encoded drainage network
-
-### Game Tables (To Be Added)
-
-**Game** - Game instance:
-```python
-@dataclass
-class Game:
-    id: int = None
-    world_id: int = 0  # References World table
-    name: str = ""
-    turn_number: int = 0
-    created: int = 0
-    modified: int = 0
-```
-
-**Kingdom** - Player civilizations:
-```python
-@dataclass  
-class KingdomRecord:
-    id: int = None
-    game_id: int = 0
-    name: str = ""
-    flag_data: str = ""  # Encoded CountryFlag
-    capital_hex_q: int = 0  # Capital location
-    capital_hex_r: int = 0
-    capital_hex_s: int = 0
-    region_data: str = ""  # Encoded HexRegion
-    food_reserves: str = ""  # JSON dict
-    personality: str = ""  # PersonalityTrait enum value
-```
-
-**Piece** - Game units:
+**PieceRecord** - Game units:
 ```python
 @dataclass
 class PieceRecord:
-    id: str = None  # UUID
-    game_id: int = 0
-    kingdom_id: int = 0
-    piece_data: str = ""  # Encoded Piece (see PieceDesign.md)
-    turn_number: int = 0  # Turn when this state was saved
-    created: int = 0
+    id: str = ""              # UUID primary key
+    kingdom_id: int = 0       # Owning kingdom
+    settlement_id: str = ""   # If stationed at a settlement
+    location: int = 0         # Current hex grid_index
+    owner_id: int = 0
+    size: int = 100
+    health: int = 100
+    max_health: int = 100
+    sight: int = 3
+    memory: float = 0.8
+    movement_range: int = 4
+    harvest_goal: str = ""    # Resources enum value
+    settle_progress: int = 0
+    settle_threshold: int = 3
+    world_id: int = 0
 ```
 
-**TradeRoute** - Economic connections:
+**SettlementRecord** - Cities:
 ```python
 @dataclass
-class TradeRouteRecord:
-    id: int = None
-    game_id: int = 0
+class SettlementRecord:
+    id: str = ""
     kingdom_id: int = 0
-    path_data: str = ""  # Encoded List[HexPosition]
-    route_level: int = 1  # 1=path, 2=road, 3=highway
+    location: int = 0
     name: str = ""
+    size: int = 100
+    health: int = 100
+    world_id: int = 0
 ```
 
-### Ownership Tracking
-
-Two approaches for tracking territory control:
-
-1. **Hex-Level** (fine-grained):
-   - Add `owner_kingdom_id` to HexData
-   - Pros: Precise control, supports hex-by-hex conquest
-   - Cons: More storage, complex queries
-
-2. **Watershed-Level** (coarse, recommended):
-   - Add `owner_kingdom_id` to WatershedMeta  
-   - Pros: Simpler, matches region-based gameplay
-   - Cons: All-or-nothing control per watershed
-
-**Recommended**: Watershed-level ownership aligns with the game's region-based strategy model.
-
-### Encoding/Decoding
-
-All major game objects support string encoding:
+**KingdomRecord** - Player civilizations:
 ```python
-# Save
-piece_str = piece.encode()
-db.pieces.insert({"piece_data": piece_str, ...})
+@dataclass  
+class KingdomRecord:
+    id: int = None            # Auto-increment pk
+    world_id: int = 0
+    country_id: int = 0       # countryId within this world
+    country_name: str = ""
+    flag_data: str = ""       # CountryFlag.encode()
+    capital_settlement_id: str = ""
+```
 
-# Load
-row = db.pieces[piece_id]
-piece = Piece.decode(row.piece_data)
+**KingdomHex** - Territory ownership:
+```python
+@dataclass
+class KingdomHex:
+    id: int = None
+    world_id: int = 0
+    kingdom_id: int = 0       # Matches country_id
+    grid_index: int = 0       # Fast terrain array access
+    q: int = 0                # Cube coordinates for spatial queries
+    r: int = 0
+    s: int = 0
+```
+
+### Ownership Tracking (Implemented)
+
+The implementation chose **hex-level** ownership via `KingdomHex` table:
+- Each hex in a kingdom's region gets a row in `KingdomHex`
+- Dual indexing: `grid_index` for array access, `(q,r,s)` for spatial queries
+- Query ownership: `storage.hex_owner(world_id, grid_index)`
+- Rebuild terrain field: `storage.load_country_field(terrain, world_id)`
+
+**Design Choice**: While the original design proposed watershed-level ownership, hex-level provides:
+- More flexible territory boundaries
+- Easier border visualization (windy edges)
+- Support for gradual conquest (not all-or-nothing)
+
+### Save/Load Pattern
+
+```python
+# Save entire game state
+game_board.save(db=storage, world_id=cover.ident)
+
+# Load game state
+board = storage.gameboard(world_id, terrain)
+
+# Save single piece
+piece.db = storage
+piece.save(world_id=cover.ident)
 ```
 
 **Performance Notes**:
-- Use delta encoding for turn-by-turn changes (only store what changed)
-- Periodic checkpoints for fast game loading
-- Cache frequently-accessed regions in memory
-
+- Uses `asdict()` for dataclass → dict conversion
+- Atomic transactions via `with db.db.conn:`
+- Region hex replacement: DELETE old + INSERT new (not per-hex upsert)
 
 ### GeoStorage Implementation Example
 
