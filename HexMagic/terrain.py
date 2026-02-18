@@ -1164,6 +1164,77 @@ def field_sizes(self:Terrain):
         self.field_summary(field)
     print("-------------------------------")
 
+# %% ../nbs/03_terrain.ipynb #418fb80f
+@patch
+def __ft__(self:Terrain):
+    if SVGBuilder.BUILDERHIDE:
+        rows = [
+            Tr(Td("Rows × Cols"), Td(f"{self.hexGrid.nRows} × {self.hexGrid.nCols}")),
+            Tr(Td("Hex Count"),    Td(str(len(self.hexGrid.hexes)))),
+            Tr(Td("Radius"),       Td(f"{self.hexGrid.radius}")),
+            Tr(Td("Path"),         Td(self.path)),
+            Tr(Td("Elevation"),    Td(f"{self.elevations.min():.0f} – {self.elevations.max():.0f}  (μ={self.elevations.mean():.0f})")),
+        ]
+        
+        # Percentiles
+        p10, p25, p75, p90 = np.percentile(self.elevations, [10, 25, 75, 90])
+        rows.append(Tr(Td("Percentiles"), Td(
+            f"10%={p10:.0f}  25%={p25:.0f}  75%={p75:.0f}  90%={p90:.0f}"
+        )))
+        
+        # Elevation level counts
+        level_counts = {}
+        for i in range(len(self.elevations)):
+            lvl = self.elevationLevel(i)
+            level_counts[lvl] = level_counts.get(lvl, 0) + 1
+        level_parts = []
+        for lvl in sorted(level_counts):
+            name = "sea" if lvl < 0 else f"L{lvl}"
+            level_parts.append(f"{name}:{level_counts[lvl]}")
+        rows.append(Tr(Td("Elev Levels"), Td("  ".join(level_parts))))
+        
+        # Histogram
+        hist, bins = np.histogram(self.elevations, bins=8)
+        bar_max = hist.max() if hist.max() > 0 else 1
+        hist_rows = []
+        for i in range(len(hist)):
+            bar_width = int(120 * hist[i] / bar_max)
+            hist_rows.append(Tr(
+                Td(f"{bins[i]:.0f}–{bins[i+1]:.0f}", style="text-align:right; padding-right:6px;"),
+                Td(
+                    Div(style=f"background:#6a9; width:{bar_width}px; height:12px; display:inline-block; border-radius:2px;"),
+                    Span(f" {hist[i]}", style="font-size:11px;")
+                )
+            ))
+        hist_table = Table(*hist_rows, style="border-collapse:collapse; font-size:11px; margin:2px 0;")
+        rows.append(Tr(Td("Distribution", style="vertical-align:top;"), Td(hist_table)))
+        
+        if self.geo:
+            g = self.geo
+            rows.append(Tr(Td("Geo Bounds"), Td(
+                f"Lat {g.lat_min:.3f}–{g.lat_max:.3f}, Lon {g.lon_min:.3f}–{g.lon_max:.3f}"
+            )))
+        
+        if self.climate:
+            rows.append(Tr(Td("Climate"), Td(self.climate.name)))
+        
+        for name, vals in self.fields.items():
+            rows.append(Tr(Td(f"Field: {name}"), Td(
+                f"{vals.min():.1f} – {vals.max():.1f}  (μ={vals.mean():.1f}, n={len(vals)})"
+            )))
+        
+        return Table(
+            Thead(Tr(Th("Property"), Th("Value"))),
+            Tbody(*rows),
+            style="border-collapse:collapse; font-family:monospace; font-size:13px;",
+            cls="terrain-info"
+        )
+    
+    self.colorMap()
+    self.hexGrid.update()
+    return self.hexGrid.builder.show()
+
+
 # %% ../nbs/03_terrain.ipynb #8ccc960f
 @patch
 def upsample(self: Terrain, scale: float = 2.0, method: str = 'bilinear') -> 'Terrain':

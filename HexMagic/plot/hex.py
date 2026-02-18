@@ -478,6 +478,12 @@ class HexGrid:
 
 
 
+# %% ../../nbs/plots/02c_hex.ipynb #e76ff44e
+@patch
+def __ft__(self:HexGrid):
+    self.update()
+    return self.builder.show()
+
 # %% ../../nbs/plots/02c_hex.ipynb #7b88e224
 @patch
 def _build_hexes(self:HexGrid):
