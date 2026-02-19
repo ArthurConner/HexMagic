@@ -2,8 +2,9 @@
 
 # %% auto #0
 __all__ = ['LoadResult', 'SaveResult', 'ChunkRef', 'chunk_to_world', 'world_to_chunk', 'HexData', 'HexWeather', 'World', 'User',
-           'ChunkBorder', 'GeoStorage', 'GeoStorageDebugger', 'ZoomResult', 'region_bounding_box', 'bbox_to_chunk_refs',
-           'stitch_chunks', 'build_fine_to_coarse_mapper', 'DataProxy', 'stitch_chunks_fast', 'proxy_to_terrain']
+           'ChunkBorder', 'ChunkMeta', 'GeoStorage', 'GeoStorageDebugger', 'ZoomResult', 'region_bounding_box',
+           'bbox_to_chunk_refs', 'stitch_chunks', 'build_fine_to_coarse_mapper', 'DataProxy', 'stitch_chunks_fast',
+           'proxy_to_terrain']
 
 # %% ../nbs/12_Database.ipynb #604269fa
 import numpy as np
@@ -220,6 +221,25 @@ class ChunkBorder:
     flow_volume: float = 0.0  # Accumulated upstream area
 
 
+# %% ../nbs/12_Database.ipynb #4f183714
+@dataclass
+class ChunkMeta:
+    """Metadata for a cached chunk — avoids dimension inference."""
+    id: int = None
+    world_id: int = 0
+    chunk_q: int = 0
+    chunk_r: int = 0
+    chunk_s: int = 0
+    scale_level: int = 0
+    nRows: int = 0
+    nCols: int = 0
+    radius: float = 0.0
+    hex_count: int = 0        # How many valid hexes stored
+    created: int = 0
+    last_accessed: int = 0
+    access_count: int = 0
+
+
 # %% ../nbs/12_Database.ipynb #7362b49f
 class GeoStorage:
 
@@ -228,67 +248,47 @@ class GeoStorage:
         self.path = path
         self.createDB()
 
+   
     def createDB(self):
         db = database(self.path)
         self.db = db
 
-        # Create tables using dataclasses
+        # Existing tables...
         db.create(World, pk='id', if_not_exists=True, transform=True)
         db.create(HexData, pk='id', if_not_exists=True, transform=True)
         db.create(User, pk='id', if_not_exists=True, transform=True)
-
         db.create(HexWeather, pk='id', if_not_exists=True, transform=True)
-
-        # NEW: Watershed table
-        #db.create(WatershedMeta, pk='id', if_not_exists=True, transform=True)
         db.create(ChunkBorder, pk='id', if_not_exists=True, transform=True)
-
-        # After creating tables
+        
+        # NEW: Chunk metadata table
+        db.create(ChunkMeta, pk='id', if_not_exists=True, transform=True)
+        
+        # Existing indices...
         db.execute("CREATE INDEX IF NOT EXISTS idx_hex_world ON hex_data(world_id)")
         db.execute("CREATE INDEX IF NOT EXISTS idx_hex_coords ON hex_data(world_id, q, r, s)")
         db.execute("CREATE INDEX IF NOT EXISTS idx_hex_grid ON hex_data(world_id, grid_index)")
-
-
         db.execute("CREATE INDEX IF NOT EXISTS idx_hex_temporal ON hex_data(world_id, q, r, s, modified DESC)")
-
-                # Find borders by source chunk
         db.execute("CREATE INDEX IF NOT EXISTS idx_border_chunk ON chunk_border(world_id, chunk_q, chunk_r, chunk_s)")
-
-        # Find borders draining INTO a chunk (for propagating flow downstream)
         db.execute("CREATE INDEX IF NOT EXISTS idx_border_downstream ON chunk_border(world_id, downstream_chunk_q, downstream_chunk_r, downstream_chunk_s)")
-
-
-        
-
-         # NEW: Index for watershed queries
-        #db.execute("CREATE INDEX IF NOT EXISTS idx_hex_watershed ON hex_data(world_id, watershed_id)")
-        #db.execute("CREATE INDEX IF NOT EXISTS idx_watershed_world ON watershed_meta(world_id)")
         db.execute("CREATE INDEX IF NOT EXISTS idx_hex_chunk ON hex_data(world_id, chunk_q, chunk_r, chunk_s, scale_level)")
-
-        # Indices for weather queries
         db.execute("CREATE INDEX IF NOT EXISTS idx_weather_world ON hex_weather(world_id)")
         db.execute("CREATE INDEX IF NOT EXISTS idx_weather_coords ON hex_weather(world_id, q, r, s)")
         db.execute("CREATE INDEX IF NOT EXISTS idx_weather_temporal ON hex_weather(world_id, q, r, s, modified DESC)")
         db.execute("CREATE INDEX IF NOT EXISTS idx_weather_season ON hex_weather(world_id, season)")
         db.execute("CREATE INDEX IF NOT EXISTS idx_weather_chunk ON hex_weather(world_id, chunk_q, chunk_r, chunk_s)")
         db.execute("CREATE INDEX IF NOT EXISTS idx_weather_scale ON hex_weather(world_id, scale_level)")
-
+        
+        # NEW: Chunk meta index — unique lookup
+        db.execute("""CREATE UNIQUE INDEX IF NOT EXISTS idx_chunk_meta_lookup 
+                    ON chunk_meta(world_id, chunk_q, chunk_r, chunk_s, scale_level)""")
 
         self.weather = db.t.hex_weather
-
-        
-
-        # Store table references using db.t notation
         self.users = db.t.user
         self.hexes = db.t.hex_data
         self.worlds = db.t.world
-        #self.watersheds = db.t.watershed_meta  # Add table reference
-        self.borders = db.t.chunk_border  # Add table reference
+        self.borders = db.t.chunk_border
+        self.chunk_meta = db.t.chunk_meta  # NEW
 
-        
-        
-        # Populate templates (after tables exist)
-        #self.populate_templates()
 
 
     @staticmethod
@@ -620,16 +620,39 @@ def load_or_generate_chunk(self: GeoStorage,
     )
 
 
+# %% ../nbs/12_Database.ipynb #798eb2e1
+@patch
+def invalidate_chunk_cache(self: GeoStorage, cover_id: int) -> SaveResult:
+    """Delete all cached chunks and their metadata for a cover."""
+    try:
+        with self.db.conn:
+            cursor = self.db.execute("""
+                DELETE FROM hex_data 
+                WHERE world_id = ? AND scale_level > 0
+            """, [cover_id])
+            hex_count = cursor.rowcount
+            
+            cursor = self.db.execute("""
+                DELETE FROM chunk_meta
+                WHERE world_id = ?
+            """, [cover_id])
+            meta_count = cursor.rowcount
+        
+        return SaveResult(hex_count, 'invalidated', 
+                         f'{hex_count} cached hexes, {meta_count} metadata records deleted')
+    
+    except Exception as e:
+        return SaveResult(None, 'error', str(e))
 
 
-
+# %% ../nbs/12_Database.ipynb #6633cf5d
 @patch
 def _save_chunk_cache(self: GeoStorage,
                       cover_id: int,
                       origin_pos: HexPosition,
                       scale: int,
                       terrain: Terrain) -> SaveResult:
-    """Save zoomed terrain as cached chunk."""
+    """Save zoomed terrain as cached chunk, including metadata."""
     now = int(datetime.now().timestamp())
     grid = terrain.hexGrid
     
@@ -637,7 +660,6 @@ def _save_chunk_cache(self: GeoStorage,
         with self.db.conn:
             count = 0
             for idx in range(len(terrain.elevations)):
-                # Skip invalid hexes
                 if idx in grid.invalidRegion:
                     continue
                 
@@ -659,23 +681,23 @@ def _save_chunk_cache(self: GeoStorage,
                 self.hexes.insert(record)
                 count += 1
             
+            # NEW: Save chunk metadata
+            self.chunk_meta.insert({
+                'world_id': cover_id,
+                'chunk_q': origin_pos.q,
+                'chunk_r': origin_pos.r,
+                'chunk_s': origin_pos.s,
+                'scale_level': scale,
+                'nRows': grid.nRows,
+                'nCols': grid.nCols,
+                'radius': grid.radius,
+                'hex_count': count,
+                'created': now,
+                'last_accessed': now,
+                'access_count': 0
+            })
+            
             return SaveResult(count, 'saved', f'{count} hexes cached')
-    
-    except Exception as e:
-        return SaveResult(None, 'error', str(e))
-
-
-@patch
-def invalidate_chunk_cache(self: GeoStorage, cover_id: int) -> SaveResult:
-    """Delete all cached chunks for a cover (when coarse terrain changes)."""
-    try:
-        cursor = self.db.execute("""
-            DELETE FROM hex_data 
-            WHERE world_id = ? AND scale_level > 0
-        """, [cover_id])
-        
-        count = cursor.rowcount
-        return SaveResult(count, 'invalidated', f'{count} cached hexes deleted')
     
     except Exception as e:
         return SaveResult(None, 'error', str(e))
@@ -2317,112 +2339,65 @@ def _load_chunk_as_proxy(self: GeoStorage,
                          scale: int) -> LoadResult:
     """Load cached chunk as DataProxy (fully numpy-optimized)."""
     try:
-        world = self.worlds[cover_id]
-        cover_data = GeoStorage._get(world, 'cover_data')
-        if not cover_data:
-            return LoadResult(None, 'error', 'No cover data found')
+        # Step 1: Get chunk metadata — no cover decode needed
+        meta = list(self.chunk_meta.rows_where(
+            "world_id = ? AND chunk_q = ? AND chunk_r = ? AND chunk_s = ? AND scale_level = ?",
+            [cover_id, origin_pos.q, origin_pos.r, origin_pos.s, scale]
+        ))
         
-        # Lightweight metadata extraction (no HexGrid/Hex construction)
-        meta = ChunkCover.decode_metadata(cover_data)
-        base_radius = float(meta['radius'])
-        chunk_rings = int(meta.get('rings', 5))
-        radius = base_radius / scale
+        if not meta:
+            return LoadResult(None, 'not_found', 'No chunk metadata')
         
-        # Hardcode column order to match HexData schema
-        cols = ['id', 'world_id', 'q', 'r', 's', 'grid_index', 'elevation',
-                'plate_id', 'latitude', 'longitude', 'distance_from_coast',
-                'watershed_id', 'chunk_q', 'chunk_r', 'chunk_s',
-                'scale_level', 'modified', 'last_accessed', 'access_count']
+        meta = meta[0]
+        nRows = meta['nRows']
+        nCols = meta['nCols']
+        radius = meta['radius']
+        expected_count = meta['hex_count']
         
+        # Step 2: Load hex data (minimal columns only)
         raw_rows = self.db.execute("""
-            SELECT h.* FROM hex_data h
-            INNER JOIN (
-                SELECT world_id, q, r, s, MAX(modified) as max_mod
-                FROM hex_data
-                WHERE world_id = ? 
-                  AND chunk_q = ? AND chunk_r = ? AND chunk_s = ?
-                  AND scale_level = ?
-                GROUP BY world_id, q, r, s
-            ) latest 
-                ON h.world_id = latest.world_id 
-                AND h.q = latest.q AND h.r = latest.r AND h.s = latest.s
-                AND h.modified = latest.max_mod
+            SELECT grid_index, elevation, watershed_id
+            FROM hex_data
+            WHERE world_id = ? 
+              AND chunk_q = ? AND chunk_r = ? AND chunk_s = ?
+              AND scale_level = ?
         """, [cover_id, origin_pos.q, origin_pos.r, origin_pos.s, scale]).fetchall()
         
         if not raw_rows:
-            return LoadResult(None, 'not_found', 'No cached chunk')
+            return LoadResult(None, 'not_found', 'No cached hex data')
         
-        rows = [dict(zip(cols, row)) for row in raw_rows]
-        
-        # Fire-and-forget access tracking
+        # Step 3: Update access stats on chunk_meta (fire-and-forget)
         now = int(datetime.now().timestamp())
-        self.db.execute("""
-            UPDATE hex_data 
-            SET last_accessed = ?, access_count = access_count + 1
-            WHERE world_id = ? AND chunk_q = ? AND chunk_r = ? AND chunk_s = ?
-            AND scale_level = ?
-        """, [now, cover_id, origin_pos.q, origin_pos.r, origin_pos.s, scale])
+        self.chunk_meta.update({
+            'id': meta['id'],
+            'last_accessed': now,
+            'access_count': meta['access_count'] + 1
+        })
         
-        # --- Pure numpy from here ---
+        # Step 4: Pure numpy — no coordinate conversion needed
+        grid_size = nRows * nCols
+        elevations = np.full(grid_size, -100.0)
+        watersheds = np.full(grid_size, -1, dtype=int)
         
-        qs = np.array([r['q'] for r in rows])
-        rs = np.array([r['r'] for r in rows])
-        ss = np.array([r['s'] for r in rows])
-        
-        min_q, max_q = int(qs.min()), int(qs.max())
-        min_r, max_r = int(rs.min()), int(rs.max())
-        
-        nRows = max_r - min_r + 1
-        nCols = max_q - min_q + 1
-        
-        elevations = np.full(nRows * nCols, -100.0)
-        watersheds = np.full(nRows * nCols, -1, dtype=int)
-        
-        # Check if stored grid_index values are usable
-        has_grid_index = all(
-            row['grid_index'] is not None 
-            and 0 <= row['grid_index'] < nRows * nCols
-            for row in rows
-        )
-        
-        if has_grid_index:
-            indices = np.array([row['grid_index'] for row in rows], dtype=int)
-        else:
-            # Vectorized coordinate conversion
-            positions = np.column_stack([
-                qs - min_q,
-                rs - min_r,
-                ss - (-min_q - min_r)
-            ])
-            temp_grid = HexGrid(
-                nRows=nRows, nCols=nCols, radius=radius,
-                style=StyleCSS("simple")
-            )
-            indices = temp_grid.hexpositions_to_indices(positions, origin_index=0)
-        
-        # Extract data as numpy arrays
-        elev_values = np.array([row['elevation'] for row in rows])
-        ws_values = np.array([
-            row['watershed_id'] if row['watershed_id'] is not None else -1
-            for row in rows
-        ], dtype=int)
+        # Extract columns as numpy arrays
+        indices = np.array([row[0] for row in raw_rows], dtype=int)
+        elev_values = np.array([row[1] for row in raw_rows])
+        ws_values = np.array([row[2] if row[2] is not None else -1 
+                              for row in raw_rows], dtype=int)
         
         # Filter valid indices
-        valid_mask = (indices >= 0) & (indices < nRows * nCols)
+        valid_mask = (indices >= 0) & (indices < grid_size)
         valid_indices = indices[valid_mask]
-        valid_elevs = elev_values[valid_mask]
-        valid_ws = ws_values[valid_mask]
         
         # Vectorized assignment
-        elevations[valid_indices] = valid_elevs
-        watersheds[valid_indices] = valid_ws
+        elevations[valid_indices] = elev_values[valid_mask]
+        watersheds[valid_indices] = ws_values[valid_mask]
         
         # Mark invalid hexes (sentinel elevation)
-        water_mask = valid_elevs <= -99.0
+        water_mask = elev_values[valid_mask] <= -99.0
         invalidRegion = set(valid_indices[water_mask].tolist())
         
         actual_count = int(np.sum(elevations > -99.0))
-        expected_count = 3 * chunk_rings * chunk_rings  # FIXED: uses metadata, not original_cover
         
         proxy = DataProxy(
             nRows=nRows, nCols=nCols, radius=radius,
@@ -2435,7 +2410,7 @@ def _load_chunk_as_proxy(self: GeoStorage,
             return LoadResult(proxy, 'partial',
                             f'{actual_count}/{expected_count} hexes (incomplete)')
         
-        return LoadResult(proxy, 'loaded', f'{len(rows)} hexes as DataProxy')
+        return LoadResult(proxy, 'loaded', f'{len(raw_rows)} hexes as DataProxy')
     
     except Exception as e:
         return LoadResult(None, 'error', str(e))
