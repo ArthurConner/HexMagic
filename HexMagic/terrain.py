@@ -769,7 +769,7 @@ def demoVolcano(self:TerraDemo):
     sampleMap.colorMap()
     sampleMap.hexGrid.update()
 
-    return sampleMap.hexGrid.builder.show()
+    return sampleMap
 
 
 # %% ../nbs/03_terrain.ipynb #fcf1848e

@@ -3,7 +3,7 @@
 # %% auto #0
 __all__ = ['LoadResult', 'SaveResult', 'ChunkRef', 'chunk_to_world', 'world_to_chunk', 'HexData', 'HexWeather', 'World', 'User',
            'ChunkBorder', 'GeoStorage', 'GeoStorageDebugger', 'ZoomResult', 'region_bounding_box', 'bbox_to_chunk_refs',
-           'stitch_chunks', 'build_fine_to_coarse_mapper']
+           'stitch_chunks', 'build_fine_to_coarse_mapper', 'DataProxy', 'stitch_chunks_fast', 'proxy_to_terrain']
 
 # %% ../nbs/12_Database.ipynb #604269fa
 import numpy as np
@@ -1813,4 +1813,914 @@ def zoom_region(self: ChunkCover,
         mapper=mapper,
         chunks_loaded=len(chunk_offsets)
     )
+
+
+# %% ../nbs/12_Database.ipynb #4a800085
+class DataProxy:
+    """Lightweight chunk data holder for efficient stitching.
+    
+    Holds only raw numpy arrays without HexGrid geometry.
+    """
+    nRows: int
+    nCols: int
+    radius: float
+    elevations: np.ndarray  # Shape: (nRows * nCols,)
+    watersheds: Optional[np.ndarray] = None  # Shape: (nRows * nCols,), watershed IDs
+    chunk_position: Optional[HexPosition] = None  # For debugging/tracking
+    invalidRegion: set[int] = field(default_factory=set)  # Track invalid hexes
+    
+    # Metadata for validation
+    expected_count: int = 0  # How many valid hexes we expect
+    actual_count: int = 0    # How many we actually loaded
+    
+    @property
+    def size(self) -> int:
+        return self.nRows * self.nCols
+    
+    def __len__(self):
+        return self.size
+    
+    @property
+    def is_complete(self) -> bool:
+        """Check if all expected hexes were loaded."""
+        if self.expected_count == 0:
+            return True  # No expectation set
+        return self.actual_count >= self.expected_count * 0.95  # Allow 5% tolerance
+    
+    def to_dict(self) -> dict:
+        """Convert to dict for debugging."""
+        return {
+            'nRows': self.nRows,
+            'nCols': self.nCols,
+            'radius': self.radius,
+            'size': self.size,
+            'has_watersheds': self.watersheds is not None,
+            'chunk_position': str(self.chunk_position) if self.chunk_position else None,
+            'invalid_count': len(self.invalidRegion),
+            'complete': self.is_complete,
+            'expected': self.expected_count,
+            'actual': self.actual_count
+        }
+
+# %% ../nbs/12_Database.ipynb #418d2f53
+@patch
+def _load_chunk_as_proxy(self: GeoStorage, 
+                         cover_id: int,
+                         origin_pos: HexPosition,
+                         scale: int) -> LoadResult:
+    """Load cached chunk as DataProxy (fully numpy-optimized)."""
+    try:
+        # Get cover metadata first (outside transaction)
+        world = self.worlds[cover_id]
+        cover_data = GeoStorage._get(world, 'cover_data')
+        if not cover_data:
+            return LoadResult(None, 'error', 'No cover data found')
+        
+        original_cover = ChunkCover.decode(cover_data)
+        base_radius = original_cover.terrain.hexGrid.radius
+        radius = base_radius / scale
+        
+        # Wrap SELECT + UPDATE in transaction — extract cols/rows INSIDE
+        with self.db.conn:
+            cursor = self.db.execute("""
+                SELECT h.* FROM hex_data h
+                INNER JOIN (
+                    SELECT world_id, q, r, s, MAX(modified) as max_mod
+                    FROM hex_data
+                    WHERE world_id = ? 
+                      AND chunk_q = ? AND chunk_r = ? AND chunk_s = ?
+                      AND scale_level = ?
+                    GROUP BY world_id, q, r, s
+                ) latest 
+                    ON h.world_id = latest.world_id 
+                    AND h.q = latest.q AND h.r = latest.r AND h.s = latest.s
+                    AND h.modified = latest.max_mod
+            """, [cover_id, origin_pos.q, origin_pos.r, origin_pos.s, scale])
+            
+            # Must extract INSIDE transaction before cursor closes
+            cols = [d[0] for d in cursor.description]
+            rows = [dict(zip(cols, row)) for row in cursor.fetchall()]
+            
+            if not rows:
+                return LoadResult(None, 'not_found', 'No cached chunk')
+            
+            # Update access stats (still in transaction)
+            now = int(datetime.now().timestamp())
+            self.db.execute("""
+                UPDATE hex_data 
+                SET last_accessed = ?, access_count = access_count + 1
+                WHERE world_id = ? AND chunk_q = ? AND chunk_r = ? AND chunk_s = ?
+                AND scale_level = ?
+            """, [now, cover_id, origin_pos.q, origin_pos.r, origin_pos.s, scale])
+        
+        # --- Everything below is pure numpy, no DB ---
+        
+        # Infer grid dimensions
+        qs = np.array([r['q'] for r in rows])
+        rs = np.array([r['r'] for r in rows])
+        ss = np.array([r['s'] for r in rows])
+        
+        min_q, max_q = int(qs.min()), int(qs.max())
+        min_r, max_r = int(rs.min()), int(rs.max())
+        
+        nRows = max_r - min_r + 1
+        nCols = max_q - min_q + 1
+        
+        # Initialize arrays
+        elevations = np.full(nRows * nCols, -100.0)
+        watersheds = np.full(nRows * nCols, -1, dtype=int)
+        
+        # Check if we have usable grid_index
+        has_grid_index = all(
+            'grid_index' in row and row['grid_index'] is not None 
+            and 0 <= row['grid_index'] < nRows * nCols
+            for row in rows
+        )
+        
+        if has_grid_index:
+            # Fast path: stored indices
+            indices = np.array([row['grid_index'] for row in rows], dtype=int)
+        else:
+            # Vectorized coordinate conversion via temp grid
+            positions = np.column_stack([
+                qs - min_q,
+                rs - min_r,
+                ss - (-min_q - min_r)  # Correct s offset
+            ])
+            
+            temp_grid = HexGrid(
+                nRows=nRows, nCols=nCols, radius=radius,
+                style=StyleCSS("simple")
+            )
+            indices = temp_grid.hexpositions_to_indices(positions, origin_index=0)
+        
+        # Extract data as numpy arrays
+        elev_values = np.array([row['elevation'] for row in rows])
+        ws_values = np.array([
+            row.get('watershed_id') if row.get('watershed_id') is not None else -1 
+            for row in rows
+        ], dtype=int)
+        
+        # Filter valid indices
+        valid_mask = (indices >= 0) & (indices < nRows * nCols)
+        valid_indices = indices[valid_mask]
+        valid_elevs = elev_values[valid_mask]
+        valid_ws = ws_values[valid_mask]
+        
+        # Vectorized assignment
+        elevations[valid_indices] = valid_elevs
+        watersheds[valid_indices] = valid_ws
+        
+        # Mark invalid hexes (sentinel elevation)
+        water_mask = valid_elevs <= -99.0
+        invalidRegion = set(valid_indices[water_mask].tolist())
+        
+        # Count valid hexes
+        actual_count = int(np.sum(elevations > -99.0))
+        chunk_rings = original_cover.rings
+        expected_count = 3 * chunk_rings * chunk_rings
+        
+        proxy = DataProxy(
+            nRows=nRows,
+            nCols=nCols,
+            radius=radius,
+            elevations=elevations,
+            watersheds=watersheds,
+            chunk_position=origin_pos,
+            invalidRegion=invalidRegion,
+            expected_count=expected_count,
+            actual_count=actual_count
+        )
+        
+        if not proxy.is_complete:
+            return LoadResult(proxy, 'partial', 
+                            f'{actual_count}/{expected_count} hexes (incomplete)')
+        
+        return LoadResult(proxy, 'loaded', f'{len(rows)} hexes as DataProxy')
+    
+    except Exception as e:
+        return LoadResult(None, 'error', str(e))
+
+
+# %% ../nbs/12_Database.ipynb #4e51090c
+def stitch_chunks_fast(chunks: set[ChunkRef], 
+                       cover: ChunkCover,
+                       storage: GeoStorage, 
+                       scale: int) -> tuple[DataProxy, dict[tuple, tuple], int, int]:
+    """Load chunks as DataProxy and stitch using numpy block copies.
+    
+    Generates chunks on cache miss, then loads as lightweight proxy.
+    Returns (stitched_proxy, chunk_offsets, chunk_rows, chunk_cols).
+    """
+    if not chunks:
+        return None, {}, 0, 0
+    
+    coarse_grid = cover.terrain.hexGrid
+    
+    # Load (or generate) all chunks as DataProxy
+    chunk_proxies = {}
+    for chunk in chunks:
+        origin_idx = coarse_grid.hexposition_to_index(chunk.center_hex, origin_index=0)
+        if origin_idx < 0:
+            continue  # Chunk center outside grid, skip
+        
+        # Try loading from cache first
+        result = storage._load_chunk_as_proxy(cover.ident, chunk.position, scale)
+        
+        if result.status == 'not_found':
+            # Cache miss — generate the chunk, then load as proxy
+            gen = storage.load_or_generate_chunk(cover, origin=origin_idx, scale=scale)
+            if gen.status in ('generated', 'cached'):
+                result = storage._load_chunk_as_proxy(cover.ident, chunk.position, scale)
+            else:
+                print(f"⚠️  Failed to generate chunk {chunk.key}: {gen.context}")
+                continue
+        
+        if result.status == 'error':
+            print(f"⚠️  Error loading chunk {chunk.key}: {result.context}")
+            continue
+        
+        if result.status in ('loaded', 'partial'):
+            coarse_row, coarse_col = coarse_grid.index_to_row_col(origin_idx)
+            chunk_proxies[chunk.key] = (result.data, coarse_row, coarse_col)
+    
+    if not chunk_proxies:
+        return None, {}, 0, 0
+    
+    # Validate dimensions — all chunks should be same size
+    first_proxy = next(iter(chunk_proxies.values()))[0]
+    chunk_rows = first_proxy.nRows
+    chunk_cols = first_proxy.nCols
+    radius = first_proxy.radius
+    
+    mismatched = {k for k, (p, _, _) in chunk_proxies.items() 
+                  if p.nRows != chunk_rows or p.nCols != chunk_cols}
+    if mismatched:
+        print(f"⚠️  Dimension mismatch in chunks: {mismatched}, skipping them")
+        for k in mismatched:
+            del chunk_proxies[k]
+    
+    if not chunk_proxies:
+        return None, {}, 0, 0
+    
+    # Calculate merged dimensions from coarse positions
+    coarse_rows = [d[1] for d in chunk_proxies.values()]
+    coarse_cols = [d[2] for d in chunk_proxies.values()]
+    min_coarse_row, max_coarse_row = min(coarse_rows), max(coarse_rows)
+    min_coarse_col, max_coarse_col = min(coarse_cols), max(coarse_cols)
+    
+    merged_rows = (max_coarse_row - min_coarse_row) * scale + chunk_rows
+    merged_cols = (max_coarse_col - min_coarse_col) * scale + chunk_cols
+    
+    # Allocate merged 2D arrays
+    merged_elev = np.full((merged_rows, merged_cols), -100.0)
+    merged_ws = np.full((merged_rows, merged_cols), -1, dtype=int)
+    merged_invalid = set()
+    
+    chunk_offsets = {}
+    
+    # Block-copy each chunk
+    for key, (proxy, coarse_row, coarse_col) in chunk_proxies.items():
+        row_off = (coarse_row - min_coarse_row) * scale
+        col_off = (coarse_col - min_coarse_col) * scale
+        chunk_offsets[key] = (row_off, col_off)
+        
+        # Reshape proxy to 2D
+        p_elev = proxy.elevations.reshape(proxy.nRows, proxy.nCols)
+        p_ws = proxy.watersheds.reshape(proxy.nRows, proxy.nCols)
+        
+        # Clip source/dest ranges
+        sr0, sr1 = 0, proxy.nRows
+        sc0, sc1 = 0, proxy.nCols
+        dr0, dr1 = row_off, row_off + proxy.nRows
+        dc0, dc1 = col_off, col_off + proxy.nCols
+        
+        if dr0 < 0:          sr0 -= dr0; dr0 = 0
+        if dr1 > merged_rows: sr1 -= (dr1 - merged_rows); dr1 = merged_rows
+        if dc0 < 0:          sc0 -= dc0; dc0 = 0
+        if dc1 > merged_cols: sc1 -= (dc1 - merged_cols); dc1 = merged_cols
+        
+        if dr0 < dr1 and dc0 < dc1:
+            merged_elev[dr0:dr1, dc0:dc1] = p_elev[sr0:sr1, sc0:sc1]
+            merged_ws[dr0:dr1, dc0:dc1] = p_ws[sr0:sr1, sc0:sc1]
+        
+        # Remap invalidRegion with offset
+        for local_idx in proxy.invalidRegion:
+            lr = local_idx // proxy.nCols
+            lc = local_idx % proxy.nCols
+            mr = row_off + lr
+            mc = col_off + lc
+            if 0 <= mr < merged_rows and 0 <= mc < merged_cols:
+                merged_invalid.add(mr * merged_cols + mc)
+    
+    merged_proxy = DataProxy(
+        nRows=merged_rows,
+        nCols=merged_cols,
+        radius=radius,
+        elevations=merged_elev.ravel(),
+        watersheds=merged_ws.ravel(),
+        invalidRegion=merged_invalid,
+        expected_count=sum(p[0].expected_count for p in chunk_proxies.values()),
+        actual_count=sum(p[0].actual_count for p in chunk_proxies.values())
+    )
+    
+    return merged_proxy, chunk_offsets, chunk_rows, chunk_cols
+
+
+# %% ../nbs/12_Database.ipynb #a79b6a52
+def proxy_to_terrain(proxy: DataProxy, 
+                     climate: ClimatePreset = None,
+                     geo: GeoBounds = None) -> Terrain:
+    """Convert DataProxy to full Terrain with geometry.
+    
+    Preserves invalidRegion from the proxy.
+    """
+    bounds = MapRect(
+        MapCord(0, 0), 
+        MapSize(proxy.nRows * proxy.radius, proxy.nCols * proxy.radius)
+    )
+    
+    terrain = Terrain(
+        bounds=bounds, 
+        radius=proxy.radius,
+        climate=climate,
+        geo=geo
+    )
+    
+    # Set grid dimensions
+    terrain.hexGrid.nRows = proxy.nRows
+    terrain.hexGrid.nCols = proxy.nCols
+    terrain.hexGrid.adjustRadius(proxy.radius)
+    
+    # Copy arrays
+    terrain.elevations = proxy.elevations.copy()
+    
+    # Add watershed field if present
+    if proxy.watersheds is not None and np.any(proxy.watersheds >= 0):
+        terrain.fields['watershed_id'] = proxy.watersheds.copy()
+    
+    # Preserve invalidRegion
+    terrain.hexGrid.invalidRegion = proxy.invalidRegion.copy()
+    
+    return terrain
+
+
+# %% ../nbs/12_Database.ipynb #d45955ff
+@patch
+def zoom_region_with_proxy(self: ChunkCover, 
+                            region: HexRegion,
+                            scale: int = 2,
+                            compute_weather: bool = True) -> ZoomResult:
+    """Zoom into a region using DataProxy for efficient stitching (FIXED)."""
+    if self.db is None:
+        raise ValueError("ChunkCover.db must be set")
+    
+    # Step 1: Get bounding box with padding
+    min_row, max_row, min_col, max_col = region_bounding_box(region)
+    
+    padding = self.halo_rings + 1
+    min_row = max(0, min_row - padding)
+    max_row = min(self.terrain.hexGrid.nRows - 1, max_row + padding)
+    min_col = max(0, min_col - padding)
+    max_col = min(self.terrain.hexGrid.nCols - 1, max_col + padding)
+    
+    # Step 2: Find chunks
+    chunks = bbox_to_chunk_refs(min_row, max_row, min_col, max_col, self)
+    
+    # Step 3: Load and stitch as DataProxy (returns chunk dimensions)
+    merged_proxy, chunk_offsets, chunk_rows, chunk_cols = stitch_chunks_fast(
+        chunks, self, self.db, scale
+    )
+    
+    if merged_proxy is None:
+        return ZoomResult(None, None, lambda x: -1, 0)
+    
+    # Warn if incomplete
+    if not merged_proxy.is_complete:
+        print(f"⚠️  Merged terrain incomplete: {merged_proxy.actual_count}/{merged_proxy.expected_count} hexes")
+    
+    # Step 4: Build Terrain once from merged proxy (geometry computed here)
+    merged_terrain = proxy_to_terrain(
+        merged_proxy,
+        climate=self.terrain.climate,
+        geo=getattr(self.terrain, 'geo', None)
+    )
+    
+    fine_grid = merged_terrain.hexGrid
+    
+    # Step 5: Lazy init coarse basin
+    if self.basin is None:
+        self.basin = DrainageBasins(self.terrain)
+        self.save()
+    
+    # Step 6: Build mapper with CORRECT chunk dimensions
+    mapper = build_fine_to_coarse_mapper(
+        self, merged_terrain, chunk_offsets, scale,
+        chunk_rows=chunk_rows,
+        chunk_cols=chunk_cols
+    )
+    
+    # Step 7: Validate and extend invalidRegion using mapper
+    for fine_idx in range(len(merged_terrain.elevations)):
+        if fine_idx in fine_grid.invalidRegion:
+            continue  # Already marked by proxy
+        
+        coarse_idx = mapper(fine_idx)
+        if coarse_idx < 0:
+            fine_grid.invalidRegion.add(fine_idx)
+        elif merged_terrain.elevations[fine_idx] <= -99.0:
+            fine_grid.invalidRegion.add(fine_idx)
+    
+    # Step 8: Weather (after invalid marking)
+    if compute_weather and hasattr(self.terrain, 'climate'):
+        merged_terrain.climate = self.terrain.climate
+        merged_terrain.geo = getattr(self.terrain, 'geo', None)
+        merged_terrain.compute_weather()
+    
+    # Step 9: Build fine_regions for watershed projection
+    fine_regions = {}
+    for fine_idx in range(len(merged_terrain.elevations)):
+        if fine_idx in fine_grid.invalidRegion:
+            continue
+        coarse_idx = mapper(fine_idx)
+        if coarse_idx >= 0:
+            if coarse_idx not in fine_regions:
+                fine_regions[coarse_idx] = set()
+            fine_regions[coarse_idx].add(fine_idx)
+    
+    # Step 10: Project watersheds
+    zoomed_sheds = self.project_watersheds(self.basin, fine_regions, merged_terrain)
+    
+    zoomed_basins = DrainageBasins(merged_terrain, compute=False)
+    zoomed_basins.sheds = zoomed_sheds
+    
+    return ZoomResult(
+        terrain=merged_terrain,
+        basins=zoomed_basins,
+        mapper=mapper,
+        chunks_loaded=len(chunk_offsets)
+    )
+
+# %% ../nbs/12_Database.ipynb #3773eb90
+@dataclass
+class DataProxy:
+    """Lightweight chunk data holder for efficient stitching.
+    
+    Holds only raw numpy arrays without HexGrid geometry.
+    """
+    nRows: int
+    nCols: int
+    radius: float
+    elevations: np.ndarray  # Shape: (nRows * nCols,)
+    watersheds: Optional[np.ndarray] = None  # Shape: (nRows * nCols,), watershed IDs
+    chunk_position: Optional[HexPosition] = None  # For debugging/tracking
+    invalidRegion: set[int] = field(default_factory=set)  # Track invalid hexes
+    
+    # Metadata for validation
+    expected_count: int = 0  # How many valid hexes we expect
+    actual_count: int = 0    # How many we actually loaded
+    
+    @property
+    def size(self) -> int:
+        return self.nRows * self.nCols
+    
+    def __len__(self):
+        return self.size
+    
+    @property
+    def is_complete(self) -> bool:
+        """Check if all expected hexes were loaded."""
+        if self.expected_count == 0:
+            return True  # No expectation set
+        return self.actual_count >= self.expected_count * 0.95  # Allow 5% tolerance
+    
+    def to_dict(self) -> dict:
+        """Convert to dict for debugging."""
+        return {
+            'nRows': self.nRows,
+            'nCols': self.nCols,
+            'radius': self.radius,
+            'size': self.size,
+            'has_watersheds': self.watersheds is not None,
+            'chunk_position': str(self.chunk_position) if self.chunk_position else None,
+            'invalid_count': len(self.invalidRegion),
+            'complete': self.is_complete,
+            'expected': self.expected_count,
+            'actual': self.actual_count
+        }
+
+# %% ../nbs/12_Database.ipynb #33e3a6cc
+@patch
+def _load_chunk_as_proxy(self: GeoStorage, 
+                         cover_id: int,
+                         origin_pos: HexPosition,
+                         scale: int) -> LoadResult:
+    """Load cached chunk as DataProxy (fully numpy-optimized)."""
+    try:
+        world = self.worlds[cover_id]
+        cover_data = GeoStorage._get(world, 'cover_data')
+        if not cover_data:
+            return LoadResult(None, 'error', 'No cover data found')
+        
+        # Lightweight metadata extraction (no HexGrid/Hex construction)
+        meta = ChunkCover.decode_metadata(cover_data)
+        base_radius = float(meta['radius'])
+        chunk_rings = int(meta.get('rings', 5))
+        radius = base_radius / scale
+        
+        # Hardcode column order to match HexData schema
+        cols = ['id', 'world_id', 'q', 'r', 's', 'grid_index', 'elevation',
+                'plate_id', 'latitude', 'longitude', 'distance_from_coast',
+                'watershed_id', 'chunk_q', 'chunk_r', 'chunk_s',
+                'scale_level', 'modified', 'last_accessed', 'access_count']
+        
+        raw_rows = self.db.execute("""
+            SELECT h.* FROM hex_data h
+            INNER JOIN (
+                SELECT world_id, q, r, s, MAX(modified) as max_mod
+                FROM hex_data
+                WHERE world_id = ? 
+                  AND chunk_q = ? AND chunk_r = ? AND chunk_s = ?
+                  AND scale_level = ?
+                GROUP BY world_id, q, r, s
+            ) latest 
+                ON h.world_id = latest.world_id 
+                AND h.q = latest.q AND h.r = latest.r AND h.s = latest.s
+                AND h.modified = latest.max_mod
+        """, [cover_id, origin_pos.q, origin_pos.r, origin_pos.s, scale]).fetchall()
+        
+        if not raw_rows:
+            return LoadResult(None, 'not_found', 'No cached chunk')
+        
+        rows = [dict(zip(cols, row)) for row in raw_rows]
+        
+        # Fire-and-forget access tracking
+        now = int(datetime.now().timestamp())
+        self.db.execute("""
+            UPDATE hex_data 
+            SET last_accessed = ?, access_count = access_count + 1
+            WHERE world_id = ? AND chunk_q = ? AND chunk_r = ? AND chunk_s = ?
+            AND scale_level = ?
+        """, [now, cover_id, origin_pos.q, origin_pos.r, origin_pos.s, scale])
+        
+        # --- Pure numpy from here ---
+        
+        qs = np.array([r['q'] for r in rows])
+        rs = np.array([r['r'] for r in rows])
+        ss = np.array([r['s'] for r in rows])
+        
+        min_q, max_q = int(qs.min()), int(qs.max())
+        min_r, max_r = int(rs.min()), int(rs.max())
+        
+        nRows = max_r - min_r + 1
+        nCols = max_q - min_q + 1
+        
+        elevations = np.full(nRows * nCols, -100.0)
+        watersheds = np.full(nRows * nCols, -1, dtype=int)
+        
+        # Check if stored grid_index values are usable
+        has_grid_index = all(
+            row['grid_index'] is not None 
+            and 0 <= row['grid_index'] < nRows * nCols
+            for row in rows
+        )
+        
+        if has_grid_index:
+            indices = np.array([row['grid_index'] for row in rows], dtype=int)
+        else:
+            # Vectorized coordinate conversion
+            positions = np.column_stack([
+                qs - min_q,
+                rs - min_r,
+                ss - (-min_q - min_r)
+            ])
+            temp_grid = HexGrid(
+                nRows=nRows, nCols=nCols, radius=radius,
+                style=StyleCSS("simple")
+            )
+            indices = temp_grid.hexpositions_to_indices(positions, origin_index=0)
+        
+        # Extract data as numpy arrays
+        elev_values = np.array([row['elevation'] for row in rows])
+        ws_values = np.array([
+            row['watershed_id'] if row['watershed_id'] is not None else -1
+            for row in rows
+        ], dtype=int)
+        
+        # Filter valid indices
+        valid_mask = (indices >= 0) & (indices < nRows * nCols)
+        valid_indices = indices[valid_mask]
+        valid_elevs = elev_values[valid_mask]
+        valid_ws = ws_values[valid_mask]
+        
+        # Vectorized assignment
+        elevations[valid_indices] = valid_elevs
+        watersheds[valid_indices] = valid_ws
+        
+        # Mark invalid hexes (sentinel elevation)
+        water_mask = valid_elevs <= -99.0
+        invalidRegion = set(valid_indices[water_mask].tolist())
+        
+        actual_count = int(np.sum(elevations > -99.0))
+        expected_count = 3 * chunk_rings * chunk_rings  # FIXED: uses metadata, not original_cover
+        
+        proxy = DataProxy(
+            nRows=nRows, nCols=nCols, radius=radius,
+            elevations=elevations, watersheds=watersheds,
+            chunk_position=origin_pos, invalidRegion=invalidRegion,
+            expected_count=expected_count, actual_count=actual_count
+        )
+        
+        if not proxy.is_complete:
+            return LoadResult(proxy, 'partial',
+                            f'{actual_count}/{expected_count} hexes (incomplete)')
+        
+        return LoadResult(proxy, 'loaded', f'{len(rows)} hexes as DataProxy')
+    
+    except Exception as e:
+        return LoadResult(None, 'error', str(e))
+
+
+# %% ../nbs/12_Database.ipynb #a69b478f
+def stitch_chunks_fast(chunks: set[ChunkRef], 
+                       cover: ChunkCover,
+                       storage: GeoStorage, 
+                       scale: int) -> tuple[DataProxy, dict[tuple, tuple], int, int]:
+    """Load chunks as DataProxy and stitch using numpy block copies.
+    
+    Generates chunks on cache miss, then loads as lightweight proxy.
+    Returns (stitched_proxy, chunk_offsets, chunk_rows, chunk_cols).
+    """
+    if not chunks:
+        return None, {}, 0, 0
+    
+    coarse_grid = cover.terrain.hexGrid
+    
+    # Load (or generate) all chunks as DataProxy
+    chunk_proxies = {}
+    for chunk in chunks:
+        origin_idx = coarse_grid.hexposition_to_index(chunk.center_hex, origin_index=0)
+        if origin_idx < 0:
+            continue
+        
+        # Use world-space position (matches what _save_chunk_cache stores)
+        origin_pos = coarse_grid.index_to_hexposition(origin_idx)
+        
+        # Try loading from cache first
+        result = storage._load_chunk_as_proxy(cover.ident, origin_pos, scale)
+        
+        if result.status == 'not_found':
+            # Cache miss — generate, then load as proxy
+            gen = storage.load_or_generate_chunk(cover, origin=origin_idx, scale=scale)
+            if gen.status in ('generated', 'cached'):
+                result = storage._load_chunk_as_proxy(cover.ident, origin_pos, scale)
+            else:
+                print(f"⚠️  Failed to generate chunk {chunk.key}: {gen.context}")
+                continue
+        
+        if result.status == 'error':
+            print(f"⚠️  Error loading chunk {chunk.key}: {result.context}")
+            continue
+        
+        if result.status in ('loaded', 'partial'):
+            coarse_row, coarse_col = coarse_grid.index_to_row_col(origin_idx)
+            chunk_proxies[chunk.key] = (result.data, coarse_row, coarse_col)
+    
+    if not chunk_proxies:
+        return None, {}, 0, 0
+    
+    # Validate dimensions — all chunks should be same size
+    first_proxy = next(iter(chunk_proxies.values()))[0]
+    chunk_rows = first_proxy.nRows
+    chunk_cols = first_proxy.nCols
+    radius = first_proxy.radius
+    
+    mismatched = {k for k, (p, _, _) in chunk_proxies.items() 
+                  if p.nRows != chunk_rows or p.nCols != chunk_cols}
+    if mismatched:
+        print(f"⚠️  Dimension mismatch in chunks: {mismatched}, skipping them")
+        for k in mismatched:
+            del chunk_proxies[k]
+    
+    if not chunk_proxies:
+        return None, {}, 0, 0
+    
+    # Calculate merged dimensions from coarse positions
+    coarse_rows = [d[1] for d in chunk_proxies.values()]
+    coarse_cols = [d[2] for d in chunk_proxies.values()]
+    min_coarse_row, max_coarse_row = min(coarse_rows), max(coarse_rows)
+    min_coarse_col, max_coarse_col = min(coarse_cols), max(coarse_cols)
+    
+    merged_rows = (max_coarse_row - min_coarse_row) * scale + chunk_rows
+    merged_cols = (max_coarse_col - min_coarse_col) * scale + chunk_cols
+    
+    # Allocate merged 2D arrays
+    merged_elev = np.full((merged_rows, merged_cols), -100.0)
+    merged_ws = np.full((merged_rows, merged_cols), -1, dtype=int)
+    merged_invalid = set()
+    
+    chunk_offsets = {}
+    
+    # Block-copy each chunk using numpy 2D slicing
+    for key, (proxy, coarse_row, coarse_col) in chunk_proxies.items():
+        row_off = (coarse_row - min_coarse_row) * scale
+        col_off = (coarse_col - min_coarse_col) * scale
+        chunk_offsets[key] = (row_off, col_off)
+        
+        # Reshape proxy to 2D for block copy
+        p_elev = proxy.elevations.reshape(proxy.nRows, proxy.nCols)
+        p_ws = proxy.watersheds.reshape(proxy.nRows, proxy.nCols)
+        
+        # Source and dest ranges
+        sr0, sr1 = 0, proxy.nRows
+        sc0, sc1 = 0, proxy.nCols
+        dr0, dr1 = row_off, row_off + proxy.nRows
+        dc0, dc1 = col_off, col_off + proxy.nCols
+        
+        # Clip to merged bounds
+        if dr0 < 0:           sr0 -= dr0; dr0 = 0
+        if dr1 > merged_rows: sr1 -= (dr1 - merged_rows); dr1 = merged_rows
+        if dc0 < 0:           sc0 -= dc0; dc0 = 0
+        if dc1 > merged_cols: sc1 -= (dc1 - merged_cols); dc1 = merged_cols
+        
+        # Single numpy block copy per chunk
+        if dr0 < dr1 and dc0 < dc1:
+            merged_elev[dr0:dr1, dc0:dc1] = p_elev[sr0:sr1, sc0:sc1]
+            merged_ws[dr0:dr1, dc0:dc1] = p_ws[sr0:sr1, sc0:sc1]
+        
+        # Remap invalidRegion with offset
+        for local_idx in proxy.invalidRegion:
+            lr = local_idx // proxy.nCols
+            lc = local_idx % proxy.nCols
+            mr = row_off + lr
+            mc = col_off + lc
+            if 0 <= mr < merged_rows and 0 <= mc < merged_cols:
+                merged_invalid.add(mr * merged_cols + mc)
+    
+    merged_proxy = DataProxy(
+        nRows=merged_rows,
+        nCols=merged_cols,
+        radius=radius,
+        elevations=merged_elev.ravel(),
+        watersheds=merged_ws.ravel(),
+        invalidRegion=merged_invalid,
+        expected_count=sum(p[0].expected_count for p in chunk_proxies.values()),
+        actual_count=sum(p[0].actual_count for p in chunk_proxies.values())
+    )
+    
+    return merged_proxy, chunk_offsets, chunk_rows, chunk_cols
+
+
+
+def proxy_to_terrain(proxy: DataProxy, 
+                     climate: ClimatePreset = None,
+                     geo: GeoBounds = None) -> Terrain:
+    """Convert DataProxy to full Terrain with geometry.
+    
+    Builds HexGrid once on the final merged result.
+    """
+    bounds = MapRect(
+        MapCord(0, 0), 
+        MapSize(proxy.nRows * proxy.radius, proxy.nCols * proxy.radius)
+    )
+    
+    terrain = Terrain(
+        bounds=bounds, 
+        radius=proxy.radius,
+        climate=climate,
+        geo=geo
+    )
+    
+    terrain.hexGrid.nRows = proxy.nRows
+    terrain.hexGrid.nCols = proxy.nCols
+    terrain.hexGrid.adjustRadius(proxy.radius)
+    
+    terrain.elevations = proxy.elevations.copy()
+    
+    if proxy.watersheds is not None and np.any(proxy.watersheds >= 0):
+        terrain.fields['watershed_id'] = proxy.watersheds.copy()
+    
+    terrain.hexGrid.invalidRegion = proxy.invalidRegion.copy()
+    
+    return terrain
+
+
+
+@patch
+def zoom_region_fast(self: ChunkCover, 
+                     region: HexRegion,
+                     scale: int = 2,
+                     compute_weather: bool = True) -> ZoomResult:
+    """Zoom into a region using DataProxy for efficient stitching."""
+    if self.db is None:
+        raise ValueError("ChunkCover.db must be set")
+    
+    # Step 1: Bounding box with padding
+    min_row, max_row, min_col, max_col = region_bounding_box(region)
+    
+    padding = self.halo_rings + 1
+    min_row = max(0, min_row - padding)
+    max_row = min(self.terrain.hexGrid.nRows - 1, max_row + padding)
+    min_col = max(0, min_col - padding)
+    max_col = min(self.terrain.hexGrid.nCols - 1, max_col + padding)
+    
+    # Step 2: Find chunks
+    chunks = bbox_to_chunk_refs(min_row, max_row, min_col, max_col, self)
+    
+    # Step 3: Load and stitch as DataProxy
+    merged_proxy, chunk_offsets, chunk_rows, chunk_cols = stitch_chunks_fast(
+        chunks, self, self.db, scale
+    )
+    
+    if merged_proxy is None:
+        return ZoomResult(None, None, lambda x: -1, 0)
+    
+    if not merged_proxy.is_complete:
+        print(f"⚠️  Merged terrain incomplete: {merged_proxy.actual_count}/{merged_proxy.expected_count} hexes")
+    
+    # Step 4: Build Terrain once from merged proxy
+    merged_terrain = proxy_to_terrain(
+        merged_proxy,
+        climate=getattr(self.terrain, 'climate', None),
+        geo=getattr(self.terrain, 'geo', None)
+    )
+    
+    fine_grid = merged_terrain.hexGrid
+    
+    # Step 5: Lazy init coarse basin
+    if self.basin is None:
+        self.basin = DrainageBasins(self.terrain)
+        self.save()
+    
+    # Step 6: Build mapper
+    mapper = build_fine_to_coarse_mapper(
+        self, merged_terrain, chunk_offsets, scale,
+        chunk_rows=chunk_rows, chunk_cols=chunk_cols
+    )
+    
+    # Step 7: Extend invalidRegion using mapper
+    for fine_idx in range(len(merged_terrain.elevations)):
+        if fine_idx in fine_grid.invalidRegion:
+            continue
+        coarse_idx = mapper(fine_idx)
+        if coarse_idx < 0:
+            fine_grid.invalidRegion.add(fine_idx)
+        elif merged_terrain.elevations[fine_idx] <= -99.0:
+            fine_grid.invalidRegion.add(fine_idx)
+    
+    # Step 8: Project weather fields from coarse → fine
+    if compute_weather:
+        coarse_terrain = self.terrain
+        weather_fields = ['temperature', 'precipitation', 'humidity',
+                         'climate_pet', 'aridity_index', 'climate',
+                         'latitude', 'longitude', 'distance_to_coast',
+                         'precip_rate_mmh']
+        
+        # Build mapping arrays once (reuse for all fields)
+        fine_indices = []
+        coarse_indices = []
+        for fine_idx in range(len(merged_terrain.elevations)):
+            if fine_idx in fine_grid.invalidRegion:
+                continue
+            coarse_idx = mapper(fine_idx)
+            if coarse_idx >= 0:
+                fine_indices.append(fine_idx)
+                coarse_indices.append(coarse_idx)
+        
+        fine_arr = np.array(fine_indices, dtype=int)
+        coarse_arr = np.array(coarse_indices, dtype=int)
+        
+        for field_name in weather_fields:
+            if field_name in coarse_terrain.fields:
+                coarse_field = coarse_terrain.fields[field_name]
+                # Clip coarse indices to valid range
+                valid = coarse_arr < len(coarse_field)
+                
+                merged_terrain.fields[field_name] = np.zeros(len(merged_terrain.elevations))
+                merged_terrain.fields[field_name][fine_arr[valid]] = coarse_field[coarse_arr[valid]]
+        
+        # Fallback: compute fresh if coarse had no weather
+        if 'temperature' not in merged_terrain.fields or 'precipitation' not in merged_terrain.fields:
+            merged_terrain.compute_weather()
+    
+    # Step 9: Build fine_regions for watershed projection
+    fine_regions = {}
+    for fi, ci in zip(fine_indices, coarse_indices):
+        if ci not in fine_regions:
+            fine_regions[ci] = set()
+        fine_regions[ci].add(fi)
+    
+    # Step 10: Project watersheds
+    zoomed_sheds = self.project_watersheds(self.basin, fine_regions, merged_terrain)
+    
+    zoomed_basins = DrainageBasins(merged_terrain, compute=False)
+    zoomed_basins.sheds = zoomed_sheds
+    
+    return ZoomResult(
+        terrain=merged_terrain,
+        basins=zoomed_basins,
+        mapper=mapper,
+        chunks_loaded=len(chunk_offsets)
+    )
+
 

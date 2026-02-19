@@ -644,6 +644,46 @@ def hexposition_to_index(self: HexGrid, hexpos: HexPosition, origin_index:int = 
 HexGrid.i2hp = index_to_hexposition
 HexGrid.hp2i = hexposition_to_index
 
+# %% ../../nbs/plots/02c_hex.ipynb #548222d3
+@patch
+def hexpositions_to_indices(self: HexGrid, 
+                            positions: np.ndarray,  # Shape: (N, 3) for q,r,s
+                            origin_index: int = None) -> np.ndarray:
+    """Vectorized conversion of multiple HexPositions to grid indices.
+    
+    Args:
+        positions: Nx3 array of (q, r, s) coordinates
+        origin_index: Reference hex index
+    
+    Returns:
+        N-length array of indices (-1 for out of bounds)
+    """
+    if origin_index is None:
+        origin_index = len(self.hexes) // 2
+    
+    # Get origin coordinates once
+    origin_row, origin_col = self.index_to_row_col(origin_index)
+    origin_q = origin_col - (origin_row - (origin_row & 1)) // 2
+    origin_r = origin_row
+    
+    # Vectorized: add origin to all positions at once
+    abs_q = positions[:, 0] + origin_q
+    abs_r = positions[:, 1] + origin_r
+    
+    # Convert cube → offset coordinates (vectorized)
+    rows = abs_r
+    cols = abs_q + (abs_r - (abs_r & 1)) // 2
+    
+    # Convert to indices (vectorized)
+    indices = rows * self.nCols + cols
+    
+    # Mark out-of-bounds as -1
+    mask = (rows >= 0) & (rows < self.nRows) & (cols >= 0) & (cols < self.nCols)
+    indices = np.where(mask, indices, -1)
+    
+    return indices.astype(int)
+
+
 # %% ../../nbs/plots/02c_hex.ipynb #72c8c278
 @patch
 def index_to_row_col(self: HexGrid, index: int) -> tuple[int, int]:

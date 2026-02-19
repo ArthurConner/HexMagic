@@ -184,6 +184,20 @@ class ChunkCover:
         return ret
 
     @staticmethod
+    def decode_metadata(s: str) -> dict:
+        """Extract just header info without building Terrain/HexGrid."""
+        # Terrain.encode() format: first few lines are key:value
+        lines = s.split('\n', 10)  # Only need first ~10 lines
+        meta = {}
+        for line in lines:
+            if ':' not in line or line.startswith('+data'):
+                break
+            key, val = line.split(':', 1)
+            meta[key.strip()] = val.strip()
+        return meta
+
+
+    @staticmethod
     def decode(s: str) -> 'ChunkCover':
         """Parse a formatted string and create a ChunkCover from it."""
         lines = s.strip().split('\n')
