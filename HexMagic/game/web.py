@@ -76,7 +76,11 @@ def html(self:Terrain,wrapper:HexWrapper = None)->str:
     grid = self.hexGrid
     if wrapper is None:
         wrapper = HexWrapper(callBack=HexWrapper.route())
-    clearStyle = StyleCSS("HexClear",stroke="red",fill="None",opacity=0.5)
+    clearStyle = StyleCSS("HexClear",stroke="orange",fill="white",opacity=0.25)
+    hover = StyleCSS("hover",fill="purple",cursor="pointer" )
+            #hover = StyleCSS("hover",fill="#007fff",cursor="pointer" )
+    clearStyle.customize(hover)
+            
     for i, h in enumerate(grid.hexes):
         grid.hexes[i].style = clearStyle
         #grid.hexes[i].label = str(i)
@@ -195,42 +199,50 @@ def hex_clicked(session, hex_id: int):
     logging.info(f"hex_clicked: session keys={list(session.keys())}")
     uid = ensure_user(session)
     logging.info(f"hex_clicked: uid={uid}")
-    active = globalStore.active_board(uid)
-    if not active:
-        return RedirectResponse('/', status_code=303)
+    try:
+        active = globalStore.active_board(uid)
+        if not active:
+            return RedirectResponse('/', status_code=303)
 
-    board = active.board
-    terrain = board.terrain
-    countries = terrain.fields.get("country")
+        board = active.board
+        terrain = board.terrain
+        countries = terrain.fields.get("country")
 
-    if countries is None or hex_id < 0 or hex_id >= len(countries):
-        debug_msg = f"Invalid hex {hex_id}"
-        return (
-            P("Invalid hex", id="map"),
-            Div(debug_msg, id="debug-panel", hx_swap_oob="true")
-        )
+        if countries is None or hex_id < 0 or hex_id >= len(countries):
+            debug_msg = f"Invalid hex {hex_id}"
+            return (
+                P("Invalid hex", id="map"),
+                Div(debug_msg, id="debug-panel", hx_swap_oob="true")
+            )
 
-    country_id = int(countries[hex_id])
+        country_id = int(countries[hex_id])
 
-    if country_id > 0:
-        # Clicked a kingdom — zoom in
-        k = next((k for k in board.kingdoms if k.countryId == country_id), None)
-        debug_msg = f"Zooming into {k.countryName if k else f'Kingdom {country_id}'}"
+        if country_id > 0:
+            # Clicked a kingdom — zoom in
+            k = next((k for k in board.kingdoms if k.countryId == country_id), None)
+            debug_msg = f"Zooming into {k.countryName if k else f'Kingdom {country_id}'}"
+            
+            map_content = kingdom(session, country_id)
+            return (
+                map_content,
+                Div(debug_msg, id="debug-panel", hx_swap_oob="true")
+            )
+        elif country_id == 0:
+            debug_msg = f"Hex {hex_id} is unclaimed land"
+        else:
+            debug_msg = f"Hex {hex_id} is water/mountains"
         
-        map_content = kingdom(session, country_id)
         return (
-            map_content,
+            P(debug_msg, id="map"),
             Div(debug_msg, id="debug-panel", hx_swap_oob="true")
         )
-    elif country_id == 0:
-        debug_msg = f"Hex {hex_id} is unclaimed land"
-    else:
-        debug_msg = f"Hex {hex_id} is water/mountains"
-    
-    return (
-        P(debug_msg, id="map"),
-        Div(debug_msg, id="debug-panel", hx_swap_oob="true")
-    )
+
+    except Exception as e:
+        logging.error(f"showMap FAILED: {type(e).__name__}: {e}", exc_info=True)
+        return (
+            Div(P(f"Error: {e}"), id="map"),
+            Div(f"hex_clicked error: {type(e).__name__}: {e}", id="debug-panel", hx_swap_oob="true")
+        )
 
 
 # %% ../../nbs/game/Web.ipynb #aafa9789
