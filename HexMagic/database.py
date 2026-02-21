@@ -3,7 +3,8 @@
 # %% auto #0
 __all__ = ['LoadResult', 'SaveResult', 'ChunkRef', 'chunk_to_world', 'world_to_chunk', 'HexData', 'HexWeather', 'World', 'User',
            'ChunkBorder', 'ChunkMeta', 'GeoStorage', 'GeoStorageDebugger', 'ZoomResult', 'region_bounding_box',
-           'bbox_to_chunk_refs', 'build_fine_to_coarse_mapper', 'DataProxy', 'stitch_chunks_fast', 'proxy_to_terrain']
+           'bbox_to_chunk_refs', 'build_fine_to_coarse_mapper', 'DataProxy', 'stitch_chunks_fast', 'proxy_to_terrain',
+           'crop_proxy_to_region', 'make_cropped_mapper']
 
 # %% ../nbs/12_Database.ipynb #604269fa
 import numpy as np
@@ -1857,4 +1858,308 @@ def zoom_region_fast(self: ChunkCover,
         chunks_loaded=len(chunk_offsets)
     )
 
+
+
+# %% ../nbs/12_Database.ipynb #bdbabd1d
+def crop_proxy_to_region(proxy: DataProxy,
+                         region_fine_indices: set[int],
+                         padding: int = 4) -> tuple[DataProxy, int, int, int, int]:
+    """Crop DataProxy to bounding box of region's fine indices + padding.
+    
+    All operations are pure numpy 2D slicing — no HexGrid involved.
+    
+    Args:
+        proxy: The stitched (potentially oversized) DataProxy
+        region_fine_indices: Fine grid indices that map to the region
+        padding: Extra rows/cols around the region bbox
+    
+    Returns:
+        (cropped_proxy, trim_top, trim_left, old_nRows, old_nCols)
+    """
+    if not region_fine_indices:
+        return proxy, 0, 0, proxy.nRows, proxy.nCols
+    
+    old_nRows, old_nCols = proxy.nRows, proxy.nCols
+    
+    # Vectorized bounding box of region in fine grid
+    indices = np.array(list(region_fine_indices))
+    rows = indices // old_nCols
+    cols = indices % old_nCols
+    
+    min_row = max(0, int(rows.min()) - padding)
+    max_row = min(old_nRows - 1, int(rows.max()) + padding)
+    min_col = max(0, int(cols.min()) - padding)
+    max_col = min(old_nCols - 1, int(cols.max()) + padding)
+    
+    new_nRows = max_row - min_row + 1
+    new_nCols = max_col - min_col + 1
+    
+    # Skip crop if savings < 10%
+    old_size = old_nRows * old_nCols
+    new_size = new_nRows * new_nCols
+    if (old_size - new_size) < old_size * 0.1:
+        return proxy, 0, 0, old_nRows, old_nCols
+    
+    # 2D slice elevations
+    elev_2d = proxy.elevations.reshape(old_nRows, old_nCols)
+    cropped_elev = elev_2d[min_row:max_row+1, min_col:max_col+1].ravel().copy()
+    
+    # 2D slice watersheds
+    cropped_ws = None
+    if proxy.watersheds is not None:
+        ws_2d = proxy.watersheds.reshape(old_nRows, old_nCols)
+        cropped_ws = ws_2d[min_row:max_row+1, min_col:max_col+1].ravel().copy()
+    
+    # Remap invalidRegion indices
+    new_invalid = set()
+    for old_idx in proxy.invalidRegion:
+        old_r = old_idx // old_nCols
+        old_c = old_idx % old_nCols
+        if min_row <= old_r <= max_row and min_col <= old_c <= max_col:
+            new_invalid.add((old_r - min_row) * new_nCols + (old_c - min_col))
+    
+    cropped = DataProxy(
+        nRows=new_nRows,
+        nCols=new_nCols,
+        radius=proxy.radius,
+        elevations=cropped_elev,
+        watersheds=cropped_ws,
+        chunk_position=proxy.chunk_position,
+        invalidRegion=new_invalid,
+        expected_count=proxy.expected_count,
+        actual_count=proxy.actual_count
+    )
+    
+    print(f"✂ Cropped {old_nRows}×{old_nCols} → {new_nRows}×{new_nCols} "
+          f"({100*(1 - new_size/old_size):.0f}% smaller)")
+    
+    return cropped, min_row, min_col, old_nRows, old_nCols
+
+
+def make_cropped_mapper(original_mapper: Callable[[int], int],
+                        trim_top: int, trim_left: int,
+                        old_nCols: int, new_nCols: int) -> Callable[[int], int]:
+    """Wrap a fine→coarse mapper to account for proxy cropping.
+    
+    Translates cropped grid indices back to the original merged grid
+    before calling the original mapper.
+    """
+    if trim_top == 0 and trim_left == 0:
+        return original_mapper  # No crop, no overhead
+    
+    def cropped_mapper(cropped_idx: int) -> int:
+        row = cropped_idx // new_nCols + trim_top
+        col = cropped_idx % new_nCols + trim_left
+        return original_mapper(row * old_nCols + col)
+    
+    return cropped_mapper
+
+
+def build_fine_to_coarse_mapper(cover: ChunkCover, 
+                                fine_nCols: int,
+                                chunk_offsets: dict,
+                                scale: int,
+                                chunk_rows: int,
+                                chunk_cols: int) -> Callable[[int], int]:
+    """Build function mapping fine terrain index → coarse terrain index.
+    
+    Only needs fine_nCols (not a full Terrain) so it works on DataProxy
+    before HexGrid construction.
+    """
+    coarse_grid = cover.terrain.hexGrid
+    offset_to_chunk = {v: k for k, v in chunk_offsets.items()}
+    
+    def mapper(fine_idx: int) -> int:
+        fine_row = fine_idx // fine_nCols
+        fine_col = fine_idx % fine_nCols
+        
+        # Find which chunk this fine hex belongs to
+        best_key = None
+        local_row = local_col = 0
+        for (row_off, col_off), key in offset_to_chunk.items():
+            if row_off <= fine_row < row_off + chunk_rows and \
+               col_off <= fine_col < col_off + chunk_cols:
+                best_key = key
+                local_row = fine_row - row_off
+                local_col = fine_col - col_off
+                break
+        
+        if best_key is None:
+            return -1
+        
+        # Scale down to coarse local position
+        coarse_local_row = local_row // scale
+        coarse_local_col = local_col // scale
+        
+        # Chunk center in coarse grid
+        q, r, s = best_key
+        chunk_center = HexPosition(q, r, s) * (cover.rings * 2)
+        center_idx = coarse_grid.hexposition_to_index(chunk_center, origin_index=0)
+        if center_idx < 0:
+            return -1
+        
+        center_row, center_col = coarse_grid.index_to_row_col(center_idx)
+        
+        # Offset from chunk center to top-left of chunk
+        half_rows = chunk_rows // (2 * scale)
+        half_cols = chunk_cols // (2 * scale)
+        
+        coarse_row = center_row - half_rows + coarse_local_row
+        coarse_col = center_col - half_cols + coarse_local_col
+        
+        return coarse_grid.row_col_to_index(coarse_row, coarse_col)
+    
+    return mapper
+
+
+@patch
+def zoom_region_fast(self: ChunkCover, 
+                     region: HexRegion,
+                     scale: int = 2,
+                     compute_weather: bool = True) -> ZoomResult:
+    """Zoom into a region using DataProxy + numpy cropping.
+    
+    Pipeline:
+      1. Find chunks covering region bbox
+      2. Stitch as DataProxy (no HexGrid yet)
+      3. Build mapper on uncropped proxy
+      4. Identify region's fine indices via mapper
+      5. Crop proxy to region bbox (numpy 2D slice)
+      6. Wrap mapper with crop offset
+      7. Build Terrain once on cropped proxy
+      8. Project weather + watersheds
+    """
+    if self.db is None:
+        raise ValueError("ChunkCover.db must be set")
+    
+    # --- Step 1: Bounding box with padding ---
+    min_row, max_row, min_col, max_col = region_bounding_box(region)
+    
+    padding = self.halo_rings + 1
+    coarse_grid = self.terrain.hexGrid
+    min_row = max(0, min_row - padding)
+    max_row = min(coarse_grid.nRows - 1, max_row + padding)
+    min_col = max(0, min_col - padding)
+    max_col = min(coarse_grid.nCols - 1, max_col + padding)
+    
+    # --- Step 2: Find and stitch chunks ---
+    chunks = bbox_to_chunk_refs(min_row, max_row, min_col, max_col, self)
+    
+    merged_proxy, chunk_offsets, chunk_rows, chunk_cols = stitch_chunks_fast(
+        chunks, self, self.db, scale
+    )
+    
+    if merged_proxy is None:
+        return ZoomResult(None, None, lambda x: -1, 0)
+    
+    if not merged_proxy.is_complete:
+        print(f"⚠️  Merged terrain incomplete: "
+              f"{merged_proxy.actual_count}/{merged_proxy.expected_count} hexes")
+    
+    # --- Step 3: Lazy init coarse basin ---
+    if self.basin is None:
+        self.basin = DrainageBasins(self.terrain)
+        self.save()
+    
+    # --- Step 4: Build mapper on UNCROPPED proxy ---
+    uncropped_mapper = build_fine_to_coarse_mapper(
+        self, merged_proxy.nCols, chunk_offsets, scale,
+        chunk_rows=chunk_rows, chunk_cols=chunk_cols
+    )
+    
+    # --- Step 5: Find region's fine indices + mark invalid ---
+    region_hexes = region.hexes  # coarse indices in the region
+    region_fine_indices = set()
+    all_valid_pairs = []  # (fine_idx, coarse_idx) for later use
+    
+    for fine_idx in range(merged_proxy.size):
+        if fine_idx in merged_proxy.invalidRegion:
+            continue
+        if merged_proxy.elevations[fine_idx] <= -99.0:
+            merged_proxy.invalidRegion.add(fine_idx)
+            continue
+        
+        coarse_idx = uncropped_mapper(fine_idx)
+        if coarse_idx < 0:
+            merged_proxy.invalidRegion.add(fine_idx)
+            continue
+        
+        all_valid_pairs.append((fine_idx, coarse_idx))
+        if coarse_idx in region_hexes:
+            region_fine_indices.add(fine_idx)
+    
+    # --- Step 6: Crop proxy to region bbox ---
+    crop_padding = max(4, scale * (self.halo_rings + 1))
+    cropped_proxy, trim_top, trim_left, old_nRows, old_nCols = crop_proxy_to_region(
+        merged_proxy, region_fine_indices, padding=crop_padding
+    )
+    
+    # --- Step 7: Wrap mapper with crop offset ---
+    mapper = make_cropped_mapper(
+        uncropped_mapper, trim_top, trim_left,
+        old_nCols, cropped_proxy.nCols
+    )
+    
+    # --- Step 8: Build Terrain ONCE on cropped proxy ---
+    merged_terrain = proxy_to_terrain(
+        cropped_proxy,
+        climate=getattr(self.terrain, 'climate', None),
+        geo=getattr(self.terrain, 'geo', None)
+    )
+    
+    fine_grid = merged_terrain.hexGrid
+    
+    # --- Step 9: Project weather from coarse → fine ---
+    if compute_weather:
+        coarse_terrain = self.terrain
+        weather_fields = ['temperature', 'precipitation', 'humidity',
+                         'climate_pet', 'aridity_index', 'climate',
+                         'latitude', 'longitude', 'distance_to_coast',
+                         'precip_rate_mmh']
+        
+        # Build vectorized mapping arrays on CROPPED grid
+        fine_indices = []
+        coarse_indices = []
+        new_nCols = cropped_proxy.nCols
+        for fine_idx in range(cropped_proxy.size):
+            if fine_idx in fine_grid.invalidRegion:
+                continue
+            coarse_idx = mapper(fine_idx)
+            if coarse_idx >= 0:
+                fine_indices.append(fine_idx)
+                coarse_indices.append(coarse_idx)
+        
+        fine_arr = np.array(fine_indices, dtype=int)
+        coarse_arr = np.array(coarse_indices, dtype=int)
+        
+        for field_name in weather_fields:
+            if field_name in coarse_terrain.fields:
+                coarse_field = coarse_terrain.fields[field_name]
+                valid = coarse_arr < len(coarse_field)
+                merged_terrain.fields[field_name] = np.zeros(len(merged_terrain.elevations))
+                merged_terrain.fields[field_name][fine_arr[valid]] = coarse_field[coarse_arr[valid]]
+        
+        # Fallback if coarse had no weather at all
+        if 'temperature' not in merged_terrain.fields or \
+           'precipitation' not in merged_terrain.fields:
+            merged_terrain.compute_weather()
+    
+    # --- Step 10: Build fine_regions and project watersheds ---
+    fine_regions = {}
+    for fi, ci in zip(fine_indices, coarse_indices):
+        if ci not in fine_regions:
+            fine_regions[ci] = set()
+        fine_regions[ci].add(fi)
+    
+    zoomed_sheds = self.project_watersheds(self.basin, fine_regions, merged_terrain)
+    
+    zoomed_basins = DrainageBasins(merged_terrain, compute=False)
+    zoomed_basins.sheds = zoomed_sheds
+    
+    return ZoomResult(
+        terrain=merged_terrain,
+        basins=zoomed_basins,
+        mapper=mapper,
+        chunks_loaded=len(chunk_offsets)
+    )
 

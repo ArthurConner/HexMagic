@@ -71,27 +71,6 @@ logging.basicConfig(
 logging.info("getting Started")
 
 
-# %% ../../nbs/game/Web.ipynb #f21ea33a
-@patch
-def html(self:Terrain,wrapper:HexWrapper = None)->str:
-    grid = self.hexGrid
-    if wrapper is None:
-        wrapper = HexWrapper(callBack=HexWrapper.route())
-    clearStyle = StyleCSS("HexClear",stroke="orange",fill="white",opacity=0.25)
-    hover = StyleCSS("hover",fill="purple",cursor="pointer" )
-            #hover = StyleCSS("hover",fill="#007fff",cursor="pointer" )
-    clearStyle.customize(hover)
-            
-    for i, h in enumerate(grid.hexes):
-        grid.hexes[i].style = clearStyle
-        #grid.hexes[i].label = str(i)
-    #self.colorMap()
-    grid.builder.add_style(clearStyle)
-    grid.update(wrapper=wrapper,layer_name="hexes")
-    for i, l in enumerate(grid.builder.layers):
-        logging.info(f"layer[{i}] is {l.name}")
-    return grid.builder.xml()
-
 # %% ../../nbs/game/Web.ipynb #04540e2b
 @dataclass
 class ActiveGame:
@@ -311,13 +290,14 @@ def kingdom(session, id: int):
 
     zoomed = result.terrain
     zoomed.hexGrid.adjustRadius(terrain.hexGrid.radius)
+    zoomed.hexGrid.builder.layers = []
     zoomed.colorMap()
     zoomed.hexGrid.update()
 
     c2f = result.invert_mapper()
 
     builder = zoomed.hexGrid.builder
-    builder.layers = []
+    
     zoomed.terrainCream()
 
     builder.adjust("borders", board.countries_overlay(zoomed, c2f))
