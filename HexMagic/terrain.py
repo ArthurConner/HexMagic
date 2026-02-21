@@ -36,7 +36,7 @@ import heapq
 # %% ../nbs/03_terrain.ipynb #a00c60ae
 from .styles import StyleCSS, SVGBuilder,SVGLayer, SVGPatternLoader, preview, app, rt, StyleDemo
 
-from .primitives import MapCord, MapSize, MapRect, MapPath, Hex, HexGrid, HexRegion, HexWrapper, HexPosition, PrimitiveDemo, hexBackground
+from .primitives import MapCord, MapSize, MapRect, MapPath, Hex, HexGrid, HexRegion, HexWrapper, HexPosition, PrimitiveDemo, HexTouchMap
 
 # %% ../nbs/03_terrain.ipynb #e71cfd34
 class TerraDemo:

@@ -15,6 +15,7 @@ import httpx
 import random
 import pandas as pd
 import threading
+import json
 
 # %% ../../nbs/game/Web.ipynb #97767b1b
 import logging
@@ -45,7 +46,7 @@ from ..plot.hex import Hex, HexWrapper
 from ..styles import StyleCSS,  SVGBuilder
 
 from ..primitives import MapPath, MapSize, MapRect, MapCord 
-from ..primitives import HexGrid, HexPosition ,  HexRegion , windy_edge , unique_windy_edge
+from ..primitives import HexGrid, HexPosition ,  HexRegion ,  unique_windy_edge, Hex, HexBackground, HexWrapper,  HexTouchMap, HexButtonGroup
 from ..terrain import Terrain
 from ..voronoi import generate_plate_terrain
 Terrain.fromSeeds = generate_plate_terrain
@@ -325,15 +326,15 @@ def kingdom(session, id: int):
     if result.basins:
         builder.adjust("water", result.basins.draw_watersheds())
 
-    wrapper = HexWrapper(callBack=lambda grid, index: {
-        "hx-post": "/kingdom_hex_clicked",
-        "hx-vals": f'{{"hex_id":{index},"country_id":{id}}}',
-        "hx-target": "#map"
-    })
-
     k = next((k for k in board.kingdoms if k.countryId == id), None)
     title = k.countryName if k else f"Kingdom {id}"
-    logging.info(f"kingdom {title} for uid={uid} is {id} ")
+    logging.info(f"kingdom {title} for uid={uid} is {id}")
+
+    on_click = lambda grid, index: {
+        "hx-post": "/kingdom_hex_clicked",
+        "hx-vals": json.dumps({"hex_id": index, "country_id": id}),
+        "hx-target": "#map"
+    }
 
     return Div(
         Div(
@@ -342,6 +343,7 @@ def kingdom(session, id: int):
             H4(title, cls="text-lg font-bold"),
             cls="flex items-center gap-4 p-2"
         ),
-        NotStr(zoomed.html(wrapper=wrapper))
+        HexTouchMap(zoomed.hexGrid, on_click=on_click, cls="w-full h-full"),
+        id="map"
     )
 

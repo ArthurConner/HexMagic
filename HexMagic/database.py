@@ -50,7 +50,7 @@ import numpy as np
 
 # %% ../nbs/12_Database.ipynb #7b40f653
 from .climate import TerrainPatterns, DrainageBasins, Geology, TerraDemo, Terrain, GeoBounds, ClimatePreset, TerrainFactory
-from .primitives import MapCord, MapSize, MapRect, MapPath, Hex, HexGrid, HexWrapper, HexPosition, hexBackground, HexRegion, unique_windy_edge, HexChunk
+from .primitives import MapCord, MapSize, MapRect, MapPath, Hex, HexGrid, HexWrapper, HexPosition, HexRegion, unique_windy_edge, HexChunk
 from .styles import StyleCSS, SVGBuilder
 from .cover import ChunkCover, TerraDemo
 

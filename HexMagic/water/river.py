@@ -35,7 +35,7 @@ sys.path.insert(0, str(Path().resolve().parent.parent))
 
 # %% ../../nbs/water/river.ipynb #a00c60ae
 from ..styles import StyleCSS, SVGBuilder,SVGLayer, SVGPatternLoader, preview, app, StyleDemo,NamedColor
-from ..primitives import MapCord, MapSize, MapRect, MapPath, Hex, HexGrid, HexWrapper, HexPosition, hexBackground,windy_edge, HexRegion, unique_windy_edge
+from ..primitives import MapCord, MapSize, MapRect, MapPath, Hex, HexGrid, HexWrapper, HexPosition,windy_edge, HexRegion, unique_windy_edge
 from ..terrain import  TerraDemo, Terrain
 from ..terrainpatterns import TerrainPatterns
 

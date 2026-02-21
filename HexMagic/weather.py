@@ -31,7 +31,7 @@ import colorsys
 from importlib import resources
 
 from .styles import StyleCSS, SVGBuilder, SVGLayer, SVGPatternLoader, preview, app, StyleDemo, LayerAnimation
-from .primitives import MapCord, MapSize, MapRect, MapPath, Hex, HexGrid, HexWrapper, HexPosition, hexBackground, HexRegion, windy_edge,unique_windy_edge
+from .primitives import MapCord, MapSize, MapRect, MapPath, Hex, HexGrid, HexWrapper, HexPosition, HexTouchMap, HexRegion, windy_edge,unique_windy_edge
 from .terrain import  TerraDemo, Terrain, GeoBounds, ClimatePreset, USGSTerrainFetcher
 from .terrainpatterns import TerrainPatterns
 #from HexMagic.river import River, SoilSystem, ErosionModel

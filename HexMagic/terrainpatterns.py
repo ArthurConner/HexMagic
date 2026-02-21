@@ -34,7 +34,7 @@ from importlib import resources
 
 # %% ../nbs/05_terrainpatterns.ipynb #a00c60ae
 from .styles import StyleCSS, SVGBuilder,SVGLayer, SVGPatternLoader, preview, app, StyleDemo, Generatable,SVGDef, NamedColor
-from .primitives import MapCord, MapSize, MapRect, MapPath, Hex, HexGrid, HexRegion, HexWrapper, HexPosition, PrimitiveDemo, hexBackground, windy_edge, unique_windy_edge
+from .primitives import MapCord, MapSize, MapRect, MapPath, Hex, HexGrid, HexRegion, HexWrapper, HexPosition, PrimitiveDemo, HexTouchMap, windy_edge, unique_windy_edge
 
 # %% ../nbs/05_terrainpatterns.ipynb #9d40ef74
 from .terrain import Terrain, TerraDemo

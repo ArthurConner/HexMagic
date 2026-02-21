@@ -17,7 +17,7 @@ from .core import Terrain, TerraDemo
 
 # %% ../nbs/11_Scale.ipynb #75e01985
 from .climate import TerrainPatterns, DrainageBasins, Geology, TerraDemo, Terrain, GeoBounds, ClimatePreset, TerrainFactory
-from .primitives import MapCord, MapSize, MapRect, MapPath, Hex, HexGrid, HexWrapper, HexPosition, hexBackground, HexRegion, unique_windy_edge, PrimitiveDemo, HexChunk
+from .primitives import MapCord, MapSize, MapRect, MapPath, Hex, HexGrid, HexWrapper, HexPosition,  HexRegion, unique_windy_edge, PrimitiveDemo, HexChunk
 from .styles import StyleCSS, SVGBuilder
 from .geology import Plate
 from .geology import River, Watershed, DrainageBasins

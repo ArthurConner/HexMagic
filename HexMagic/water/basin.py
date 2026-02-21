@@ -29,7 +29,7 @@ import copy
 
 # %% ../../nbs/water/basin.ipynb #f400829f
 from ..styles import StyleCSS, SVGBuilder, SVGLayer, SVGPatternLoader, preview, app, StyleDemo, LayerAnimation
-from ..primitives import MapCord, MapSize, MapRect, MapPath, Hex, HexGrid, HexWrapper, HexPosition, hexBackground, HexRegion, unique_windy_edge
+from ..primitives import MapCord, MapSize, MapRect, MapPath, Hex, HexGrid, HexWrapper, HexPosition, HexRegion, unique_windy_edge
 from ..terrain import  TerraDemo, Terrain, GeoBounds, ClimatePreset
 from ..terrainpatterns import TerrainPatterns, SVGMask
 

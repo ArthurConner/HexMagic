@@ -27,7 +27,7 @@ import httpx
 
 # %% ../nbs/07_geology.ipynb #a00c60ae
 from .styles import StyleCSS, SVGBuilder
-from .primitives import MapCord, MapSize, MapRect, MapPath, Hex, HexGrid, HexWrapper, HexPosition, hexBackground,windy_edge, HexRegion, unique_windy_edge
+from .primitives import MapCord, MapSize, MapRect, MapPath, Hex, HexGrid, HexWrapper, HexPosition, HexTouchMap,windy_edge, HexRegion, unique_windy_edge
 from .terrain import  TerraDemo, Terrain, GeoBounds
 from .terrainpatterns import TerrainPatterns
 
