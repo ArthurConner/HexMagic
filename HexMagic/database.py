@@ -2,35 +2,28 @@
 
 # %% auto #0
 __all__ = ['LoadResult', 'SaveResult', 'ChunkRef', 'chunk_to_world', 'world_to_chunk', 'HexData', 'HexWeather', 'World', 'User',
-           'ChunkBorder', 'ChunkMeta', 'GeoStorage', 'GeoStorageDebugger', 'ZoomResult', 'region_bounding_box',
-           'bbox_to_chunk_refs', 'build_fine_to_coarse_mapper', 'DataProxy', 'stitch_chunks_fast', 'proxy_to_terrain',
+           'ChunkBorder', 'ChunkMeta', 'GeoStorage', 'GeoStorageDebugger', 'DataProxy', 'stitch_chunks_fast',
+           'proxy_to_terrain', 'ZoomResult', 'region_bounding_box', 'bbox_to_chunk_refs', 'build_fine_to_coarse_mapper',
            'crop_proxy_to_region', 'make_cropped_mapper']
 
 # %% ../nbs/12_Database.ipynb #604269fa
 import numpy as np
-import sys
 import os
-import math
-from math import radians, cos, sin, sqrt, atan2
 import random
-
-#data
+import asyncio
+import tempfile
+import shutil
+import sqlite3
+from math import radians, cos, sin, sqrt, atan2
 from collections import namedtuple
-from dataclasses import dataclass,  field, asdict
-import json
-from typing import List , Optional
+from dataclasses import dataclass, field
+from typing import List, Optional, Callable, Iterator
 from enum import Enum
-
-
-
-# %% ../nbs/12_Database.ipynb #3f40cd85
-from dataclasses import dataclass
-from typing import Optional
-
 from datetime import datetime
+from importlib import resources
+from pathlib import Path
 
-
-# %% ../nbs/12_Database.ipynb #ffbe640f
+# %% ../nbs/12_Database.ipynb #06f9c0b9
 from fastcore.utils import *
 from fasthtml.common import *
 from fasthtml.jupyter import *
@@ -38,55 +31,38 @@ from fastlite import *
 import fasthtml.components as fc
 import httpx
 
-
-# %% ../nbs/12_Database.ipynb #87f4cc2d
-from importlib import resources
-from pathlib import Path
-import tempfile
-import shutil
-import sqlite3
-from dataclasses import dataclass
-from typing import Iterator
-import numpy as np
-
-# %% ../nbs/12_Database.ipynb #7b40f653
+# %% ../nbs/12_Database.ipynb #92f4d551
 from .climate import TerrainPatterns, DrainageBasins, Geology, TerraDemo, Terrain, GeoBounds, ClimatePreset, TerrainFactory
 from .primitives import MapCord, MapSize, MapRect, MapPath, Hex, HexGrid, HexWrapper, HexPosition, HexRegion, unique_windy_edge, HexChunk
 from .styles import StyleCSS, SVGBuilder
 from .cover import ChunkCover, TerraDemo
-
-# %% ../nbs/12_Database.ipynb #480e76c9
 from .geology import River, Watershed
 
-# %% ../nbs/12_Database.ipynb #2eb30d94
-import asyncio
-from dataclasses import dataclass
-
-# %% ../nbs/12_Database.ipynb #43713f55
+# %% ../nbs/12_Database.ipynb #aca40b9e
 LoadResult = namedtuple('LoadResult', ['data', 'status', 'context'])
 SaveResult = namedtuple('SaveResult', ['id', 'status', 'context'])
 
-# %% ../nbs/12_Database.ipynb #6acb6570
+# %% ../nbs/12_Database.ipynb #cc03347a
 @dataclass
 class ChunkRef:
     """Reference to a chunk in the world - uses HexPosition for coordinates."""
     position: HexPosition  # Chunk's position in chunk-space (q+r+s=0)
     rings: int             # Hex rings per chunk
-    
+
     @property
     def center_hex(self) -> HexPosition:
         """World hex coordinates of chunk center."""
         spacing = self.rings * 2
         return spacing * self.position
-    
+
     @property
     def key(self) -> tuple[int, int, int]:
         """Hashable key for dict storage."""
         return (self.position.q, self.position.r, self.position.s)
-    
+
     def __hash__(self):
         return hash(self.key)
-    
+
     @classmethod
     def from_key(cls, key, chunk_rings: int) -> 'ChunkRef':
         if isinstance(key, tuple):
@@ -94,8 +70,6 @@ class ChunkRef:
         else:
             q, r, s = map(int, key.split(','))
         return cls(HexPosition(q, r, s), chunk_rings)
-
-
 
 
 def chunk_to_world(chunk: ChunkRef, local_pos: HexPosition) -> HexPosition:
@@ -106,20 +80,19 @@ def chunk_to_world(chunk: ChunkRef, local_pos: HexPosition) -> HexPosition:
 def world_to_chunk(world_pos: HexPosition, chunk_rings: int) -> tuple[HexPosition, HexPosition]:
     """Map world position to (chunk_position, local_position_within_chunk)."""
     spacing = chunk_rings * 2
-    
+
     chunk_q = world_pos.q // spacing
     chunk_r = world_pos.r // spacing
     chunk_s = -chunk_q - chunk_r
-    
+
     chunk_pos = HexPosition(chunk_q, chunk_r, chunk_s)
     chunk_center = spacing * chunk_pos
     local_pos = world_pos - chunk_center
-    
+
     return chunk_pos, local_pos
 
-
-# %% ../nbs/12_Database.ipynb #21f4c247
-@dataclass  
+# %% ../nbs/12_Database.ipynb #360e01d7
+@dataclass
 class HexData:
     id: int = None
     world_id: int = 0
@@ -128,21 +101,20 @@ class HexData:
     s: int = 0
     grid_index: int = 0
     elevation: float = 0.0
-    plate_id:int = -1
+    plate_id: int = -1
     latitude: Optional[float] = None
     longitude: Optional[float] = None
     distance_from_coast: Optional[float] = None
-    watershed_id: Optional[int] = None  # NEW: FK to WatershedMeta
-    chunk_q: Optional[int] = None  # Chunk origin position
+    watershed_id: Optional[int] = None
+    chunk_q: Optional[int] = None
     chunk_r: Optional[int] = None
     chunk_s: Optional[int] = None
-    scale_level: int = 0  # 0=coarse, >0=zoomed scale factor
+    scale_level: int = 0        # 0=coarse, >0=zoomed scale factor
     modified: int = 0
-    last_accessed: int = 0   # Unix timestamp
-    access_count: int = 0    # Hit counter
+    last_accessed: int = 0
+    access_count: int = 0
 
-
-# %% ../nbs/12_Database.ipynb #a40e12c3
+# %% ../nbs/12_Database.ipynb #ace00095
 @dataclass
 class HexWeather:
     """Weather data for a hex at a point in time."""
@@ -151,77 +123,63 @@ class HexWeather:
     q: int = 0
     r: int = 0
     s: int = 0
-    # Core weather fields
     temperature: float = 0.0           # °C
     precipitation: float = 0.0         # mm/year
     humidity: Optional[float] = None   # %
-    # Derived/computed fields
-    climate_pet: Optional[float] = None          # potential evapotranspiration
+    climate_pet: Optional[float] = None
     aridity_index: Optional[float] = None
     temp_seasonality: Optional[float] = None
     precip_seasonality: Optional[float] = None
-    distance_from_coast: Optional[float] = None  # hex units
-    # Temporal
-    season: str = ""                   # e.g., "annual", "summer", "winter"
-
-     # NEW: Chunk identification (NULL for coarse-level weather)
+    distance_from_coast: Optional[float] = None
+    season: str = ""
     chunk_q: Optional[int] = None
     chunk_r: Optional[int] = None
     chunk_s: Optional[int] = None
-    
-    # NEW: For cache invalidation
-    scale_level: int = 0        # 0=coarse, 1=fine chunk
-    climate_name: str = ""      # e.g., "mediterranean" - invalidate if changed
-    wind_dir: Optional[float] = None  # Wind direction used in computation
-
-
+    scale_level: int = 0
+    climate_name: str = ""
+    wind_dir: Optional[float] = None
     modified: int = 0
 
-
-# %% ../nbs/12_Database.ipynb #4698a4e4
+# %% ../nbs/12_Database.ipynb #02e3696b
 @dataclass
 class World:
-    """Metadata for a stored ChunkCober."""
+    """Metadata for a stored ChunkCover."""
     id: int = None
     name: str = ""
     extras: str = ""
     created: int = 0
-    cover_data: str = ""  # Terrain.encode() for coarse map
+    cover_data: str = ""
     modified: int = 0
 
 
-
-
-# %% ../nbs/12_Database.ipynb #e3c63ae8
 @dataclass
 class User:
     username: str
     email: str
     password: str
-    created: int  # Unix timestamp
+    created: int
     sessionID: str
-    activeWorld: int # a link into world_id for world 
+    activeWorld: int
     id: int = None
 
-# %% ../nbs/12_Database.ipynb #714f5233
+
 @dataclass
 class ChunkBorder:
     """Track drainage across chunk boundaries."""
     id: int = None
     world_id: int = 0
     chunk_q: int = 0
-    chunk_r: int = 0  
+    chunk_r: int = 0
     chunk_s: int = 0
-    border_hex_q: int = 0  # Local hex at border
+    border_hex_q: int = 0
     border_hex_r: int = 0
     border_hex_s: int = 0
-    downstream_chunk_q: int = 0  # Which chunk it drains to
+    downstream_chunk_q: int = 0
     downstream_chunk_r: int = 0
     downstream_chunk_s: int = 0
-    flow_volume: float = 0.0  # Accumulated upstream area
+    flow_volume: float = 0.0
 
 
-# %% ../nbs/12_Database.ipynb #4f183714
 @dataclass
 class ChunkMeta:
     """Metadata for a cached chunk — avoids dimension inference."""
@@ -234,13 +192,12 @@ class ChunkMeta:
     nRows: int = 0
     nCols: int = 0
     radius: float = 0.0
-    hex_count: int = 0        # How many valid hexes stored
+    hex_count: int = 0
     created: int = 0
     last_accessed: int = 0
     access_count: int = 0
 
-
-# %% ../nbs/12_Database.ipynb #7362b49f
+# %% ../nbs/12_Database.ipynb #f5a7c491
 class GeoStorage:
 
     def __init__(self, custom_path=None):
@@ -248,22 +205,18 @@ class GeoStorage:
         self.path = path
         self.createDB()
 
-   
     def createDB(self):
         db = database(self.path)
         self.db = db
 
-        # Existing tables...
         db.create(World, pk='id', if_not_exists=True, transform=True)
         db.create(HexData, pk='id', if_not_exists=True, transform=True)
         db.create(User, pk='id', if_not_exists=True, transform=True)
         db.create(HexWeather, pk='id', if_not_exists=True, transform=True)
         db.create(ChunkBorder, pk='id', if_not_exists=True, transform=True)
-        
-        # NEW: Chunk metadata table
         db.create(ChunkMeta, pk='id', if_not_exists=True, transform=True)
-        
-        # Existing indices...
+
+        # Indices
         db.execute("CREATE INDEX IF NOT EXISTS idx_hex_world ON hex_data(world_id)")
         db.execute("CREATE INDEX IF NOT EXISTS idx_hex_coords ON hex_data(world_id, q, r, s)")
         db.execute("CREATE INDEX IF NOT EXISTS idx_hex_grid ON hex_data(world_id, grid_index)")
@@ -277,9 +230,7 @@ class GeoStorage:
         db.execute("CREATE INDEX IF NOT EXISTS idx_weather_season ON hex_weather(world_id, season)")
         db.execute("CREATE INDEX IF NOT EXISTS idx_weather_chunk ON hex_weather(world_id, chunk_q, chunk_r, chunk_s)")
         db.execute("CREATE INDEX IF NOT EXISTS idx_weather_scale ON hex_weather(world_id, scale_level)")
-        
-        # NEW: Chunk meta index — unique lookup
-        db.execute("""CREATE UNIQUE INDEX IF NOT EXISTS idx_chunk_meta_lookup 
+        db.execute("""CREATE UNIQUE INDEX IF NOT EXISTS idx_chunk_meta_lookup
                     ON chunk_meta(world_id, chunk_q, chunk_r, chunk_s, scale_level)""")
 
         self.weather = db.t.hex_weather
@@ -287,26 +238,20 @@ class GeoStorage:
         self.hexes = db.t.hex_data
         self.worlds = db.t.world
         self.borders = db.t.chunk_border
-        self.chunk_meta = db.t.chunk_meta  # NEW
-
-
+        self.chunk_meta = db.t.chunk_meta
 
     @staticmethod
     def get_db_path(custom_path=None):
         """Get database path. Tries package data, falls back to user directory."""
         if custom_path:
             return custom_path
-        
-        # Try package data directory first
         try:
             db_dir = resources.files('HexMagic').joinpath('data/db')
             db_path = Path(db_dir) / 'hexmagic.db'
-            # Test if writable
             db_path.parent.mkdir(parents=True, exist_ok=True)
             db_path.touch(exist_ok=True)
             return str(db_path)
         except (PermissionError, OSError):
-            # Fallback to user directory
             data_dir = Path.home() / '.hexmagic' / 'data'
             data_dir.mkdir(parents=True, exist_ok=True)
             return str(data_dir / 'hexmagic.db')
@@ -317,27 +262,21 @@ class GeoStorage:
     def __exit__(self, *args):
         self.db.close()
 
-    
     @staticmethod
     def _get(obj, key):
         """Get attribute from dict or object."""
         return obj[key] if isinstance(obj, dict) else getattr(obj, key)
 
-# %% ../nbs/12_Database.ipynb #b823b32e
-#this might be something we don't export
+# %% ../nbs/12_Database.ipynb #e7aa34e6
 @patch
 def reset_database(self:GeoStorage):
     """Delete and recreate database. USE WITH CAUTION!"""
-    db_path = Path(self.path)  # Convert string to Path
-    
+    db_path = Path(self.path)
     if db_path.exists():
         db_path.unlink()
-
     self.createDB()
 
-
-
-# %% ../nbs/12_Database.ipynb #40dbcf6f
+# %% ../nbs/12_Database.ipynb #affb0603
 @patch
 def _latest_hex_subquery(self: GeoStorage, world_id: int, as_of: int = None) -> str:
     """SQL subquery for latest hex state, optionally at a point in time."""
@@ -349,45 +288,38 @@ def _latest_hex_subquery(self: GeoStorage, world_id: int, as_of: int = None) -> 
         GROUP BY world_id, q, r, s
     """
 
-
-
-
-# %% ../nbs/12_Database.ipynb #533d8b0b
+# %% ../nbs/12_Database.ipynb #3163cf88
 @patch
 def query_hexes_latest(self: GeoStorage, world_id: int, as_of: int = None) -> list:
     """Get most recent version of each hex, optionally at a specific time."""
     subq = self._latest_hex_subquery(world_id, as_of)
-    
+
     cursor = self.db.execute(f"""
         SELECT h.* FROM hex_data h
-        INNER JOIN ({subq}) latest 
-            ON h.world_id = latest.world_id 
+        INNER JOIN ({subq}) latest
+            ON h.world_id = latest.world_id
             AND h.q = latest.q AND h.r = latest.r AND h.s = latest.s
             AND h.modified = latest.max_mod
     """)
-    
-    # Get column names from cursor description
+
     cols = [d[0] for d in cursor.description]
     rows = [dict(zip(cols, row)) for row in cursor.fetchall()]
-    
     return rows
 
-
-# %% ../nbs/12_Database.ipynb #f8452c1b
+# %% ../nbs/12_Database.ipynb #b582a26e
 @patch
 def update_hex(self: GeoStorage, world_id: int, q: int, r: int, s: int,
                elevation: float = None, latitude: float = None, longitude: float = None,
                distance_from_coast: float = None, grid_index: int = None) -> SaveResult:
     """Append a new state for a hex (temporal update)."""
     now = int(datetime.now().timestamp())
-    
+
     record = {
         'world_id': world_id,
         'q': q, 'r': r, 's': s,
         'modified': now
     }
-    
-    # Get previous state to preserve unchanged fields
+
     prev = self.query_hexes_in_radius(world_id, q, r, s, radius=0)
     if prev:
         prev = prev[0]
@@ -402,168 +334,137 @@ def update_hex(self: GeoStorage, world_id: int, q: int, r: int, s: int,
         record['latitude'] = latitude
         record['longitude'] = longitude
         record['distance_from_coast'] = distance_from_coast
-    
+
     try:
         self.hexes.insert(record)
         return SaveResult(None, 'updated', f'hex ({q},{r},{s}) at {now}')
     except Exception as e:
         return SaveResult(None, 'error', str(e))
 
-
-# %% ../nbs/12_Database.ipynb #e0d9759d
+# %% ../nbs/12_Database.ipynb #de502283
 @patch
 def query_hexes_in_radius(self: GeoStorage, world_id: int,
                           center_q: int, center_r: int, center_s: int,
                           radius: int, as_of: int = None) -> list:
     """Query latest hexes within radius of a center position."""
     subq = self._latest_hex_subquery(world_id, as_of)
-    
-    rows = list(self.db.execute(f"""
+
+    cursor = self.db.execute(f"""
         SELECT h.* FROM hex_data h
-        INNER JOIN ({subq}) latest 
-            ON h.world_id = latest.world_id 
+        INNER JOIN ({subq}) latest
+            ON h.world_id = latest.world_id
             AND h.q = latest.q AND h.r = latest.r AND h.s = latest.s
             AND h.modified = latest.max_mod
         WHERE h.q BETWEEN ? AND ? AND h.r BETWEEN ? AND ?
     """, [
         center_q - radius, center_q + radius,
         center_r - radius, center_r + radius
-    ]).fetchall())
-    
-    if not rows:
-        return []
-    
-    # Hardcode column order to avoid cursor.description issue
-    cols = ['id', 'world_id', 'q', 'r', 's', 'grid_index', 'elevation', 
-        'plate_id', 'latitude', 'longitude', 'distance_from_coast', 
-        'watershed_id', 'modified']
-    
-    rows = [dict(zip(cols, row)) for row in rows]
-    
+    ])
+
+    cols = [d[0] for d in cursor.description]
+    rows = [dict(zip(cols, row)) for row in cursor.fetchall()]
+
     # Filter to actual hex distance
-    return [row for row in rows
-            if max(abs(row['q'] - center_q), abs(row['r'] - center_r), abs(row['s'] - center_s)) <= radius]
+    result = []
+    for row in rows:
+        dq = abs(GeoStorage._get(row, 'q') - center_q)
+        dr = abs(GeoStorage._get(row, 'r') - center_r)
+        ds = abs(GeoStorage._get(row, 's') - center_s)
+        dist = max(dq, dr, ds)
+        if dist <= radius:
+            result.append(row)
 
+    return result
 
-# %% ../nbs/12_Database.ipynb #b2f529fc
+# %% ../nbs/12_Database.ipynb #fc977b34
 @patch
 def save_cover(self: GeoStorage, cover: ChunkCover, name: str = "") -> SaveResult:
-    """Save ChunkCover to database.
-    
-    Args:
-        cover: ChunkCover to save
-        name: Optional name for the world
-    
-    Returns:
-        SaveResult(world_id, status, context)
-    """
+    """Save ChunkCover to database."""
     now = int(datetime.now().timestamp())
-    
+
     try:
         with self.db.conn:
-            # Handle ID assignment
             if cover.ident < 0:
-                # Get next available ID
                 cursor = self.db.execute("SELECT MAX(id) FROM world")
                 max_id = cursor.fetchone()[0]
                 cover.ident = (max_id or 0) + 1
-            
-            # Check if exists
+
             existing = self.db.execute(
-                "SELECT id FROM world WHERE id = ?", 
+                "SELECT id FROM world WHERE id = ?",
                 [cover.ident]
             ).fetchone()
-            
+
             encoded = cover.encode()
-            
             record = {
                 'id': cover.ident,
                 'name': name or f"Cover_{cover.ident}",
                 'cover_data': encoded,
                 'modified': now
             }
-            
+
             if existing:
-                # Update existing
                 record['created'] = self.worlds[cover.ident]['created']
                 self.worlds.update(record)
                 status_msg = 'updated'
             else:
-                # Insert new
                 record['created'] = now
                 self.worlds.insert(record)
                 status_msg = 'saved'
-            
+
             return SaveResult(
-                cover.ident, 
-                status_msg, 
+                cover.ident,
+                status_msg,
                 f"ChunkCover {cover.rings}r+{cover.halo_rings}h, {len(cover.terrain.hexGrid.hexes)} hexes"
             )
-    
+
     except Exception as e:
         return SaveResult(None, 'error', str(e))
 
 
 @patch
 def load_cover(self: GeoStorage, cover_id: int) -> LoadResult:
-    """Load ChunkCover from database.
-    
-    Args:
-        cover_id: ID of the cover to load
-    
-    Returns:
-        LoadResult(ChunkCover, status, context)
-    """
+    """Load ChunkCover from database."""
     try:
         world = self.worlds[cover_id]
         if not world:
             return LoadResult(None, 'not_found', f'Cover {cover_id} not found')
-        
+
         cover_data = GeoStorage._get(world, 'cover_data')
         if not cover_data:
             return LoadResult(None, 'error', 'No cover_data in world record')
-        
+
         cover = ChunkCover.decode(cover_data)
         cover.ident = cover_id
-        cover.db = self  # Attach database reference
-        
+        cover.db = self
+
         name = GeoStorage._get(world, 'name')
         return LoadResult(
-            cover, 
-            'loaded', 
+            cover,
+            'loaded',
             f"{name}: {cover.rings}r+{cover.halo_rings}h, {len(cover.terrain.hexGrid.hexes)} hexes"
         )
-    
+
     except Exception as e:
         return LoadResult(None, 'error', str(e))
 
-
-# %% ../nbs/12_Database.ipynb #7c809ec1
+# %% ../nbs/12_Database.ipynb #62330dbe
 @patch
 def save(self: ChunkCover, name: str = "") -> SaveResult:
-    """Save this ChunkCover to its attached database.
-    
-    Args:
-        name: Optional name for the world
-    
-    Returns:
-        SaveResult with updated ident
-    """
+    """Save this ChunkCover to its attached database."""
     if self.db is None:
         return SaveResult(None, 'error', 'No database attached to ChunkCover')
-    
+
     result = self.db.save_cover(self, name=name)
-    
-    # Update ident if it was assigned
+
     if result.status in ('saved', 'updated') and result.id is not None:
         self.ident = result.id
-    
+
     return result
 
 
-# %% ../nbs/12_Database.ipynb #d4f29d8b
+# %% ../nbs/12_Database.ipynb #17d97c74
 @patch
-def load_or_generate_chunk(self: GeoStorage, 
+def load_or_generate_chunk(self: GeoStorage,
                            cover: ChunkCover,
                            origin: int = None,
                            scale: int = 2,
@@ -573,79 +474,60 @@ def load_or_generate_chunk(self: GeoStorage,
                            detail_strength: float = 0.2,
                            force_regenerate: bool = False) -> LoadResult:
     """Load cached chunk or generate new one.
-    
+
     Returns LoadResult(terrain, status, context) where:
     - status='cached' if loaded from DB
     - status='generated' if computed fresh
     """
-    # 1. Compute chunk identifier
     grid = cover.terrain.hexGrid
     if origin is None:
         origin = grid.middle
-    
+
     origin_pos = grid.index_to_hexposition(origin)
-    chunk_key = f"{cover.ident}_{origin_pos.q}_{origin_pos.r}_{origin_pos.s}_{scale}"
-    
-    # 2. Check cache
+
     if not force_regenerate:
         cached = self._load_cached_chunk(cover.ident, origin_pos, scale)
         if cached.status == 'loaded':
             return LoadResult(cached.data, 'cached', cached.context)
-    
-    # 3. Generate chunk
+
     zoomed = cover.zoomChunkCombined(
-        origin=origin,
-        scale=scale,
-        method=method,
-        octaves=octaves,
-        persistence=persistence,
+        origin=origin, scale=scale, method=method,
+        octaves=octaves, persistence=persistence,
         detail_strength=detail_strength
     )
-    
-    # 4. Save to cache
-    save_result = self._save_chunk_cache(
-        cover.ident, 
-        origin_pos, 
-        scale, 
-        zoomed
-    )
-    # Periodic eviction check (every N generations)
-    if random.random() < 0.1:  # 10% of the time
+
+    save_result = self._save_chunk_cache(cover.ident, origin_pos, scale, zoomed)
+
+    if random.random() < 0.1:
         self.evict_lru_chunks(cover.ident, max_chunks=100)
-    
-    return LoadResult(
-        zoomed, 
-        'generated', 
-        f"{save_result.context}, scale={scale}"
-    )
 
+    return LoadResult(zoomed, 'generated', f"{save_result.context}, scale={scale}")
 
-# %% ../nbs/12_Database.ipynb #798eb2e1
+# %% ../nbs/12_Database.ipynb #d439fe7b
 @patch
 def invalidate_chunk_cache(self: GeoStorage, cover_id: int) -> SaveResult:
     """Delete all cached chunks and their metadata for a cover."""
     try:
         with self.db.conn:
             cursor = self.db.execute("""
-                DELETE FROM hex_data 
+                DELETE FROM hex_data
                 WHERE world_id = ? AND scale_level > 0
             """, [cover_id])
             hex_count = cursor.rowcount
-            
+
             cursor = self.db.execute("""
                 DELETE FROM chunk_meta
                 WHERE world_id = ?
             """, [cover_id])
             meta_count = cursor.rowcount
-        
-        return SaveResult(hex_count, 'invalidated', 
+
+        return SaveResult(hex_count, 'invalidated',
                          f'{hex_count} cached hexes, {meta_count} metadata records deleted')
-    
+
     except Exception as e:
         return SaveResult(None, 'error', str(e))
 
-
-# %% ../nbs/12_Database.ipynb #6633cf5d
+# %% ../nbs/12_Database.ipynb #f63d5a51
 @patch
 def _save_chunk_cache(self: GeoStorage,
                       cover_id: int,
@@ -655,21 +537,18 @@ def _save_chunk_cache(self: GeoStorage,
     """Save zoomed terrain as cached chunk, including metadata."""
     now = int(datetime.now().timestamp())
     grid = terrain.hexGrid
-    
+
     try:
         with self.db.conn:
             count = 0
             for idx in range(len(terrain.elevations)):
                 if idx in grid.invalidRegion:
                     continue
-                
+
                 pos = grid.index_to_hexposition(idx)
-                
                 record = {
                     'world_id': cover_id,
-                    'q': pos.q,
-                    'r': pos.r,
-                    's': pos.s,
+                    'q': pos.q, 'r': pos.r, 's': pos.s,
                     'chunk_q': origin_pos.q,
                     'chunk_r': origin_pos.r,
                     'chunk_s': origin_pos.s,
@@ -680,8 +559,7 @@ def _save_chunk_cache(self: GeoStorage,
                 }
                 self.hexes.insert(record)
                 count += 1
-            
-            # NEW: Save chunk metadata
+
             self.chunk_meta.insert({
                 'world_id': cover_id,
                 'chunk_q': origin_pos.q,
@@ -696,142 +574,134 @@ def _save_chunk_cache(self: GeoStorage,
                 'last_accessed': now,
                 'access_count': 0
             })
-            
+
             return SaveResult(count, 'saved', f'{count} hexes cached')
-    
+
     except Exception as e:
         return SaveResult(None, 'error', str(e))
 
-
-# %% ../nbs/12_Database.ipynb #0d69ee6e
+# %% ../nbs/12_Database.ipynb #22e0387e
 @patch
-def _load_cached_chunk(self: GeoStorage, 
+def _load_cached_chunk(self: GeoStorage,
                        cover_id: int,
                        origin_pos: HexPosition,
                        scale: int) -> LoadResult:
     """Load cached chunk hexes from database."""
     try:
-        # Query hexes with matching chunk coordinates
         cursor = self.db.execute("""
             SELECT h.* FROM hex_data h
             INNER JOIN (
                 SELECT world_id, q, r, s, MAX(modified) as max_mod
                 FROM hex_data
-                WHERE world_id = ? 
+                WHERE world_id = ?
                   AND chunk_q = ? AND chunk_r = ? AND chunk_s = ?
                   AND scale_level = ?
                 GROUP BY world_id, q, r, s
-            ) latest 
-                ON h.world_id = latest.world_id 
+            ) latest
+                ON h.world_id = latest.world_id
                 AND h.q = latest.q AND h.r = latest.r AND h.s = latest.s
                 AND h.modified = latest.max_mod
         """, [cover_id, origin_pos.q, origin_pos.r, origin_pos.s, scale])
-        
+
         cols = [d[0] for d in cursor.description]
         rows = [dict(zip(cols, row)) for row in cursor.fetchall()]
-        
+
         if not rows:
             return LoadResult(None, 'not_found', 'No cached chunk')
 
-        if rows:  # Cache hit - update access stats
-            now = int(datetime.now().timestamp())
-            self.db.execute("""
-                UPDATE hex_data 
-                SET last_accessed = ?, access_count = access_count + 1
-                WHERE world_id = ? AND chunk_q = ? AND chunk_r = ? AND chunk_s = ?
-                AND scale_level = ?
-            """, [now, cover_id, origin_pos.q, origin_pos.r, origin_pos.s, scale])
-        
-        # Reconstruct terrain from rows
-        # (You'll need to infer grid dimensions from the data)
+        now = int(datetime.now().timestamp())
+        self.db.execute("""
+            UPDATE hex_data
+            SET last_accessed = ?, access_count = access_count + 1
+            WHERE world_id = ? AND chunk_q = ? AND chunk_r = ? AND chunk_s = ?
+            AND scale_level = ?
+        """, [now, cover_id, origin_pos.q, origin_pos.r, origin_pos.s, scale])
+
         terrain = self._reconstruct_terrain_from_rows(rows, cover_id)
-        
+
         return LoadResult(terrain, 'loaded', f'{len(rows)} cached hexes')
-    
+
     except Exception as e:
         return LoadResult(None, 'error', str(e))
 
-# %% ../nbs/12_Database.ipynb #91b28ea6
+# %% ../nbs/12_Database.ipynb #ad10765f
 @patch
-def evict_lru_chunks(self: GeoStorage, cover_id: int, 
+def evict_lru_chunks(self: GeoStorage, cover_id: int,
                      max_chunks: int = 100) -> SaveResult:
     """Evict oldest chunks until under limit."""
-    
-    # Count current chunks
     count = self.db.execute("""
-        SELECT COUNT(DISTINCT chunk_q || ',' || chunk_r || ',' || chunk_s) 
+        SELECT COUNT(DISTINCT chunk_q || ',' || chunk_r || ',' || chunk_s)
         FROM hex_data WHERE world_id = ? AND scale_level > 0
     """, [cover_id]).fetchone()[0]
-    
+
     if count <= max_chunks:
         return SaveResult(0, 'ok', 'under limit')
-    
+
     to_evict = count - max_chunks
-    
-    # Find oldest chunks
+
     oldest = self.db.execute("""
         SELECT DISTINCT chunk_q, chunk_r, chunk_s, MIN(last_accessed) as oldest
-        FROM hex_data 
+        FROM hex_data
         WHERE world_id = ? AND scale_level > 0
         GROUP BY chunk_q, chunk_r, chunk_s
         ORDER BY oldest ASC
         LIMIT ?
     """, [cover_id, to_evict]).fetchall()
-    
-    # Delete them
+
     deleted = 0
     with self.db.conn:
         for row in oldest:
             self.db.execute("""
-                DELETE FROM hex_data 
+                DELETE FROM hex_data
                 WHERE world_id = ? AND chunk_q = ? AND chunk_r = ? AND chunk_s = ?
                   AND scale_level > 0
             """, [cover_id, row['chunk_q'], row['chunk_r'], row['chunk_s']])
             deleted += 1
-    
+
     return SaveResult(deleted, 'evicted', f'{deleted} chunks removed')
 
-
-# %% ../nbs/12_Database.ipynb #d6c26d0a
+# %% ../nbs/12_Database.ipynb #5410e2a3
 @patch
-def query_hexes_in_radius(self: GeoStorage, world_id: int,
-                          center_q: int, center_r: int, center_s: int,
-                          radius: int, as_of: int = None) -> list:
-    """Query latest hexes within radius of a center position."""
-    subq = self._latest_hex_subquery(world_id, as_of)
-    
-    cursor = self.db.execute(f"""
-        SELECT h.* FROM hex_data h
-        INNER JOIN ({subq}) latest 
-            ON h.world_id = latest.world_id 
-            AND h.q = latest.q AND h.r = latest.r AND h.s = latest.s
-            AND h.modified = latest.max_mod
-        WHERE h.q BETWEEN ? AND ? AND h.r BETWEEN ? AND ?
-    """, [
-        center_q - radius, center_q + radius,
-        center_r - radius, center_r + radius
-    ])
-    
-    # Convert to dicts like query_hexes_latest does
-    cols = [d[0] for d in cursor.description]
-    rows = [dict(zip(cols, row)) for row in cursor.fetchall()]
-    
-    # Filter to actual hex distance
-    result = []
+def _reconstruct_terrain_from_rows(self: GeoStorage, rows: list[dict], cover_id: int) -> Terrain:
+    """Reconstruct Terrain from cached hex_data rows."""
+    if not rows:
+        return None
+
+    qs = [r['q'] for r in rows]
+    rs = [r['r'] for r in rows]
+
+    world = self.worlds[cover_id]
+    cover_data = GeoStorage._get(world, 'cover_data')
+    if cover_data:
+        original_cover = ChunkCover.decode(cover_data)
+        base_radius = original_cover.terrain.hexGrid.radius
+    else:
+        base_radius = 10
+
+    nRows = max(rs) - min(rs) + 1
+    nCols = max(qs) - min(qs) + 1
+
+    scale = rows[0].get('scale_level', 1)
+    radius = base_radius / scale
+
+    grid = HexGrid(nRows=nRows, nCols=nCols, radius=radius, style=StyleCSS("simple"))
+
+    terrain = Terrain.__new__(Terrain)
+    terrain.hexGrid = grid
+    terrain.elevations = np.zeros(len(grid.hexes))
+    terrain.fields = {}
+
     for row in rows:
-        dq = abs(GeoStorage._get(row, 'q') - center_q)
-        dr = abs(GeoStorage._get(row, 'r') - center_r)
-        ds = abs(GeoStorage._get(row, 's') - center_s)
-        dist = max(dq, dr, ds)
-        if dist <= radius:
-            result.append(row)
-    
-    return result
+        pos = HexPosition(row['q'], row['r'], row['s'])
+        idx = grid.hexposition_to_index(pos)
+        if 0 <= idx < len(terrain.elevations):
+            terrain.elevations[idx] = row['elevation']
 
+    return terrain
 
-# %% ../nbs/12_Database.ipynb #90dd8e0f
+# %% ../nbs/12_Database.ipynb #4df4d7d5
 @patch
-def save_zoomed_weather(self: GeoStorage, 
+def save_zoomed_weather(self: GeoStorage,
                         cover_id: int,
                         origin_pos: HexPosition,
                         scale: int,
@@ -842,24 +712,21 @@ def save_zoomed_weather(self: GeoStorage,
     now = int(datetime.now().timestamp())
     grid = terrain.hexGrid
     invalid = getattr(grid, 'invalidRegion', set())
-    
+
     if 'temperature' not in terrain.fields or 'precipitation' not in terrain.fields:
         return SaveResult(None, 'error', 'Missing weather fields')
-    
+
     try:
         with self.db.conn:
             count = 0
             for idx in range(len(terrain.elevations)):
                 if idx in invalid:
                     continue
-                
+
                 pos = grid.index_to_hexposition(idx)
-                
                 record = {
                     'world_id': cover_id,
-                    'q': pos.q,
-                    'r': pos.r,
-                    's': pos.s,
+                    'q': pos.q, 'r': pos.r, 's': pos.s,
                     'chunk_q': origin_pos.q,
                     'chunk_r': origin_pos.r,
                     'chunk_s': origin_pos.s,
@@ -870,17 +737,16 @@ def save_zoomed_weather(self: GeoStorage,
                     'season': season,
                     'modified': now
                 }
-                
-                # Add optional fields
                 for field in ['humidity', 'climate_pet', 'aridity_index']:
                     if field in terrain.fields:
                         record[field] = float(terrain.fields[field][idx])
-                
+
                 self.weather.insert(record)
                 count += 1
-            
-            return SaveResult(count, 'saved', f'{count} weather records for chunk ({origin_pos.q},{origin_pos.r},{origin_pos.s})')
-    
+
+            return SaveResult(count, 'saved',
+                f'{count} weather records for chunk ({origin_pos.q},{origin_pos.r},{origin_pos.s})')
+
     except Exception as e:
         return SaveResult(None, 'error', str(e))
 
@@ -903,31 +769,28 @@ def load_zoomed_weather(self: GeoStorage,
                   AND chunk_q = ? AND chunk_r = ? AND chunk_s = ?
                   AND scale_level = ?
                 GROUP BY world_id, q, r, s
-            ) latest 
-                ON hw.world_id = latest.world_id 
+            ) latest
+                ON hw.world_id = latest.world_id
                 AND hw.q = latest.q AND hw.r = latest.r AND hw.s = latest.s
                 AND hw.modified = latest.max_mod
         """, [cover_id, season, origin_pos.q, origin_pos.r, origin_pos.s, scale])
-        
+
         cols = [d[0] for d in cursor.description]
         rows = [dict(zip(cols, row)) for row in cursor.fetchall()]
-        
+
         if not rows:
             return LoadResult(terrain, 'not_found', 'No cached weather')
-        
-        # Initialize fields
+
         n = len(terrain.elevations)
         for field in ['temperature', 'precipitation', 'humidity', 'climate_pet', 'aridity_index']:
             if field not in terrain.fields:
                 terrain.fields[field] = np.zeros(n)
-        
+
         grid = terrain.hexGrid
         filled = 0
-        
         for row in rows:
             pos = HexPosition(row['q'], row['r'], row['s'])
             idx = grid.hexposition_to_index(pos)
-            
             if 0 <= idx < n:
                 terrain.fields['temperature'][idx] = row['temperature'] or 0.0
                 terrain.fields['precipitation'][idx] = row['precipitation'] or 0.0
@@ -938,9 +801,9 @@ def load_zoomed_weather(self: GeoStorage,
                 if row.get('aridity_index') is not None:
                     terrain.fields['aridity_index'][idx] = row['aridity_index']
                 filled += 1
-        
+
         return LoadResult(terrain, 'loaded', f'{filled} weather records')
-    
+
     except Exception as e:
         return LoadResult(terrain, 'error', str(e))
 
@@ -960,121 +823,67 @@ def has_zoomed_weather(self: GeoStorage,
               AND chunk_q = ? AND chunk_r = ? AND chunk_s = ?
               AND scale_level = ?
         """, [cover_id, season, origin_pos.q, origin_pos.r, origin_pos.s, scale])
-        
         count = cursor.fetchone()[0]
         return count >= min_count
     except Exception:
         return False
 
-
-# %% ../nbs/12_Database.ipynb #52a85290
+# %% ../nbs/12_Database.ipynb #0d92c704
 @patch
-def zoom_cached(self: ChunkCover, 
-                origin: int = None,
-                scale: int = 2,
-                **kwargs) -> Terrain:
-    """Zoom with database caching (requires db attached)."""
-    if self.db is None:
-        # Fallback to direct generation
-        return self.zoomChunkCombined(origin=origin, scale=scale, **kwargs)
-    
-    result = self.db.load_or_generate_chunk(
-        self, 
-        origin=origin, 
-        scale=scale, 
-        **kwargs
-    )
-    
-    if result.status == 'cached':
-        print(f"✓ Loaded from cache: {result.context}")
-    else:
-        print(f"⚙ Generated: {result.context}")
-    
-    return result.data
+def invalidate_all_caches(self: GeoStorage, cover_id: int) -> dict:
+    """Invalidate all cached data when coarse terrain changes."""
+    results = {}
+    try:
+        with self.db.conn:
+            results['terrain'] = self.invalidate_chunk_cache(cover_id)
 
+            cursor = self.db.execute("""
+                DELETE FROM hex_weather
+                WHERE world_id = ? AND scale_level > 0
+            """, [cover_id])
+            results['weather'] = SaveResult(cursor.rowcount, 'invalidated',
+                                           f'{cursor.rowcount} weather records')
 
-# %% ../nbs/12_Database.ipynb #890aac98
+            cursor = self.db.execute("""
+                DELETE FROM hex_data
+                WHERE world_id = ? AND scale_level > 0 AND watershed_id IS NOT NULL
+            """, [cover_id])
+            results['watersheds'] = SaveResult(cursor.rowcount, 'invalidated',
+                                              f'{cursor.rowcount} watershed assignments')
+
+            return results
+    except Exception as e:
+        return {'error': SaveResult(None, 'error', str(e))}
+
+# %% ../nbs/12_Database.ipynb #919354fb
 @patch
-def zoom_with_full_data(self: ChunkCover,
-                        origin: int = None,
-                        scale: int = 2,
-                        compute_weather: bool = True,
-                        force_regenerate: bool = False) -> DrainageBasins:
-    """Zoom chunk with weather and watersheds, using cache where possible.
-    
-    Returns DrainageBasins with terrain set to the zoomed terrain.
-    """
-    if self.db is None:
-        raise ValueError("ChunkCover.db must be set for caching")
-    
-    grid = self.terrain.hexGrid
-    if origin is None:
-        origin = grid.middle
-    origin_pos = grid.index_to_hexposition(origin)
-    
-    # Step 1: Lazy init coarse basin (O(n²) only once)
-    if self.basin is None:
-        self.basin = DrainageBasins(self.terrain)
-        # Save cover with basin to persist
-        self.save()
-    
-    # Step 2: Base terrain (cached)
-    result = self.db.load_or_generate_chunk(
-        self, origin=origin, scale=scale, force_regenerate=force_regenerate
-    )
-    zoomed = result.data
-    
-    # Step 3: Weather
-    if compute_weather:
-        if not force_regenerate and self.db.has_zoomed_weather(self.ident, origin_pos, scale):
-            self.db.load_zoomed_weather(self.ident, origin_pos, scale, zoomed)
-        else:
-            zoomed.climate = self.terrain.climate
-            zoomed.geo = self.terrain.geo
-            zoomed.compute_weather()
-            self.db.save_zoomed_weather(self.ident, origin_pos, scale, zoomed)
-    
-    # Step 4: Build fine_regions mapping (O(n), cheap)
-    fine_regions = self._build_fine_regions_map(origin, scale, zoomed.hexGrid)
-    
-    # Step 5: Project watersheds (O(n), uses cached coarse basin)
-    zoomed_sheds = self.project_watersheds(self.basin, fine_regions, zoomed)
-    
-    # Step 6: Return DrainageBasins with zoomed terrain
-    zoomed_basins = DrainageBasins(zoomed, compute=False)
-    zoomed_basins.sheds = zoomed_sheds
-    
-    return zoomed_basins
-
-
-@patch
-def _build_fine_regions_map(self: ChunkCover, 
-                            origin: int, 
-                            scale: int, 
+def _build_fine_regions_map(self: ChunkCover,
+                            origin: int,
+                            scale: int,
                             fine_grid: HexGrid) -> dict[int, set[int]]:
     """Map coarse hex indices to sets of fine hex indices.
-    
+
     O(n) — just coordinate math, no flow computation.
     """
     coarse_grid = self.terrain.hexGrid
     extent = 3 * self.rings + self.halo_rings
-    
+
     center_row = origin // coarse_grid.nCols
     center_col = origin % coarse_grid.nCols
-    
+
     fine_regions = {}
     invalid = getattr(fine_grid, 'invalidRegion', set())
-    
+
     for coarse_row in range(center_row - extent, center_row + extent + 1):
         for coarse_col in range(center_col - extent, center_col + extent + 1):
             if not (0 <= coarse_row < coarse_grid.nRows and 0 <= coarse_col < coarse_grid.nCols):
                 continue
-            
+
             coarse_idx = coarse_row * coarse_grid.nCols + coarse_col
-            
+
             fine_start_row = (coarse_row - (center_row - extent)) * scale
             fine_start_col = (coarse_col - (center_col - extent)) * scale
-            
+
             fine_hexes = set()
             for dr in range(scale):
                 for dc in range(scale):
@@ -1084,83 +893,43 @@ def _build_fine_regions_map(self: ChunkCover,
                         fine_idx = fine_row * fine_grid.nCols + fine_col
                         if fine_idx not in invalid:
                             fine_hexes.add(fine_idx)
-            
+
             if fine_hexes:
                 fine_regions[coarse_idx] = fine_hexes
-    
+
     return fine_regions
 
-
-# %% ../nbs/12_Database.ipynb #560ab648
+# %% ../nbs/12_Database.ipynb #6566a259
 @patch
-def invalidate_all_caches(self: GeoStorage, cover_id: int) -> dict:
-    """Invalidate all cached data when coarse terrain changes."""
-    results = {}
-
-     # Use transaction for atomic invalidation
-    try:
-        with self.db.conn:
-            
-            # Invalidate terrain chunks
-            results['terrain'] = self.invalidate_chunk_cache(cover_id)
-            
-            # Invalidate weather
-            cursor = self.db.execute("""
-                DELETE FROM hex_weather 
-                WHERE world_id = ? AND scale_level > 0
-            """, [cover_id])
-            results['weather'] = SaveResult(cursor.rowcount, 'invalidated', f'{cursor.rowcount} weather records')
-            
-            # Invalidate watersheds
-            cursor = self.db.execute("""
-                DELETE FROM hex_data 
-                WHERE world_id = ? AND scale_level > 0 AND watershed_id IS NOT NULL
-            """, [cover_id])
-            results['watersheds'] = SaveResult(cursor.rowcount, 'invalidated', f'{cursor.rowcount} watershed assignments')
-        
-            return results
-    except Exception as e:
-        # Transaction rolled back automatically
-        return {'error': SaveResult(None, 'error', str(e))}
-
-
-# %% ../nbs/12_Database.ipynb #eb7508b6
-# === WATERSHED PERSISTENCE ===
-
-@patch
-def save_chunk_watersheds(self: GeoStorage, chunk: HexChunk, 
+def save_chunk_watersheds(self: GeoStorage, chunk: HexChunk,
                           chunk_ref: ChunkRef, world_id: int) -> SaveResult:
     """Save watershed assignments for a chunk."""
     now = int(datetime.now().timestamp())
     p = chunk_ref.position
-    
+
     if 'watershed_id' not in chunk.fields:
         return SaveResult(None, 'error', 'Chunk missing watershed_id field')
-    
+
     try:
         with self.db.conn:
             count = 0
             for idx in chunk.iter_core():
                 world_pos = chunk.index_to_world(idx)
                 ws_id = int(chunk.fields['watershed_id'][idx])
-                
                 if ws_id < 0:
-                    continue  # Skip unassigned/ocean
-                
-                # Update hex_data with watershed_id
+                    continue
+
                 self.hexes.insert({
                     'world_id': world_id,
-                    'q': world_pos.q,
-                    'r': world_pos.r,
-                    's': world_pos.s,
+                    'q': world_pos.q, 'r': world_pos.r, 's': world_pos.s,
                     'grid_index': idx,
                     'elevation': float(chunk.elevations[idx]),
                     'watershed_id': ws_id,
                     'modified': now
                 })
                 count += 1
-            
-            return SaveResult(count, 'saved', 
+
+            return SaveResult(count, 'saved',
                             f'{count} watershed assignments for chunk ({p.q},{p.r},{p.s})')
     except Exception as e:
         return SaveResult(None, 'error', str(e))
@@ -1172,105 +941,348 @@ def load_chunk_watersheds(self: GeoStorage, world_id: int,
     """Load watershed assignments for a chunk."""
     try:
         p = chunk_ref.position
-        
-        # Query hexes with watershed_id for this chunk's world positions
         hex_rows = []
         for idx in chunk.iter_core():
             world_pos = chunk.index_to_world(idx)
             rows = self.query_hexes_in_radius(world_id, world_pos.q, world_pos.r, world_pos.s, radius=0)
             if rows:
                 hex_rows.append((idx, rows[0]))
-        
+
         if not hex_rows:
-            return LoadResult(chunk, 'not_found', 
+            return LoadResult(chunk, 'not_found',
                             f'No watershed data for chunk ({p.q},{p.r},{p.s})')
-        
-        # Initialize field if needed
+
         if 'watershed_id' not in chunk.fields:
             chunk.add_field('watershed_id', default=-1)
-        
+
         filled = 0
         for idx, row in hex_rows:
             ws_id = row.get('watershed_id')
             if ws_id is not None and ws_id >= 0:
                 chunk.fields['watershed_id'][idx] = ws_id
                 filled += 1
-        
-        return LoadResult(chunk, 'loaded', 
+
+        return LoadResult(chunk, 'loaded',
                          f'{filled} watershed assignments for chunk ({p.q},{p.r},{p.s})')
     except Exception as e:
         return LoadResult(None, 'error', str(e))
 
 
-# %% ../nbs/12_Database.ipynb #4ea23db8
 @patch
-def has_chunk_watersheds(self: GeoStorage, world_id: int, 
+def has_chunk_watersheds(self: GeoStorage, world_id: int,
                          chunk_ref: ChunkRef,
                          min_count: int = 1) -> bool:
     """Check if watershed data exists for chunk."""
     try:
         center = chunk_ref.center_hex
-        # Use larger radius to cover more of the chunk
-        radius = chunk_ref.rings  # Full chunk radius, not just 3
-        
+        radius = chunk_ref.rings
         rows = self.query_hexes_in_radius(world_id, center.q, center.r, center.s, radius=radius)
-        
         ws_count = sum(1 for r in rows if r.get('watershed_id') is not None and r.get('watershed_id') >= 0)
         return ws_count >= min_count
     except Exception:
         return False
 
-
-
-# %% ../nbs/12_Database.ipynb #1c4f6677
+# %% ../nbs/12_Database.ipynb #392de6f0
 class GeoStorageDebugger:
-    """Test harness for HexServer with automatic cleanup."""
-    
+    """Test harness for GeoStorage with automatic cleanup."""
+
     def __init__(self, keep_on_error=False):
-        """
-        Args:
-            keep_on_error: If True, preserve database when tests fail
-        """
         self.temp_dir = tempfile.mkdtemp(prefix='hexmagic_test_')
         self.db_path = os.path.join(self.temp_dir, 'test.db')
         self.server = GeoStorage(custom_path=self.db_path)
         self.keep_on_error = keep_on_error
         self.failed = False
-        
+
     def preserve_db(self, test_name):
         """Copy database to inspection directory."""
         inspect_dir = Path.home() / '.hexmagic' / 'test_failures'
         inspect_dir.mkdir(parents=True, exist_ok=True)
-        
         timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
         dest = inspect_dir / f"{test_name}_{timestamp}.db"
-        
         shutil.copy2(self.db_path, dest)
         print(f"⚠ Database preserved at: {dest}")
-        
+
     def close(self):
         """Clean up test database."""
         self.server.db.close()
-        
         if not self.failed or not self.keep_on_error:
             shutil.rmtree(self.temp_dir)
             print("✓ Test database cleaned up")
         else:
             print(f"⚠ Test database kept at: {self.temp_dir}")
-            
+
     def __enter__(self):
         return self
-        
+
     def __exit__(self, exc_type, exc_val, exc_tb):
         if exc_type is not None:
             self.failed = True
         self.close()
 
+# %% ../nbs/12_Database.ipynb #be03d098
+@dataclass
+class DataProxy:
+    """Lightweight chunk data holder for efficient stitching.
 
-# %% ../nbs/12_Database.ipynb #ec136fe9
-from dataclasses import dataclass
-from typing import Callable
+    Holds only raw numpy arrays without HexGrid geometry.
+    """
+    nRows: int
+    nCols: int
+    radius: float
+    elevations: np.ndarray          # Shape: (nRows * nCols,)
+    watersheds: Optional[np.ndarray] = None  # Shape: (nRows * nCols,)
+    chunk_position: Optional[HexPosition] = None
+    invalidRegion: set[int] = field(default_factory=set)
+    expected_count: int = 0
+    actual_count: int = 0
 
+    @property
+    def size(self) -> int:
+        return self.nRows * self.nCols
+
+    def __len__(self):
+        return self.size
+
+    @property
+    def is_complete(self) -> bool:
+        """Check if all expected hexes were loaded."""
+        if self.expected_count == 0:
+            return True
+        return self.actual_count >= self.expected_count * 0.95
+
+    def to_dict(self) -> dict:
+        """Convert to dict for debugging."""
+        return {
+            'nRows': self.nRows, 'nCols': self.nCols,
+            'radius': self.radius, 'size': self.size,
+            'has_watersheds': self.watersheds is not None,
+            'chunk_position': str(self.chunk_position) if self.chunk_position else None,
+            'invalid_count': len(self.invalidRegion),
+            'complete': self.is_complete,
+            'expected': self.expected_count, 'actual': self.actual_count
+        }
+
+# %% ../nbs/12_Database.ipynb #a62cddd4
+@patch
+def _load_chunk_as_proxy(self: GeoStorage,
+                         cover_id: int,
+                         origin_pos: HexPosition,
+                         scale: int) -> LoadResult:
+    """Load cached chunk as DataProxy (fully numpy-optimized)."""
+    try:
+        meta = list(self.chunk_meta.rows_where(
+            "world_id = ? AND chunk_q = ? AND chunk_r = ? AND chunk_s = ? AND scale_level = ?",
+            [cover_id, origin_pos.q, origin_pos.r, origin_pos.s, scale]
+        ))
+
+        if not meta:
+            return LoadResult(None, 'not_found', 'No chunk metadata')
+
+        meta = meta[0]
+        nRows = meta['nRows']
+        nCols = meta['nCols']
+        radius = meta['radius']
+        expected_count = meta['hex_count']
+
+        raw_rows = self.db.execute("""
+            SELECT grid_index, elevation, watershed_id
+            FROM hex_data
+            WHERE world_id = ?
+              AND chunk_q = ? AND chunk_r = ? AND chunk_s = ?
+              AND scale_level = ?
+        """, [cover_id, origin_pos.q, origin_pos.r, origin_pos.s, scale]).fetchall()
+
+        if not raw_rows:
+            return LoadResult(None, 'not_found', 'No cached hex data')
+
+        now = int(datetime.now().timestamp())
+        self.chunk_meta.update({
+            'id': meta['id'],
+            'last_accessed': now,
+            'access_count': meta['access_count'] + 1
+        })
+
+        grid_size = nRows * nCols
+        elevations = np.full(grid_size, -100.0)
+        watersheds = np.full(grid_size, -1, dtype=int)
+
+        indices = np.array([row[0] for row in raw_rows], dtype=int)
+        elev_values = np.array([row[1] for row in raw_rows])
+        ws_values = np.array([row[2] if row[2] is not None else -1
+                              for row in raw_rows], dtype=int)
+
+        valid_mask = (indices >= 0) & (indices < grid_size)
+        valid_indices = indices[valid_mask]
+
+        elevations[valid_indices] = elev_values[valid_mask]
+        watersheds[valid_indices] = ws_values[valid_mask]
+
+        water_mask = elev_values[valid_mask] <= -99.0
+        invalidRegion = set(valid_indices[water_mask].tolist())
+
+        actual_count = int(np.sum(elevations > -99.0))
+
+        proxy = DataProxy(
+            nRows=nRows, nCols=nCols, radius=radius,
+            elevations=elevations, watersheds=watersheds,
+            chunk_position=origin_pos, invalidRegion=invalidRegion,
+            expected_count=expected_count, actual_count=actual_count
+        )
+
+        if not proxy.is_complete:
+            return LoadResult(proxy, 'partial',
+                            f'{actual_count}/{expected_count} hexes (incomplete)')
+
+        return LoadResult(proxy, 'loaded', f'{len(raw_rows)} hexes as DataProxy')
+
+    except Exception as e:
+        return LoadResult(None, 'error', str(e))
+
+# %% ../nbs/12_Database.ipynb #da5ff64a
+def stitch_chunks_fast(chunks: set[ChunkRef],
+                       cover: ChunkCover,
+                       storage: GeoStorage,
+                       scale: int) -> tuple[DataProxy, dict[tuple, tuple], int, int]:
+    """Load chunks as DataProxy and stitch using numpy block copies.
+
+    Generates chunks on cache miss, then loads as lightweight proxy.
+    Returns (stitched_proxy, chunk_offsets, chunk_rows, chunk_cols).
+    """
+    if not chunks:
+        return None, {}, 0, 0
+
+    coarse_grid = cover.terrain.hexGrid
+
+    chunk_proxies = {}
+    for chunk in chunks:
+        origin_idx = coarse_grid.hexposition_to_index(chunk.center_hex, origin_index=0)
+        if origin_idx < 0:
+            continue
+
+        origin_pos = coarse_grid.index_to_hexposition(origin_idx)
+
+        result = storage._load_chunk_as_proxy(cover.ident, origin_pos, scale)
+
+        if result.status == 'not_found':
+            gen = storage.load_or_generate_chunk(cover, origin=origin_idx, scale=scale)
+            if gen.status in ('generated', 'cached'):
+                result = storage._load_chunk_as_proxy(cover.ident, origin_pos, scale)
+            else:
+                continue
+
+        if result.status == 'error':
+            continue
+
+        if result.status in ('loaded', 'partial'):
+            coarse_row, coarse_col = coarse_grid.index_to_row_col(origin_idx)
+            chunk_proxies[chunk.key] = (result.data, coarse_row, coarse_col)
+
+    if not chunk_proxies:
+        return None, {}, 0, 0
+
+    first_proxy = next(iter(chunk_proxies.values()))[0]
+    chunk_rows = first_proxy.nRows
+    chunk_cols = first_proxy.nCols
+    radius = first_proxy.radius
+
+    mismatched = {k for k, (p, _, _) in chunk_proxies.items()
+                  if p.nRows != chunk_rows or p.nCols != chunk_cols}
+    if mismatched:
+        for k in mismatched:
+            del chunk_proxies[k]
+
+    if not chunk_proxies:
+        return None, {}, 0, 0
+
+    coarse_rows = [d[1] for d in chunk_proxies.values()]
+    coarse_cols = [d[2] for d in chunk_proxies.values()]
+    min_coarse_row, max_coarse_row = min(coarse_rows), max(coarse_rows)
+    min_coarse_col, max_coarse_col = min(coarse_cols), max(coarse_cols)
+
+    merged_rows = (max_coarse_row - min_coarse_row) * scale + chunk_rows
+    merged_cols = (max_coarse_col - min_coarse_col) * scale + chunk_cols
+
+    merged_elev = np.full((merged_rows, merged_cols), -100.0)
+    merged_ws = np.full((merged_rows, merged_cols), -1, dtype=int)
+    merged_invalid = set()
+
+    chunk_offsets = {}
+
+    for key, (proxy, coarse_row, coarse_col) in chunk_proxies.items():
+        row_off = (coarse_row - min_coarse_row) * scale
+        col_off = (coarse_col - min_coarse_col) * scale
+        chunk_offsets[key] = (row_off, col_off)
+
+        p_elev = proxy.elevations.reshape(proxy.nRows, proxy.nCols)
+        p_ws = proxy.watersheds.reshape(proxy.nRows, proxy.nCols)
+
+        sr0, sr1 = 0, proxy.nRows
+        sc0, sc1 = 0, proxy.nCols
+        dr0, dr1 = row_off, row_off + proxy.nRows
+        dc0, dc1 = col_off, col_off + proxy.nCols
+
+        if dr0 < 0:           sr0 -= dr0; dr0 = 0
+        if dr1 > merged_rows: sr1 -= (dr1 - merged_rows); dr1 = merged_rows
+        if dc0 < 0:           sc0 -= dc0; dc0 = 0
+        if dc1 > merged_cols: sc1 -= (dc1 - merged_cols); dc1 = merged_cols
+
+        if dr0 < dr1 and dc0 < dc1:
+            merged_elev[dr0:dr1, dc0:dc1] = p_elev[sr0:sr1, sc0:sc1]
+            merged_ws[dr0:dr1, dc0:dc1] = p_ws[sr0:sr1, sc0:sc1]
+
+        for local_idx in proxy.invalidRegion:
+            lr = local_idx // proxy.nCols
+            lc = local_idx % proxy.nCols
+            mr = row_off + lr
+            mc = col_off + lc
+            if 0 <= mr < merged_rows and 0 <= mc < merged_cols:
+                merged_invalid.add(mr * merged_cols + mc)
+
+    merged_proxy = DataProxy(
+        nRows=merged_rows, nCols=merged_cols, radius=radius,
+        elevations=merged_elev.ravel(),
+        watersheds=merged_ws.ravel(),
+        invalidRegion=merged_invalid,
+        expected_count=sum(p[0].expected_count for p in chunk_proxies.values()),
+        actual_count=sum(p[0].actual_count for p in chunk_proxies.values())
+    )
+
+    return merged_proxy, chunk_offsets, chunk_rows, chunk_cols
+
+# %% ../nbs/12_Database.ipynb #80964be6
+def proxy_to_terrain(proxy: DataProxy,
+                     climate: ClimatePreset = None,
+                     geo: GeoBounds = None) -> Terrain:
+    """Convert DataProxy to full Terrain with geometry.
+
+    Builds HexGrid once on the final merged result.
+    """
+    bounds = MapRect(
+        MapCord(0, 0),
+        MapSize(proxy.nRows * proxy.radius, proxy.nCols * proxy.radius)
+    )
+
+    terrain = Terrain(
+        bounds=bounds,
+        radius=proxy.radius,
+        climate=climate,
+        geo=geo
+    )
+
+    terrain.hexGrid.nRows = proxy.nRows
+    terrain.hexGrid.nCols = proxy.nCols
+    terrain.hexGrid.adjustRadius(proxy.radius)
+
+    terrain.elevations = proxy.elevations.copy()
+
+    if proxy.watersheds is not None and np.any(proxy.watersheds >= 0):
+        terrain.fields['watershed_id'] = proxy.watersheds.copy()
+
+    terrain.hexGrid.invalidRegion = proxy.invalidRegion.copy()
+
+    return terrain
+
+# %% ../nbs/12_Database.ipynb #8a8c047d
 @dataclass
 class ZoomResult:
     """Result of zooming into a region."""
@@ -1298,22 +1310,18 @@ def bbox_to_chunk_refs(min_row: int, max_row: int, min_col: int, max_col: int,
     grid = cover.terrain.hexGrid
     chunk_rings = cover.rings
     spacing = chunk_rings * 2
-    
+
     chunks = set()
-    
-    # Convert row/col range to indices, then to chunk positions
+
     for row in range(min_row, max_row + 1, spacing):
         for col in range(min_col, max_col + 1, spacing):
             idx = grid.row_col_to_index(row, col)
             if idx < 0:
                 continue
-            
-            # Convert to HexPosition, then to chunk position
             world_pos = grid.index_to_hexposition(idx, origin_index=0)
             chunk_pos, _ = world_to_chunk(world_pos, chunk_rings)
             chunks.add(ChunkRef(chunk_pos, chunk_rings))
-    
-    # Also check corners and edges to ensure coverage
+
     for row in [min_row, max_row]:
         for col in [min_col, max_col]:
             idx = grid.row_col_to_index(row, col)
@@ -1321,659 +1329,28 @@ def bbox_to_chunk_refs(min_row: int, max_row: int, min_col: int, max_col: int,
                 world_pos = grid.index_to_hexposition(idx, origin_index=0)
                 chunk_pos, _ = world_to_chunk(world_pos, chunk_rings)
                 chunks.add(ChunkRef(chunk_pos, chunk_rings))
-    
+
     return chunks
 
-
-
-def build_fine_to_coarse_mapper(cover: ChunkCover, 
-                                merged_terrain: Terrain,
-                                chunk_offsets: dict,
-                                scale: int) -> Callable[[int], int]:
-    """Build function mapping fine terrain index → coarse terrain index."""
-    coarse_grid = cover.terrain.hexGrid
-    fine_grid = merged_terrain.hexGrid
-    
-    # Precompute for efficiency
-    chunk_rows = fine_grid.nRows // len(set(k[1] for k in chunk_offsets.keys())) if chunk_offsets else fine_grid.nRows
-    chunk_cols = fine_grid.nCols // len(set(k[0] for k in chunk_offsets.keys())) if chunk_offsets else fine_grid.nCols
-    
-    # Invert chunk_offsets for lookup
-    offset_to_chunk = {v: k for k, v in chunk_offsets.items()}
-    
-    def mapper(fine_idx: int) -> int:
-        fine_row, fine_col = fine_grid.index_to_row_col(fine_idx)
-        
-        # Which chunk is this in?
-        chunk_row_idx = fine_row // chunk_rows
-        chunk_col_idx = fine_col // chunk_cols
-        
-        # Find corresponding chunk key
-        row_offset = chunk_row_idx * chunk_rows
-        col_offset = chunk_col_idx * chunk_cols
-        
-        chunk_key = offset_to_chunk.get((row_offset, col_offset))
-        if chunk_key is None:
-            return -1
-        
-        q, r, s = chunk_key
-        chunk_center = HexPosition(q, r, s) * (cover.rings * 2)
-        
-        # Local position within chunk
-        local_row = fine_row - row_offset
-        local_col = fine_col - col_offset
-        
-        # Scale down to coarse
-        coarse_local_row = local_row // scale
-        coarse_local_col = local_col // scale
-        
-        # Convert to coarse grid index
-        # The chunk center in coarse grid
-        center_idx = coarse_grid.hexposition_to_index(chunk_center, origin_index=0)
-        if center_idx < 0:
-            return -1
-        
-        center_row, center_col = coarse_grid.index_to_row_col(center_idx)
-        
-        # Offset from chunk center
-        half_chunk = cover.rings
-        coarse_row = center_row - half_chunk + coarse_local_row
-        coarse_col = center_col - half_chunk + coarse_local_col
-        
-        return coarse_grid.row_col_to_index(coarse_row, coarse_col)
-    
-    return mapper
-
-
-
-
-
-# %% ../nbs/12_Database.ipynb #609c72be
-def build_fine_to_coarse_mapper(cover: ChunkCover, 
-                                merged_terrain: Terrain,
-                                chunk_offsets: dict,
-                                scale: int,
-                                chunk_rows: int,
-                                chunk_cols: int) -> Callable[[int], int]:
-    """Build function mapping fine terrain index → coarse terrain index."""
-    coarse_grid = cover.terrain.hexGrid
-    fine_grid = merged_terrain.hexGrid
-    
-    # Invert chunk_offsets for lookup
-    offset_to_chunk = {v: k for k, v in chunk_offsets.items()}
-    
-    def mapper(fine_idx: int) -> int:
-        fine_row, fine_col = fine_grid.index_to_row_col(fine_idx)
-        
-        # Find which chunk this fine hex belongs to
-        best_key = None
-        for (row_off, col_off), key in offset_to_chunk.items():
-            if row_off <= fine_row < row_off + chunk_rows and \
-               col_off <= fine_col < col_off + chunk_cols:
-                best_key = key
-                local_row = fine_row - row_off
-                local_col = fine_col - col_off
-                break
-        
-        if best_key is None:
-            return -1
-        
-        # Scale down to coarse local position
-        coarse_local_row = local_row // scale
-        coarse_local_col = local_col // scale
-        
-        # Chunk center in coarse grid
-        q, r, s = best_key
-        chunk_center = HexPosition(q, r, s) * (cover.rings * 2)
-        center_idx = coarse_grid.hexposition_to_index(chunk_center, origin_index=0)
-        if center_idx < 0:
-            return -1
-        
-        center_row, center_col = coarse_grid.index_to_row_col(center_idx)
-        
-        # The chunk terrain is centered on center_idx, so offset from top-left
-        half_rows = chunk_rows // (2 * scale)
-        half_cols = chunk_cols // (2 * scale)
-        
-        coarse_row = center_row - half_rows + coarse_local_row
-        coarse_col = center_col - half_cols + coarse_local_col
-        
-        return coarse_grid.row_col_to_index(coarse_row, coarse_col)
-    
-    return mapper
-
-
-# %% ../nbs/12_Database.ipynb #3773eb90
-@dataclass
-class DataProxy:
-    """Lightweight chunk data holder for efficient stitching.
-    
-    Holds only raw numpy arrays without HexGrid geometry.
-    """
-    nRows: int
-    nCols: int
-    radius: float
-    elevations: np.ndarray  # Shape: (nRows * nCols,)
-    watersheds: Optional[np.ndarray] = None  # Shape: (nRows * nCols,), watershed IDs
-    chunk_position: Optional[HexPosition] = None  # For debugging/tracking
-    invalidRegion: set[int] = field(default_factory=set)  # Track invalid hexes
-    
-    # Metadata for validation
-    expected_count: int = 0  # How many valid hexes we expect
-    actual_count: int = 0    # How many we actually loaded
-    
-    @property
-    def size(self) -> int:
-        return self.nRows * self.nCols
-    
-    def __len__(self):
-        return self.size
-    
-    @property
-    def is_complete(self) -> bool:
-        """Check if all expected hexes were loaded."""
-        if self.expected_count == 0:
-            return True  # No expectation set
-        return self.actual_count >= self.expected_count * 0.95  # Allow 5% tolerance
-    
-    def to_dict(self) -> dict:
-        """Convert to dict for debugging."""
-        return {
-            'nRows': self.nRows,
-            'nCols': self.nCols,
-            'radius': self.radius,
-            'size': self.size,
-            'has_watersheds': self.watersheds is not None,
-            'chunk_position': str(self.chunk_position) if self.chunk_position else None,
-            'invalid_count': len(self.invalidRegion),
-            'complete': self.is_complete,
-            'expected': self.expected_count,
-            'actual': self.actual_count
-        }
-
-# %% ../nbs/12_Database.ipynb #33e3a6cc
-@patch
-def _load_chunk_as_proxy(self: GeoStorage, 
-                         cover_id: int,
-                         origin_pos: HexPosition,
-                         scale: int) -> LoadResult:
-    """Load cached chunk as DataProxy (fully numpy-optimized)."""
-    try:
-        # Step 1: Get chunk metadata — no cover decode needed
-        meta = list(self.chunk_meta.rows_where(
-            "world_id = ? AND chunk_q = ? AND chunk_r = ? AND chunk_s = ? AND scale_level = ?",
-            [cover_id, origin_pos.q, origin_pos.r, origin_pos.s, scale]
-        ))
-        
-        if not meta:
-            return LoadResult(None, 'not_found', 'No chunk metadata')
-        
-        meta = meta[0]
-        nRows = meta['nRows']
-        nCols = meta['nCols']
-        radius = meta['radius']
-        expected_count = meta['hex_count']
-        
-        # Step 2: Load hex data (minimal columns only)
-        raw_rows = self.db.execute("""
-            SELECT grid_index, elevation, watershed_id
-            FROM hex_data
-            WHERE world_id = ? 
-              AND chunk_q = ? AND chunk_r = ? AND chunk_s = ?
-              AND scale_level = ?
-        """, [cover_id, origin_pos.q, origin_pos.r, origin_pos.s, scale]).fetchall()
-        
-        if not raw_rows:
-            return LoadResult(None, 'not_found', 'No cached hex data')
-        
-        # Step 3: Update access stats on chunk_meta (fire-and-forget)
-        now = int(datetime.now().timestamp())
-        self.chunk_meta.update({
-            'id': meta['id'],
-            'last_accessed': now,
-            'access_count': meta['access_count'] + 1
-        })
-        
-        # Step 4: Pure numpy — no coordinate conversion needed
-        grid_size = nRows * nCols
-        elevations = np.full(grid_size, -100.0)
-        watersheds = np.full(grid_size, -1, dtype=int)
-        
-        # Extract columns as numpy arrays
-        indices = np.array([row[0] for row in raw_rows], dtype=int)
-        elev_values = np.array([row[1] for row in raw_rows])
-        ws_values = np.array([row[2] if row[2] is not None else -1 
-                              for row in raw_rows], dtype=int)
-        
-        # Filter valid indices
-        valid_mask = (indices >= 0) & (indices < grid_size)
-        valid_indices = indices[valid_mask]
-        
-        # Vectorized assignment
-        elevations[valid_indices] = elev_values[valid_mask]
-        watersheds[valid_indices] = ws_values[valid_mask]
-        
-        # Mark invalid hexes (sentinel elevation)
-        water_mask = elev_values[valid_mask] <= -99.0
-        invalidRegion = set(valid_indices[water_mask].tolist())
-        
-        actual_count = int(np.sum(elevations > -99.0))
-        
-        proxy = DataProxy(
-            nRows=nRows, nCols=nCols, radius=radius,
-            elevations=elevations, watersheds=watersheds,
-            chunk_position=origin_pos, invalidRegion=invalidRegion,
-            expected_count=expected_count, actual_count=actual_count
-        )
-        
-        if not proxy.is_complete:
-            return LoadResult(proxy, 'partial',
-                            f'{actual_count}/{expected_count} hexes (incomplete)')
-        
-        return LoadResult(proxy, 'loaded', f'{len(raw_rows)} hexes as DataProxy')
-    
-    except Exception as e:
-        return LoadResult(None, 'error', str(e))
-
-
-# %% ../nbs/12_Database.ipynb #a69b478f
-def stitch_chunks_fast(chunks: set[ChunkRef], 
-                       cover: ChunkCover,
-                       storage: GeoStorage, 
-                       scale: int) -> tuple[DataProxy, dict[tuple, tuple], int, int]:
-    """Load chunks as DataProxy and stitch using numpy block copies.
-    
-    Generates chunks on cache miss, then loads as lightweight proxy.
-    Returns (stitched_proxy, chunk_offsets, chunk_rows, chunk_cols).
-    """
-    if not chunks:
-        return None, {}, 0, 0
-    
-    coarse_grid = cover.terrain.hexGrid
-    
-    # Load (or generate) all chunks as DataProxy
-    chunk_proxies = {}
-    for chunk in chunks:
-        origin_idx = coarse_grid.hexposition_to_index(chunk.center_hex, origin_index=0)
-        if origin_idx < 0:
-            continue
-        
-        # Use world-space position (matches what _save_chunk_cache stores)
-        origin_pos = coarse_grid.index_to_hexposition(origin_idx)
-        
-        # Try loading from cache first
-        result = storage._load_chunk_as_proxy(cover.ident, origin_pos, scale)
-        
-        if result.status == 'not_found':
-            # Cache miss — generate, then load as proxy
-            gen = storage.load_or_generate_chunk(cover, origin=origin_idx, scale=scale)
-            if gen.status in ('generated', 'cached'):
-                result = storage._load_chunk_as_proxy(cover.ident, origin_pos, scale)
-            else:
-                print(f"⚠️  Failed to generate chunk {chunk.key}: {gen.context}")
-                continue
-        
-        if result.status == 'error':
-            print(f"⚠️  Error loading chunk {chunk.key}: {result.context}")
-            continue
-        
-        if result.status in ('loaded', 'partial'):
-            coarse_row, coarse_col = coarse_grid.index_to_row_col(origin_idx)
-            chunk_proxies[chunk.key] = (result.data, coarse_row, coarse_col)
-    
-    if not chunk_proxies:
-        return None, {}, 0, 0
-    
-    # Validate dimensions — all chunks should be same size
-    first_proxy = next(iter(chunk_proxies.values()))[0]
-    chunk_rows = first_proxy.nRows
-    chunk_cols = first_proxy.nCols
-    radius = first_proxy.radius
-    
-    mismatched = {k for k, (p, _, _) in chunk_proxies.items() 
-                  if p.nRows != chunk_rows or p.nCols != chunk_cols}
-    if mismatched:
-        print(f"⚠️  Dimension mismatch in chunks: {mismatched}, skipping them")
-        for k in mismatched:
-            del chunk_proxies[k]
-    
-    if not chunk_proxies:
-        return None, {}, 0, 0
-    
-    # Calculate merged dimensions from coarse positions
-    coarse_rows = [d[1] for d in chunk_proxies.values()]
-    coarse_cols = [d[2] for d in chunk_proxies.values()]
-    min_coarse_row, max_coarse_row = min(coarse_rows), max(coarse_rows)
-    min_coarse_col, max_coarse_col = min(coarse_cols), max(coarse_cols)
-    
-    merged_rows = (max_coarse_row - min_coarse_row) * scale + chunk_rows
-    merged_cols = (max_coarse_col - min_coarse_col) * scale + chunk_cols
-    
-    # Allocate merged 2D arrays
-    merged_elev = np.full((merged_rows, merged_cols), -100.0)
-    merged_ws = np.full((merged_rows, merged_cols), -1, dtype=int)
-    merged_invalid = set()
-    
-    chunk_offsets = {}
-    
-    # Block-copy each chunk using numpy 2D slicing
-    for key, (proxy, coarse_row, coarse_col) in chunk_proxies.items():
-        row_off = (coarse_row - min_coarse_row) * scale
-        col_off = (coarse_col - min_coarse_col) * scale
-        chunk_offsets[key] = (row_off, col_off)
-        
-        # Reshape proxy to 2D for block copy
-        p_elev = proxy.elevations.reshape(proxy.nRows, proxy.nCols)
-        p_ws = proxy.watersheds.reshape(proxy.nRows, proxy.nCols)
-        
-        # Source and dest ranges
-        sr0, sr1 = 0, proxy.nRows
-        sc0, sc1 = 0, proxy.nCols
-        dr0, dr1 = row_off, row_off + proxy.nRows
-        dc0, dc1 = col_off, col_off + proxy.nCols
-        
-        # Clip to merged bounds
-        if dr0 < 0:           sr0 -= dr0; dr0 = 0
-        if dr1 > merged_rows: sr1 -= (dr1 - merged_rows); dr1 = merged_rows
-        if dc0 < 0:           sc0 -= dc0; dc0 = 0
-        if dc1 > merged_cols: sc1 -= (dc1 - merged_cols); dc1 = merged_cols
-        
-        # Single numpy block copy per chunk
-        if dr0 < dr1 and dc0 < dc1:
-            merged_elev[dr0:dr1, dc0:dc1] = p_elev[sr0:sr1, sc0:sc1]
-            merged_ws[dr0:dr1, dc0:dc1] = p_ws[sr0:sr1, sc0:sc1]
-        
-        # Remap invalidRegion with offset
-        for local_idx in proxy.invalidRegion:
-            lr = local_idx // proxy.nCols
-            lc = local_idx % proxy.nCols
-            mr = row_off + lr
-            mc = col_off + lc
-            if 0 <= mr < merged_rows and 0 <= mc < merged_cols:
-                merged_invalid.add(mr * merged_cols + mc)
-    
-    merged_proxy = DataProxy(
-        nRows=merged_rows,
-        nCols=merged_cols,
-        radius=radius,
-        elevations=merged_elev.ravel(),
-        watersheds=merged_ws.ravel(),
-        invalidRegion=merged_invalid,
-        expected_count=sum(p[0].expected_count for p in chunk_proxies.values()),
-        actual_count=sum(p[0].actual_count for p in chunk_proxies.values())
-    )
-    
-    return merged_proxy, chunk_offsets, chunk_rows, chunk_cols
-
-
-
-def proxy_to_terrain(proxy: DataProxy, 
-                     climate: ClimatePreset = None,
-                     geo: GeoBounds = None) -> Terrain:
-    """Convert DataProxy to full Terrain with geometry.
-    
-    Builds HexGrid once on the final merged result.
-    """
-    bounds = MapRect(
-        MapCord(0, 0), 
-        MapSize(proxy.nRows * proxy.radius, proxy.nCols * proxy.radius)
-    )
-    
-    terrain = Terrain(
-        bounds=bounds, 
-        radius=proxy.radius,
-        climate=climate,
-        geo=geo
-    )
-    
-    terrain.hexGrid.nRows = proxy.nRows
-    terrain.hexGrid.nCols = proxy.nCols
-    terrain.hexGrid.adjustRadius(proxy.radius)
-    
-    terrain.elevations = proxy.elevations.copy()
-    
-    if proxy.watersheds is not None and np.any(proxy.watersheds >= 0):
-        terrain.fields['watershed_id'] = proxy.watersheds.copy()
-    
-    terrain.hexGrid.invalidRegion = proxy.invalidRegion.copy()
-    
-    return terrain
-
-
-
-@patch
-def zoom_region_fast(self: ChunkCover, 
-                     region: HexRegion,
-                     scale: int = 2,
-                     compute_weather: bool = True) -> ZoomResult:
-    """Zoom into a region using DataProxy for efficient stitching."""
-    if self.db is None:
-        raise ValueError("ChunkCover.db must be set")
-    
-    # Step 1: Bounding box with padding
-    min_row, max_row, min_col, max_col = region_bounding_box(region)
-    
-    padding = self.halo_rings + 1
-    min_row = max(0, min_row - padding)
-    max_row = min(self.terrain.hexGrid.nRows - 1, max_row + padding)
-    min_col = max(0, min_col - padding)
-    max_col = min(self.terrain.hexGrid.nCols - 1, max_col + padding)
-    
-    # Step 2: Find chunks
-    chunks = bbox_to_chunk_refs(min_row, max_row, min_col, max_col, self)
-    
-    # Step 3: Load and stitch as DataProxy
-    merged_proxy, chunk_offsets, chunk_rows, chunk_cols = stitch_chunks_fast(
-        chunks, self, self.db, scale
-    )
-    
-    if merged_proxy is None:
-        return ZoomResult(None, None, lambda x: -1, 0)
-    
-    if not merged_proxy.is_complete:
-        print(f"⚠️  Merged terrain incomplete: {merged_proxy.actual_count}/{merged_proxy.expected_count} hexes")
-    
-    # Step 4: Build Terrain once from merged proxy
-    merged_terrain = proxy_to_terrain(
-        merged_proxy,
-        climate=getattr(self.terrain, 'climate', None),
-        geo=getattr(self.terrain, 'geo', None)
-    )
-    
-    fine_grid = merged_terrain.hexGrid
-    
-    # Step 5: Lazy init coarse basin
-    if self.basin is None:
-        self.basin = DrainageBasins(self.terrain)
-        self.save()
-    
-    # Step 6: Build mapper
-    mapper = build_fine_to_coarse_mapper(
-        self, merged_terrain, chunk_offsets, scale,
-        chunk_rows=chunk_rows, chunk_cols=chunk_cols
-    )
-    
-    # Step 7: Extend invalidRegion using mapper
-    for fine_idx in range(len(merged_terrain.elevations)):
-        if fine_idx in fine_grid.invalidRegion:
-            continue
-        coarse_idx = mapper(fine_idx)
-        if coarse_idx < 0:
-            fine_grid.invalidRegion.add(fine_idx)
-        elif merged_terrain.elevations[fine_idx] <= -99.0:
-            fine_grid.invalidRegion.add(fine_idx)
-    
-    # Step 8: Project weather fields from coarse → fine
-    if compute_weather:
-        coarse_terrain = self.terrain
-        weather_fields = ['temperature', 'precipitation', 'humidity',
-                         'climate_pet', 'aridity_index', 'climate',
-                         'latitude', 'longitude', 'distance_to_coast',
-                         'precip_rate_mmh']
-        
-        # Build mapping arrays once (reuse for all fields)
-        fine_indices = []
-        coarse_indices = []
-        for fine_idx in range(len(merged_terrain.elevations)):
-            if fine_idx in fine_grid.invalidRegion:
-                continue
-            coarse_idx = mapper(fine_idx)
-            if coarse_idx >= 0:
-                fine_indices.append(fine_idx)
-                coarse_indices.append(coarse_idx)
-        
-        fine_arr = np.array(fine_indices, dtype=int)
-        coarse_arr = np.array(coarse_indices, dtype=int)
-        
-        for field_name in weather_fields:
-            if field_name in coarse_terrain.fields:
-                coarse_field = coarse_terrain.fields[field_name]
-                # Clip coarse indices to valid range
-                valid = coarse_arr < len(coarse_field)
-                
-                merged_terrain.fields[field_name] = np.zeros(len(merged_terrain.elevations))
-                merged_terrain.fields[field_name][fine_arr[valid]] = coarse_field[coarse_arr[valid]]
-        
-        # Fallback: compute fresh if coarse had no weather
-        if 'temperature' not in merged_terrain.fields or 'precipitation' not in merged_terrain.fields:
-            merged_terrain.compute_weather()
-    
-    # Step 9: Build fine_regions for watershed projection
-    fine_regions = {}
-    for fi, ci in zip(fine_indices, coarse_indices):
-        if ci not in fine_regions:
-            fine_regions[ci] = set()
-        fine_regions[ci].add(fi)
-    
-    # Step 10: Project watersheds
-    zoomed_sheds = self.project_watersheds(self.basin, fine_regions, merged_terrain)
-    
-    zoomed_basins = DrainageBasins(merged_terrain, compute=False)
-    zoomed_basins.sheds = zoomed_sheds
-    
-    return ZoomResult(
-        terrain=merged_terrain,
-        basins=zoomed_basins,
-        mapper=mapper,
-        chunks_loaded=len(chunk_offsets)
-    )
-
-
-
-# %% ../nbs/12_Database.ipynb #bdbabd1d
-def crop_proxy_to_region(proxy: DataProxy,
-                         region_fine_indices: set[int],
-                         padding: int = 4) -> tuple[DataProxy, int, int, int, int]:
-    """Crop DataProxy to bounding box of region's fine indices + padding.
-    
-    All operations are pure numpy 2D slicing — no HexGrid involved.
-    
-    Args:
-        proxy: The stitched (potentially oversized) DataProxy
-        region_fine_indices: Fine grid indices that map to the region
-        padding: Extra rows/cols around the region bbox
-    
-    Returns:
-        (cropped_proxy, trim_top, trim_left, old_nRows, old_nCols)
-    """
-    if not region_fine_indices:
-        return proxy, 0, 0, proxy.nRows, proxy.nCols
-    
-    old_nRows, old_nCols = proxy.nRows, proxy.nCols
-    
-    # Vectorized bounding box of region in fine grid
-    indices = np.array(list(region_fine_indices))
-    rows = indices // old_nCols
-    cols = indices % old_nCols
-    
-    min_row = max(0, int(rows.min()) - padding)
-    max_row = min(old_nRows - 1, int(rows.max()) + padding)
-    min_col = max(0, int(cols.min()) - padding)
-    max_col = min(old_nCols - 1, int(cols.max()) + padding)
-    
-    new_nRows = max_row - min_row + 1
-    new_nCols = max_col - min_col + 1
-    
-    # Skip crop if savings < 10%
-    old_size = old_nRows * old_nCols
-    new_size = new_nRows * new_nCols
-    if (old_size - new_size) < old_size * 0.1:
-        return proxy, 0, 0, old_nRows, old_nCols
-    
-    # 2D slice elevations
-    elev_2d = proxy.elevations.reshape(old_nRows, old_nCols)
-    cropped_elev = elev_2d[min_row:max_row+1, min_col:max_col+1].ravel().copy()
-    
-    # 2D slice watersheds
-    cropped_ws = None
-    if proxy.watersheds is not None:
-        ws_2d = proxy.watersheds.reshape(old_nRows, old_nCols)
-        cropped_ws = ws_2d[min_row:max_row+1, min_col:max_col+1].ravel().copy()
-    
-    # Remap invalidRegion indices
-    new_invalid = set()
-    for old_idx in proxy.invalidRegion:
-        old_r = old_idx // old_nCols
-        old_c = old_idx % old_nCols
-        if min_row <= old_r <= max_row and min_col <= old_c <= max_col:
-            new_invalid.add((old_r - min_row) * new_nCols + (old_c - min_col))
-    
-    cropped = DataProxy(
-        nRows=new_nRows,
-        nCols=new_nCols,
-        radius=proxy.radius,
-        elevations=cropped_elev,
-        watersheds=cropped_ws,
-        chunk_position=proxy.chunk_position,
-        invalidRegion=new_invalid,
-        expected_count=proxy.expected_count,
-        actual_count=proxy.actual_count
-    )
-    
-    print(f"✂ Cropped {old_nRows}×{old_nCols} → {new_nRows}×{new_nCols} "
-          f"({100*(1 - new_size/old_size):.0f}% smaller)")
-    
-    return cropped, min_row, min_col, old_nRows, old_nCols
-
-
-def make_cropped_mapper(original_mapper: Callable[[int], int],
-                        trim_top: int, trim_left: int,
-                        old_nCols: int, new_nCols: int) -> Callable[[int], int]:
-    """Wrap a fine→coarse mapper to account for proxy cropping.
-    
-    Translates cropped grid indices back to the original merged grid
-    before calling the original mapper.
-    """
-    if trim_top == 0 and trim_left == 0:
-        return original_mapper  # No crop, no overhead
-    
-    def cropped_mapper(cropped_idx: int) -> int:
-        row = cropped_idx // new_nCols + trim_top
-        col = cropped_idx % new_nCols + trim_left
-        return original_mapper(row * old_nCols + col)
-    
-    return cropped_mapper
-
-
-def build_fine_to_coarse_mapper(cover: ChunkCover, 
+# %% ../nbs/12_Database.ipynb #a56b0aaa
+def build_fine_to_coarse_mapper(cover: ChunkCover,
                                 fine_nCols: int,
                                 chunk_offsets: dict,
                                 scale: int,
                                 chunk_rows: int,
                                 chunk_cols: int) -> Callable[[int], int]:
     """Build function mapping fine terrain index → coarse terrain index.
-    
+
     Only needs fine_nCols (not a full Terrain) so it works on DataProxy
     before HexGrid construction.
     """
     coarse_grid = cover.terrain.hexGrid
     offset_to_chunk = {v: k for k, v in chunk_offsets.items()}
-    
+
     def mapper(fine_idx: int) -> int:
         fine_row = fine_idx // fine_nCols
         fine_col = fine_idx % fine_nCols
-        
-        # Find which chunk this fine hex belongs to
+
         best_key = None
         local_row = local_col = 0
         for (row_off, col_off), key in offset_to_chunk.items():
@@ -1983,144 +1360,193 @@ def build_fine_to_coarse_mapper(cover: ChunkCover,
                 local_row = fine_row - row_off
                 local_col = fine_col - col_off
                 break
-        
+
         if best_key is None:
             return -1
-        
-        # Scale down to coarse local position
+
         coarse_local_row = local_row // scale
         coarse_local_col = local_col // scale
-        
-        # Chunk center in coarse grid
+
         q, r, s = best_key
         chunk_center = HexPosition(q, r, s) * (cover.rings * 2)
         center_idx = coarse_grid.hexposition_to_index(chunk_center, origin_index=0)
         if center_idx < 0:
             return -1
-        
+
         center_row, center_col = coarse_grid.index_to_row_col(center_idx)
-        
-        # Offset from chunk center to top-left of chunk
+
         half_rows = chunk_rows // (2 * scale)
         half_cols = chunk_cols // (2 * scale)
-        
+
         coarse_row = center_row - half_rows + coarse_local_row
         coarse_col = center_col - half_cols + coarse_local_col
-        
+
         return coarse_grid.row_col_to_index(coarse_row, coarse_col)
-    
+
     return mapper
 
+# %% ../nbs/12_Database.ipynb #bc16d394
+def crop_proxy_to_region(proxy: DataProxy,
+                         region_fine_indices: set[int],
+                         padding: int = 4) -> tuple[DataProxy, int, int, int, int]:
+    """Crop DataProxy to bounding box of region's fine indices + padding.
 
+    Returns (cropped_proxy, trim_top, trim_left, old_nRows, old_nCols).
+    """
+    if not region_fine_indices:
+        return proxy, 0, 0, proxy.nRows, proxy.nCols
+
+    old_nRows, old_nCols = proxy.nRows, proxy.nCols
+
+    indices = np.array(list(region_fine_indices))
+    rows = indices // old_nCols
+    cols = indices % old_nCols
+
+    min_row = max(0, int(rows.min()) - padding)
+    max_row = min(old_nRows - 1, int(rows.max()) + padding)
+    min_col = max(0, int(cols.min()) - padding)
+    max_col = min(old_nCols - 1, int(cols.max()) + padding)
+
+    new_nRows = max_row - min_row + 1
+    new_nCols = max_col - min_col + 1
+
+    old_size = old_nRows * old_nCols
+    new_size = new_nRows * new_nCols
+    if (old_size - new_size) < old_size * 0.1:
+        return proxy, 0, 0, old_nRows, old_nCols
+
+    elev_2d = proxy.elevations.reshape(old_nRows, old_nCols)
+    cropped_elev = elev_2d[min_row:max_row+1, min_col:max_col+1].ravel().copy()
+
+    cropped_ws = None
+    if proxy.watersheds is not None:
+        ws_2d = proxy.watersheds.reshape(old_nRows, old_nCols)
+        cropped_ws = ws_2d[min_row:max_row+1, min_col:max_col+1].ravel().copy()
+
+    new_invalid = set()
+    for old_idx in proxy.invalidRegion:
+        old_r = old_idx // old_nCols
+        old_c = old_idx % old_nCols
+        if min_row <= old_r <= max_row and min_col <= old_c <= max_col:
+            new_invalid.add((old_r - min_row) * new_nCols + (old_c - min_col))
+
+    cropped = DataProxy(
+        nRows=new_nRows, nCols=new_nCols, radius=proxy.radius,
+        elevations=cropped_elev, watersheds=cropped_ws,
+        chunk_position=proxy.chunk_position,
+        invalidRegion=new_invalid,
+        expected_count=proxy.expected_count,
+        actual_count=proxy.actual_count
+    )
+
+    return cropped, min_row, min_col, old_nRows, old_nCols
+
+
+def make_cropped_mapper(original_mapper: Callable[[int], int],
+                        trim_top: int, trim_left: int,
+                        old_nCols: int, new_nCols: int) -> Callable[[int], int]:
+    """Wrap a fine→coarse mapper to account for proxy cropping."""
+    if trim_top == 0 and trim_left == 0:
+        return original_mapper
+
+    def cropped_mapper(cropped_idx: int) -> int:
+        row = cropped_idx // new_nCols + trim_top
+        col = cropped_idx % new_nCols + trim_left
+        return original_mapper(row * old_nCols + col)
+
+    return cropped_mapper
+
+# %% ../nbs/12_Database.ipynb #73806c21
 @patch
-def zoom_region_fast(self: ChunkCover, 
+def zoom_region_fast(self: ChunkCover,
                      region: HexRegion,
                      scale: int = 2,
                      compute_weather: bool = True) -> ZoomResult:
-    """Zoom into a region using DataProxy + numpy cropping.
-    
-    Pipeline:
-      1. Find chunks covering region bbox
-      2. Stitch as DataProxy (no HexGrid yet)
-      3. Build mapper on uncropped proxy
-      4. Identify region's fine indices via mapper
-      5. Crop proxy to region bbox (numpy 2D slice)
-      6. Wrap mapper with crop offset
-      7. Build Terrain once on cropped proxy
-      8. Project weather + watersheds
-    """
+    """Zoom into a region using DataProxy + numpy cropping."""
     if self.db is None:
         raise ValueError("ChunkCover.db must be set")
-    
-    # --- Step 1: Bounding box with padding ---
+
+    # Step 1: Bounding box with padding
     min_row, max_row, min_col, max_col = region_bounding_box(region)
-    
+
     padding = self.halo_rings + 1
     coarse_grid = self.terrain.hexGrid
     min_row = max(0, min_row - padding)
     max_row = min(coarse_grid.nRows - 1, max_row + padding)
     min_col = max(0, min_col - padding)
     max_col = min(coarse_grid.nCols - 1, max_col + padding)
-    
-    # --- Step 2: Find and stitch chunks ---
+
+    # Step 2: Find and stitch chunks
     chunks = bbox_to_chunk_refs(min_row, max_row, min_col, max_col, self)
-    
+
     merged_proxy, chunk_offsets, chunk_rows, chunk_cols = stitch_chunks_fast(
         chunks, self, self.db, scale
     )
-    
+
     if merged_proxy is None:
         return ZoomResult(None, None, lambda x: -1, 0)
-    
-    if not merged_proxy.is_complete:
-        print(f"⚠️  Merged terrain incomplete: "
-              f"{merged_proxy.actual_count}/{merged_proxy.expected_count} hexes")
-    
-    # --- Step 3: Lazy init coarse basin ---
+
+    # Step 3: Lazy init coarse basin
     if self.basin is None:
         self.basin = DrainageBasins(self.terrain)
         self.save()
-    
-    # --- Step 4: Build mapper on UNCROPPED proxy ---
+
+    # Step 4: Build mapper on UNCROPPED proxy
     uncropped_mapper = build_fine_to_coarse_mapper(
         self, merged_proxy.nCols, chunk_offsets, scale,
         chunk_rows=chunk_rows, chunk_cols=chunk_cols
     )
-    
-    # --- Step 5: Find region's fine indices + mark invalid ---
-    region_hexes = region.hexes  # coarse indices in the region
+
+    # Step 5: Find region's fine indices + mark invalid
+    region_hexes = region.hexes
     region_fine_indices = set()
-    all_valid_pairs = []  # (fine_idx, coarse_idx) for later use
-    
+
     for fine_idx in range(merged_proxy.size):
         if fine_idx in merged_proxy.invalidRegion:
             continue
         if merged_proxy.elevations[fine_idx] <= -99.0:
             merged_proxy.invalidRegion.add(fine_idx)
             continue
-        
+
         coarse_idx = uncropped_mapper(fine_idx)
         if coarse_idx < 0:
             merged_proxy.invalidRegion.add(fine_idx)
             continue
-        
-        all_valid_pairs.append((fine_idx, coarse_idx))
+
         if coarse_idx in region_hexes:
             region_fine_indices.add(fine_idx)
-    
-    # --- Step 6: Crop proxy to region bbox ---
+
+    # Step 6: Crop proxy to region bbox
     crop_padding = max(4, scale * (self.halo_rings + 1))
     cropped_proxy, trim_top, trim_left, old_nRows, old_nCols = crop_proxy_to_region(
         merged_proxy, region_fine_indices, padding=crop_padding
     )
-    
-    # --- Step 7: Wrap mapper with crop offset ---
+
+    # Step 7: Wrap mapper with crop offset
     mapper = make_cropped_mapper(
         uncropped_mapper, trim_top, trim_left,
         old_nCols, cropped_proxy.nCols
     )
-    
-    # --- Step 8: Build Terrain ONCE on cropped proxy ---
+
+    # Step 8: Build Terrain ONCE on cropped proxy
     merged_terrain = proxy_to_terrain(
         cropped_proxy,
         climate=getattr(self.terrain, 'climate', None),
         geo=getattr(self.terrain, 'geo', None)
     )
-    
+
     fine_grid = merged_terrain.hexGrid
-    
-    # --- Step 9: Project weather from coarse → fine ---
+
+    # Step 9: Project weather from coarse → fine
+    fine_indices = []
+    coarse_indices = []
     if compute_weather:
         coarse_terrain = self.terrain
         weather_fields = ['temperature', 'precipitation', 'humidity',
                          'climate_pet', 'aridity_index', 'climate',
                          'latitude', 'longitude', 'distance_to_coast',
                          'precip_rate_mmh']
-        
-        # Build vectorized mapping arrays on CROPPED grid
-        fine_indices = []
-        coarse_indices = []
-        new_nCols = cropped_proxy.nCols
+
         for fine_idx in range(cropped_proxy.size):
             if fine_idx in fine_grid.invalidRegion:
                 continue
@@ -2128,38 +1554,36 @@ def zoom_region_fast(self: ChunkCover,
             if coarse_idx >= 0:
                 fine_indices.append(fine_idx)
                 coarse_indices.append(coarse_idx)
-        
+
         fine_arr = np.array(fine_indices, dtype=int)
         coarse_arr = np.array(coarse_indices, dtype=int)
-        
+
         for field_name in weather_fields:
             if field_name in coarse_terrain.fields:
                 coarse_field = coarse_terrain.fields[field_name]
                 valid = coarse_arr < len(coarse_field)
                 merged_terrain.fields[field_name] = np.zeros(len(merged_terrain.elevations))
                 merged_terrain.fields[field_name][fine_arr[valid]] = coarse_field[coarse_arr[valid]]
-        
-        # Fallback if coarse had no weather at all
+
         if 'temperature' not in merged_terrain.fields or \
            'precipitation' not in merged_terrain.fields:
             merged_terrain.compute_weather()
-    
-    # --- Step 10: Build fine_regions and project watersheds ---
+
+    # Step 10: Build fine_regions and project watersheds
     fine_regions = {}
     for fi, ci in zip(fine_indices, coarse_indices):
         if ci not in fine_regions:
             fine_regions[ci] = set()
         fine_regions[ci].add(fi)
-    
+
     zoomed_sheds = self.project_watersheds(self.basin, fine_regions, merged_terrain)
-    
+
     zoomed_basins = DrainageBasins(merged_terrain, compute=False)
     zoomed_basins.sheds = zoomed_sheds
-    
+
     return ZoomResult(
         terrain=merged_terrain,
         basins=zoomed_basins,
         mapper=mapper,
         chunks_loaded=len(chunk_offsets)
     )
-

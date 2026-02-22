@@ -1053,7 +1053,7 @@ def convolution(self: Terrain, field, shape:[HexPosition], fraction, weights = N
 
 # %% ../nbs/03_terrain.ipynb #1c5cf798
 @patch
-def scaled(self: Terrain, scale: float):
+def scaled_simple(self: Terrain, scale: float):
     """Create a scaled terrain that maintains proportional grid dimensions"""
     radius = self.hexGrid.radius 
 
@@ -1071,6 +1071,128 @@ def scaled(self: Terrain, scale: float):
     ring_pattern = hexes_in_range(1)
 
     nextEl , nRows, nCols  = self.convolution( self.elevations, ring_pattern, scale)
+
+    grid =  HexGrid (
+        nRows = nRows,
+        nCols = nCols,
+        radius = radius,
+        style = self.hexGrid.style)
+
+    mySize = MapSize(400, 400) #we are droping these
+    myBounds = MapRect(MapCord(0,0), mySize)
+    sampleMap = Terrain(myBounds, radius=15)
+    sampleMap.hexGrid = grid
+
+    sampleMap.elevations = nextEl
+
+    # Copy style properties
+    sampleMap.colorLevels = self.colorLevels.copy() if self.colorLevels else None
+    sampleMap.elevationDelta = self.elevationDelta
+    sampleMap.seaLevel = self.seaLevel
+
+# Use the downsample_field meth
+
+    return sampleMap
+
+    
+
+# %% ../nbs/03_terrain.ipynb #1f8b319f
+@patch
+def _sample_indexes_np(self: Terrain, rows, cols, fraction):
+    new_rows = int(rows * fraction)
+    new_cols = int(cols * fraction)
+    
+    r = np.arange(rows)
+    c = np.arange(cols)
+    rr, cc = np.meshgrid(r, c, indexing='ij')
+    
+    new_rr = (rr * fraction).astype(int)
+    new_cc = (cc * fraction).astype(int)
+    
+    valid = (new_rr < new_rows) & (new_cc < new_cols)
+    src_idx = (rr * cols + cc).astype(float)
+    dst_idx = new_rr * new_cols + new_cc
+    
+    new_arr = np.full(new_rows * new_cols, np.inf)
+    np.minimum.at(new_arr, dst_idx[valid], src_idx[valid])
+    
+    return new_arr, new_rows, new_cols
+
+
+# %% ../nbs/03_terrain.ipynb #198cccd8
+@patch
+def convolution_np(self: Terrain, field, shape, fraction, weights=None, method='weighted_avg'):
+    grid = self.hexGrid
+    destIndex, new_rows, new_cols = self._sample_indexes_np(grid.nRows, grid.nCols, fraction)
+    new_size = new_rows * new_cols
+    
+    if weights is None:
+        weights = np.ones(len(shape))
+    weights = np.array(weights)
+    
+    # Shape offsets as (K, 3) array
+    shape_arr = np.array([[hp.q, hp.r, hp.s] for hp in shape])  # (K, 3)
+    
+    # All sampling origins (M,)
+    si = destIndex.astype(int)
+    origin_rows = si // grid.nCols
+    origin_cols = si % grid.nCols
+    origin_q = origin_cols - (origin_rows - (origin_rows & 1)) // 2
+    origin_r = origin_rows
+    
+    # Broadcast: (M,1) + (1,K) → (M,K)
+    abs_q = origin_q[:, None] + shape_arr[None, :, 0]
+    abs_r = origin_r[:, None] + shape_arr[None, :, 1]
+    
+    # Cube → offset → index
+    rows = abs_r
+    cols = abs_q + (abs_r - (abs_r & 1)) // 2
+    indices = rows * grid.nCols + cols
+    
+    # Bounds mask
+    valid = (rows >= 0) & (rows < grid.nRows) & (cols >= 0) & (cols < grid.nCols)
+    safe_idx = np.where(valid, indices, 0).astype(int)
+    
+    # Gather all values at once
+    values = field[safe_idx]  # (M, K)
+    
+    # Aggregate
+    if method == 'weighted_avg':
+        w = np.where(valid, weights[None, :], 0.0)
+        w_sum = np.maximum(w.sum(axis=1), 1e-12)
+        new_field = (values * w).sum(axis=1) / w_sum
+    elif method == 'max':
+        values = np.where(valid, values, -np.inf)
+        new_field = values.max(axis=1)
+        new_field = np.where(np.isinf(new_field), 0, new_field)
+    elif method == 'min':
+        values = np.where(valid, values, np.inf)
+        new_field = values.min(axis=1)
+        new_field = np.where(np.isinf(new_field), 0, new_field)
+    
+    return new_field, new_rows, new_cols
+
+
+# %% ../nbs/03_terrain.ipynb #d881fe6b
+@patch
+def scaled(self: Terrain, scale: float):
+    """Create a scaled terrain that maintains proportional grid dimensions"""
+    radius = self.hexGrid.radius 
+
+    def hexes_in_range(n):
+        """ finding all hexes within distance N from origin: """
+        results = []
+        for q in range(-n, n + 1):
+            for r in range(max(-n, -q - n), min(n, -q + n) + 1):
+                s = -q - r
+                results.append(HexPosition(q, r, s))
+        return results
+
+
+
+    ring_pattern = hexes_in_range(1)
+
+    nextEl , nRows, nCols  = self.convolution_np( self.elevations, ring_pattern, scale)
 
     grid =  HexGrid (
         nRows = nRows,
