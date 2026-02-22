@@ -11,16 +11,15 @@
 - `docs/DATABASE_EXTENSION_GUIDE.md` - How to extend database with game tables
 
 **Schema Documents (docs/):**
-- `DatabaseSchema.md` - **Current implementation** (GeoStorage, tables, API)
+- `DatabaseSchema.md` - **Current implementation** (GeoStorage + GameStorage tables)
 - `ChunkCover_System.md` - **Upscaling system** (master terrain + zoom)
 - `DATABASE_QUICK_REF.md` - Quick reference for common operations
-- `schema.md` - Database design overview and status
-- `schemaMain.md` - Proposed TerrainDB schema (design doc)
-- `TerrainSchema.md` - Database-centric architecture (design doc)
-- `TerrainSchema_FastLite.md` - Web game schema (design doc)
 - `PieceDesign.md` - Game unit/agent system
 - `Game design.md` - Game mechanics and design overview
-- `DATABASE_EXTENSION_GUIDE.md` - How to extend database
+- `DATABASE_EXTENSION_GUIDE.md` - How to extend
+
+**Subsystem Docs:**
+- `HexMagic/game/llms.txt` - Game subsystem (kingdoms, settlements, pieces, web)
 
 ## Core Architecture: MVC-Like Pattern
 
@@ -45,9 +44,11 @@
 
 ### Controller: Game Logic (HexMagic/game/*.py)
 - **GameBoard** - Game state management
-- **Kingdom** - Civilizations
+- **Kingdom** - Civilizations with territory (HexRegion)
+- **Settlement** - Cities with citizens (Piece list)
 - **Piece** - Units (movement, vision, AI)
-- **Actions**: Modify ViewModel → sync to Model
+- **GameStorage** - Database layer extending GeoStorage
+- **See `HexMagic/game/llms.txt`** for detailed game subsystem docs
 
 ### Web Layer (Planned)
 - FastHTML + HTMX interface
@@ -310,21 +311,24 @@ Access: `db.get_template(1)` for Bay Area
 ✅ Climate modeling (Köppen)
 ✅ Real-world data (7+ locations)
 ✅ SVG visualization
-✅ Game mechanics basics
-✅ Database schemas designed
-✅ Multi-scale system designed
+✅ Database schemas (GeoStorage + GameStorage)
+✅ Multi-scale system (ChunkCover)
 ✅ crop_to_centered_grid()
 ✅ downsample_climate()
+✅ Game database (PieceRecord, SettlementRecord, KingdomRecord, KingdomHex)
+✅ Territory expansion (watershed-based)
+✅ CountryDetails regional views
 
 **In Progress:**
-🔄 Game database extension (kingdoms, pieces)
-🔄 Template system
+🔄 Piece movement and AI
 🔄 Web interface (FastHTML)
+🔄 Turn processing system
 
 **Planned:**
-📋 Web routes (FastHTML)
-📋 Multi-player system
-📋 Interactive viewport
+📋 Combat system
+📋 Trade route caching in DB
+📋 Turn history/replay
+📋 Multi-player sync
 
 ## Key Insights
 

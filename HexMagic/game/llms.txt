@@ -1,0 +1,359 @@
+# HexMagic Game Subsystem
+
+> Strategy game layer - kingdoms, settlements, pieces, territory control, web interface
+
+## Quick Reference
+
+**Source Notebooks (nbs/game/):**
+- `01_flag.ipynb` → `settlement.py` - CountryFlag visual identity
+- `02_data.ipynb` → `data.py` - Core dataclasses (Piece, Settlement, GameStorage)
+- `Country.ipynb` → `country.py` - CountryDetails regional views
+- `Kingdoms.ipynb` → `kingdom.py` - Kingdom, GameBoard, TradeRoute
+- `gamedatabase.ipynb` → `store.py` - HexServer database operations
+- `Web.ipynb` → `web.py` - FastHTML web interface
+
+**Key Documentation:**
+- `docs/Game design.md` - Game mechanics overview
+- `docs/PieceDesign.md` - Unit/agent specifications
+- `docs/DatabaseSchema.md` - Database tables (see "Game Tables" section)
+
+---
+
+## Architecture
+
+```
+GameBoard (game state manager)
+  ├── Terrain (elevations, climate, fields)
+  ├── ChunkCover (master terrain + zoom)
+  └── Kingdom[] (player civilizations)
+        ├── CountryFlag (visual identity)
+        ├── HexRegion (territory)
+        ├── Settlement[] (cities)
+        │     └── Piece[] (citizens/units)
+        └── TradeRoute[] (economic links)
+```
+
+**Database Layer:**
+- `GameStorage` extends `GeoStorage` with game tables
+- Tables: `PieceRecord`, `SettlementRecord`, `KingdomRecord`, `KingdomHex`
+- Cascade save: GameBoard → Kingdom → Settlement → Piece
+
+---
+
+## Core Classes
+
+### CountryFlag (settlement.py)
+Visual identity and naming for kingdoms.
+
+```python
+flag = CountryFlag(rgb_tuple, name="Karl", year=1900)
+flag.primary      # Main hex color
+flag.comp         # Complementary color
+flag.countryPrefix  # Generated place name (e.g., "Kingdom")
+flag.capital      # Generated city name (e.g., "Karlville")
+
+# Styles for rendering
+flag.kingStyle("name")      # Territory fill (70% opacity)
+flag.contrastStyle("name")  # Settlement markers
+flag.labelStyle("name")     # Text labels
+
+# Patterns
+flag.circlePattern("id")    # SVG pattern definition
+flag.triPattern("id")       # Triadic color pattern
+flag.swirl("id")            # Decorative pattern
+
+# Batch creation
+flags = CountryFlag.seaborn("husl", levels=7, year=1900)
+```
+
+### Kingdom (kingdom.py)
+Territory controlled by a single government.
+
+```python
+kingdom = Kingdom(capital_hex, region, world, countryId=1, flag=flag)
+kingdom.settlements  # List of settlement hex indices (capital first)
+kingdom.region       # HexRegion of controlled territory
+kingdom.captured     # List[WatershedFlow] - conquered watersheds
+kingdom.routes       # List[TradeRoute] - trade network
+kingdom.countryName  # Full name (e.g., "Karl's Kingdom")
+
+# Factory method
+kingdoms = Kingdom.start(world, scored_watersheds, palette_name="husl")
+
+# Encode/decode
+data = kingdom.encode()
+kingdom = Kingdom.decode(data, world)
+```
+
+### GameBoard (kingdom.py)
+Top-level game state manager.
+
+```python
+board = GameBoard(terrain, top_n=5)  # Creates kingdoms from best watersheds
+board.terrain       # Terrain instance
+board.world         # Geology instance
+board.kingdoms      # List[Kingdom]
+board.shedScores    # List[WatershedFlow] - ranked watersheds
+board.watershed_map # numpy array: hex_idx → watershed_id
+
+# Expansion
+board.expand_kingdoms(max_rounds=50)  # Round-robin watershed claiming
+
+# Exploration
+score = board.explore(countryId)  # Find best adjacent unclaimed watershed
+
+# Pathfinding
+path = board.find_path_dijkstra(start_hex, end_hex)
+cost = board.movement_cost(from_pos, to_pos, origin)
+
+# Overlays
+svg = board.countries_overlay()  # Territory borders
+svg = board.names_overlay()       # Country name labels
+
+# Encode/decode
+data = board.encode()
+board = GameBoard.decode(data)
+```
+
+### CountryDetails (country.py)
+Regional view of a kingdom using `crop_to_centered_grid()`.
+
+```python
+details = CountryDetails(kingdom)
+details.countryMap     # Terrain cropped to kingdom region
+details.regionMapper   # Function: local_idx → master_idx
+details.mapper         # Dict: master_idx → local_idx
+
+# Transform regions between coordinate systems
+local_region = details.viewableRegion(master_region)
+
+# Overlays for kingdom view
+svg = details.countries_overlay(kingdoms)
+svg = details.names_overlay(kingdoms)
+svg = details.settlements_overlay(kingdoms)
+svg = details.unknownOverlay(fill="white")  # Fog for unknown hexes
+```
+
+### TradeRoute (kingdom.py)
+Path between settlements with caching.
+
+```python
+route = TradeRoute(path=[hex_indices], origin=0, cost=10.5, name="Capital-East")
+route.destination()  # Last hex in path
+
+data = route.encode()
+route = TradeRoute.decode(data)
+```
+
+### WatershedFlow (kingdom.py)
+Cached watershed + flow value to avoid recomputation.
+
+```python
+WatershedFlow = NamedTuple('WatershedFlow', [('watershed', Watershed), ('flow', float)])
+```
+
+---
+
+## Database Schema (GameStorage)
+
+### Tables
+
+**PieceRecord** - Game units:
+```python
+@dataclass
+class PieceRecord:
+    id: str = ""              # UUID
+    kingdom_id: int = 0
+    settlement_id: str = ""   # If stationed at settlement
+    location: int = 0         # Current hex grid_index
+    owner_id: int = 0
+    size: int = 100
+    health: int = 100
+    max_health: int = 100
+    sight: int = 3
+    memory: float = 0.8
+    movement_range: int = 4
+    harvest_goal: str = ""    # Resources enum value
+    settle_progress: int = 0
+    settle_threshold: int = 3
+    world_id: int = 0
+```
+
+**SettlementRecord** - Cities:
+```python
+@dataclass
+class SettlementRecord:
+    id: str = ""
+    kingdom_id: int = 0
+    location: int = 0
+    name: str = ""
+    size: int = 100
+    health: int = 100
+    world_id: int = 0
+```
+
+**KingdomRecord** - Kingdom metadata:
+```python
+@dataclass
+class KingdomRecord:
+    id: int = None
+    world_id: int = 0
+    country_id: int = 0
+    country_name: str = ""
+    flag_data: str = ""       # CountryFlag.encode()
+    capital_settlement_id: str = ""
+```
+
+**KingdomHex** - Territory ownership:
+```python
+@dataclass
+class KingdomHex:
+    id: int = None
+    world_id: int = 0
+    kingdom_id: int = 0
+    grid_index: int = 0       # For array access
+    q: int = 0                # Cube coords for spatial queries
+    r: int = 0
+    s: int = 0
+```
+
+### GameStorage Methods
+
+```python
+storage = GameStorage("path/to/db.sqlite")
+
+# Save (cascades down)
+board.save(storage, world_id=cover.ident)
+kingdom.save(db=storage, world_id=cover.ident)
+settlement.save(world_id=cover.ident)
+piece.save(world_id=cover.ident)
+
+# Load
+piece = storage.piece_from_id(piece_id)
+settlement = storage.settlement_from_id(settlement_id)
+kingdom = storage.kingdom_from_db(country_id, world_id, world)
+board = storage.gameboard(world_id, terrain)
+
+# Ownership queries
+owner_id = storage.hex_owner(world_id, grid_index)
+storage.load_country_field(terrain, world_id)  # Rebuild terrain.fields["country"]
+
+# Overlays
+svg = storage.pieceOverlay(terrain, world_id, mapper=None)
+svg = storage.settlementOverlay(terrain, world_id, mapper=None)
+```
+
+---
+
+## Web Interface (web.py)
+
+FastHTML + HTMX web application.
+
+**Key Routes:**
+- `/` - Main game view
+- `/hex_clicked?hex_id=N` - Handle hex selection
+- `/kingdom?id=N` - Kingdom detail view
+- `/create_world` - New game form handler
+
+**ActiveGame State:**
+```python
+@dataclass
+class ActiveGame:
+    board: GameBoard
+    cover: ChunkCover
+    world_id: int
+    country_id: int = 0      # 0 = world view
+    selected_piece: str = ""
+    selected_settlement: str = ""
+```
+
+**Global Store:**
+```python
+globalStore = GameStorage("gameData/WebDebug.db")
+active = globalStore.active_board(user_id)
+active = globalStore.create_game(user_id, template_name="bayArea", kingdoms=5)
+```
+
+---
+
+## Common Workflows
+
+### Create New Game
+```python
+storage = GameStorage()
+terrain = TerraDemo().bayArea_map()
+terrain.carve_to_ocean(num_lakes=1)
+
+board = GameBoard(terrain, top_n=5)
+board.expand_kingdoms(max_rounds=50)
+
+# Save
+cover = ChunkCover(terrain, rings=5)
+cover.db = storage
+cover.save(name="My Game")
+board.save(storage, world_id=cover.ident)
+```
+
+### Render Kingdom View
+```python
+kingdom = board.kingdoms[0]
+details = CountryDetails(kingdom)
+
+# Build visualization
+details.countryMap.colorMap()
+grid = details.countryMap.hexGrid
+
+# Add overlays
+grid.builder.adjust("borders", details.countries_overlay(board.kingdoms))
+grid.builder.adjust("names", details.names_overlay(board.kingdoms))
+grid.builder.adjust("cities", details.settlements_overlay(board.kingdoms))
+grid.builder.adjust("fog", details.unknownOverlay())
+
+grid.builder.show()
+```
+
+### Query Territory Ownership
+```python
+# From database
+owner = storage.hex_owner(world_id, hex_index)
+
+# From terrain field
+countries = terrain.fields["country"]
+owner = int(countries[hex_index])  # 0=unclaimed, -1=invalid, >0=kingdom_id
+```
+
+---
+
+## Key Design Patterns
+
+1. **Watershed-Based Conquest**: Kingdoms expand by claiming entire watersheds, not individual hexes. More like Risk than Civilization.
+
+2. **Cascade Save/Load**: `GameBoard.save()` → `Kingdom.save()` → `Settlement.save()` → `Piece.save()`. Atomic transactions.
+
+3. **Dual Indexing**: `KingdomHex` stores both `grid_index` (array access) and `(q,r,s)` (spatial queries).
+
+4. **Index Mapper Pattern**: `CountryDetails.mapper` transforms between master terrain and cropped kingdom view.
+
+5. **Overlay Composition**: SVG layers (borders, names, settlements, fog) composed via `builder.adjust()`.
+
+---
+
+## Status
+
+**✅ Implemented:**
+- CountryFlag visual identity
+- Kingdom/GameBoard with encode/decode
+- Territory expansion (watershed-based)
+- Database persistence (GameStorage)
+- CountryDetails regional extraction
+- Web interface skeleton
+
+**🔄 In Progress:**
+- Piece movement and AI
+- Combat system
+- Turn processing
+
+**📋 Planned:**
+- Trade route caching in DB
+- Turn history/replay
+- Multi-player sync
