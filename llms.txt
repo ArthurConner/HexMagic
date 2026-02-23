@@ -6,274 +6,207 @@
 
 **Documentation:**
 - `docs/PROJECT_OVERVIEW.md` - Complete architecture, workflows, design patterns
+- `docs/PROJECT_PLAN_2026.md` - MVC architecture roadmap and status
 - `docs/CODE_PATTERNS.md` - Quick code reference for common operations
 - `docs/IMPLEMENTATION_CHECKLIST.md` - Development roadmap and status
 - `docs/DATABASE_EXTENSION_GUIDE.md` - How to extend database with game tables
+- `docs/DataProxyOptimizations.md` - Numpy-based chunk stitching performance
 
 **Schema Documents (docs/):**
 - `DatabaseSchema.md` - **Current implementation** (GeoStorage + GameStorage tables)
 - `ChunkCover_System.md` - **Upscaling system** (master terrain + zoom)
 - `DATABASE_QUICK_REF.md` - Quick reference for common operations
+- `TerrainSchema.md` / `TerrainSchema_FastLite.md` - Terrain data model
 - `PieceDesign.md` - Game unit/agent system
 - `Game design.md` - Game mechanics and design overview
-- `DATABASE_EXTENSION_GUIDE.md` - How to extend
 
-**Subsystem Docs:**
+**Subsystem LLM Docs:**
+- `llms-drawing.txt` - Drawing/visualization (styles.py + plot/*.py)
+- `llms-computation.txt` - Computation (primitives.py + database.py)
 - `HexMagic/game/llms.txt` - Game subsystem (kingdoms, settlements, pieces, web)
 
 ## Core Architecture: MVC-Like Pattern
 
 ### Model: Database (HexMagic/database.py)
-- **GeoStorage** - Persistent storage layer
-- **Tables**: HexData, HexWeather, WatershedMeta, ChunkBorder, World, User
-- **Persistence**: Terrain, weather, watersheds, chunk cache
+- **GeoStorage** - Persistent storage layer (SQLite via FastLite)
+- **Tables**: World, HexData, HexWeather, ChunkBorder, ChunkMeta, User
+- **DataProxy** - Lightweight numpy chunk holder for efficient stitching
+- **Chunk pipeline**: stitch_chunks_fast → proxy_to_terrain → ZoomResult
 - **Queries**: Spatial (q,r,s), temporal (as_of), chunk-scoped
-- **Caching**: Automatic chunk caching with invalidation
+- **Caching**: Automatic chunk caching with LRU eviction
 
 ### ViewModel: Terrain & ChunkCover
-- **Terrain** - Working data structure (elevations, fields)
-- **ChunkCover** - Master terrain + zoom pattern (top view)
-- **HexChunk** - Viewport extraction with halo (regional view)
+- **Terrain** (`terrain.py`) - Working data structure (elevations, fields dict, climate, geo)
+- **ChunkCover** (`cover.py`) - Master terrain + zoom + DrainageBasins + encode/decode
+- **HexChunk** (`plot/chunk.py`) - Viewport extraction with core + halo regions
 - **Bidirectional sync**: ViewModel ↔ Model via GeoStorage
 - **On-demand loading**: Generate detail only when needed
 
-### View: Visualization (HexMagic/plots/*.py)
-- **SVGBuilder** - Pattern-based rendering
-- **TerrainPatterns** - Dots, waves, climate patterns
+### View: Visualization (HexMagic/plot/*.py, styles.py, terrainpatterns.py)
+- **SVGBuilder** - Pattern-based rendering with layers and definitions
+- **TerrainPatterns** (`terrainpatterns.py`) - Dots, waves, climate patterns, SVGMask, PathPattern
+- **Terraform** (`terraform.py`) - Seismic events, climate/map rendering configs, legends
 - **crop_to_centered_grid()** - Regional extraction with index mapping
 
 ### Controller: Game Logic (HexMagic/game/*.py)
-- **GameBoard** - Game state management
-- **Kingdom** - Civilizations with territory (HexRegion)
-- **Settlement** - Cities with citizens (Piece list)
-- **Piece** - Units (movement, vision, AI)
-- **GameStorage** - Database layer extending GeoStorage
+- **GameBoard** (`data.py`) - Game state: cover, terrain, kingdoms, watershed_map
+- **Kingdom** (`data.py`) - Civilizations with territory (HexRegion), settlements, captured watersheds
+- **Settlement** / **Piece** (`data.py`) - Cities with citizens, units with movement/vision
+- **CountryFlag** (`flag.py`) - Visual identity, color generation, SVG patterns, naming
+- **GameStorage** (`data.py`) - Database layer extending GeoStorage with game tables
+- **Globals** (`globals.py`) - FastHTML app, MonsterUI, routes, game creation, caching
 - **See `HexMagic/game/llms.txt`** for detailed game subsystem docs
 
-### Web Layer (Planned)
-- FastHTML + HTMX interface
-- Multi-user hosting with per-user viewports
-- Real-time sync: DB → ViewModel → View
+### Web Layer (FastHTML + HTMX)
+- **globals.py** - App setup, MonsterUI theme, session management, world creation
+- **settlement.py** - Route wiring, imports
+- **web.py** - Routes: `/`, `/hex_clicked`, `/kingdom`, `/create_world`
+- **country.py** - CountryDetails regional views with mapper
 
 ---
 
-## Foundation Components (HexMagic/*.py)
+## Module Map (HexMagic/*.py)
 
-### Coordinates & Grids
-- `HexPosition` (q,r,s) - Universal cube coordinates
-- `HexGrid` - Grid with index↔position conversions
-- `HexChunk` - Viewport with core + halo regions
+### Coordinates & Grids (plot/)
+- `plot/primitives.py` - MapCord, MapSize, MapRect, MapPath
+- `plot/cube.py` - HexPosition (q,r,s), GosperCurve
+- `plot/hex.py` - Hex, HexGrid, HexWrapper, HexTouchMap, LinearGradient, HexButtonGroup
+- `plot/region.py` - HexRegion, boundary tracing, windy_edge factories
+- `plot/chunk.py` - HexChunk with core/halo, spiral iteration, position-based indexing
+- `primitives.py` - Re-exports from all plot modules
 
-### Terrain Generation
-- `Terrain` - Elevation + fields (temperature, precipitation, climate)
-- `Geology` - Tectonic plates, watersheds
-- Procedural: `Terrain.fromSeeds(bounds, num_plates=12)`
-- Real-world: `TerraDemo().bayArea_map()` (7+ locations)
+### Terrain & Climate
+- `terrain.py` - Terrain, GeoBounds, ClimatePreset, TerraDemo, USGSTerrainFetcher
+- `climate.py` - Climate, TerrainFactory, ClimatePreset presets
+- `weather.py` - TerrainTemplate (real-world map methods), WeatherColor, WeatherFetcher, Smith-Barstad precipitation, compute_weather patches
+- `voronoi.py` - Plate, PlateKind, voronoi_seeds, generate_plate_terrain (Terrain.fromSeeds)
+- `geology.py` - Geology (plates + terrain + soils + basins), imports from water/ subpackage
+- `water/` - River, Watershed, DrainageBasins, SoilSystem submodules
 
-### Multi-Scale System
-- `ChunkCover` - Chunk extraction and upsampling from master terrain
-- `HFFT` - Hexagonal FFT for smooth upsampling with detail
-- **Pattern**: Store coarse master, generate fine detail on-demand
-- **Caching**: Database-backed automatic caching
+### Visualization
+- `styles.py` - StyleCSS, SVGBuilder, SVGLayer, SVGDef, SVGPatternLoader, animations
+- `terrainpatterns.py` - TerrainPatterns (ballDensity, ballSpectrum, wavePattern, etc.), PathPattern, SVGMask
+- `terraform.py` - Terraform (seismic events stack), SeismicEvent, ClimateRenderConfig, MapRenderConfig, VolcanoSettings
+- `erosion.py` - ErosionConfig, ErosionSimulator, visualize_erosion
+
+### Persistence & Scale
+- `database.py` - GeoStorage, DataProxy, ChunkRef, stitch_chunks_fast, proxy_to_terrain, ZoomResult, region zoom pipeline, GeoStorageDebugger
+- `cover.py` - ChunkCover (master terrain + zoom + DrainageBasins), HFFT
 
 ## Database Schema (HexMagic/database.py)
 
 ### Core Tables (GeoStorage)
-**Tables:** World, HexData, HexWeather, WatershedMeta, ChunkBorder, User
+**Tables:** World, HexData, HexWeather, ChunkBorder, ChunkMeta, User
 
-**World:**
-- Stores ChunkCover instances via `cover_data` (encoded)
-- Metadata: name, created, modified
+**World** - Stores ChunkCover via `cover_data` (encoded). Fields: id, name, extras, created, cover_data, modified.
 
-**HexData:**
-- Individual hex terrain data (elevation, plate_id, lat/lon)
-- Indexed by (world_id, q, r, s) - cube coordinates
-- NEW: `watershed_id`, `chunk_q/r/s`, `scale_level`
-- Grid index for array access
-- Distance from coast
-- Temporal versioning (modified timestamp)
+**HexData** - Hex terrain data. Fields: world_id, q, r, s, grid_index, elevation, plate_id, latitude, longitude, distance_from_coast, watershed_id, chunk_q/r/s, scale_level (0=coarse, >0=zoomed), modified, last_accessed, access_count.
 
-**HexWeather:**
-- Weather/climate data per hex
-- Temperature, precipitation, humidity
-- Climate metrics (PET, aridity, seasonality)
-- Seasonal variations (annual, summer, winter)
-- NEW: `chunk_q/r/s`, `scale_level`, `climate_name`, `wind_dir`
-- Temporal versioning
+**HexWeather** - Weather/climate per hex. Fields: temperature, precipitation, humidity, climate_pet, aridity_index, seasonality, distance_from_coast, season, chunk_q/r/s, scale_level, climate_name, wind_dir.
 
-**WatershedMeta (NEW):**
-- Watershed topology and river trees
-- Terminal hex (outlet), flow statistics
-- Encoded river tree and style
-- Chunk-level watersheds supported
+**ChunkMeta** - Cached chunk metadata (avoids dimension inference). Fields: world_id, chunk_q/r/s, scale_level, nRows, nCols, radius, hex_count, timestamps.
 
-**ChunkBorder (NEW):**
-- Track drainage across chunk boundaries
-- Enable distributed watershed computation
-- Source/destination chunk coordinates
+**ChunkBorder** - Drainage across chunk boundaries. Fields: source/destination chunk coords, border hex, flow_volume.
 
-**User:**
-- Username, email, password
-- Session ID and active world
+**User** - username, email, password, sessionID, activeWorld.
 
-**Key Features:**
-- ChunkCover persistence: Save/load master terrain with zoom
-- Chunk caching: Automatic caching of zoomed terrain/weather/watersheds
-- Temporal data: Version history via modified timestamps
-- Spatial indexing: Fast queries by coordinates
-- Multi-scale support: `scale_level` distinguishes coarse vs zoomed
-- Cache invalidation: Clear derived data when master changes
-- Region extraction: `extract_region(world_id, center_q, center_r, center_s, rings=20)`
+### DataProxy Pipeline (NEW)
+- `DataProxy` - Lightweight numpy holder (nRows, nCols, radius, elevations, watersheds, invalidRegion)
+- `stitch_chunks_fast()` - Load chunks as DataProxy, stitch via numpy block copies, return merged proxy + offsets
+- `proxy_to_terrain()` - Convert final DataProxy to full Terrain with HexGrid geometry
+- `crop_proxy_to_region()` - Crop DataProxy to region bounding box + padding
+- `build_fine_to_coarse_mapper()` - Map fine terrain indices → coarse terrain indices
+- `ZoomResult` - Bundles terrain, basins, mapper function, chunk count
 
 ## Coordinate Systems
 
-**HexPosition (q,r,s)** - PRIMARY for cross-grid operations
-- Cube coordinates, q+r+s=0
-- Grid-independent
-- `pos.distance(other_pos)`
+**HexPosition (q,r,s)** - PRIMARY for cross-grid operations. Cube coordinates, q+r+s=0.
 
-**Grid Index** - For array access
-- 0 to len(hexes)-1
-- Grid-specific
+**Grid Index** - For array access: 0 to len(hexes)-1, grid-specific.
 
-**Row/Col** - For rectangular ops
-- Grid-specific
+**Row/Col** - For rectangular ops, grid-specific.
+
+**ChunkRef** - Chunk-space coordinates: position (HexPosition), rings. center_hex = rings*2 * position.
 
 **Conversions:**
 ```python
 pos = grid.index_to_hexposition(idx, origin_index=0)
 idx = grid.hexposition_to_index(pos, origin_index=0)
+chunk_pos, local_pos = world_to_chunk(world_pos, chunk_rings)
+world_pos = chunk_to_world(chunk_ref, local_pos)
 ```
 
 ## Key Workflows
 
 ### Terrain Generation
 ```python
-# Procedural
+# Procedural (via voronoi.py)
 terrain, plates = Terrain.fromSeeds(bounds, num_plates=12, seed=42)
 
-# Real-world
-terrain = TerraDemo().bayArea_map()
+# Real-world (via weather.py TerrainTemplate)
+tt = TerrainTemplate()
+terrain = tt.bayArea()  # or sanFran, maui, japan, normandy, hongKong, sydney
 
-# Climate
-terrain.compute_temperature()
-terrain.compute_precipitation()
-terrain.compute_climate()
+# Climate pipeline
+terrain.compute_weather()  # temperature + precipitation + climate zones
+terrain.carve_to_ocean(num_lakes=1)  # River carving
 
 # Visualize
 terrain.colorMap()
-terrain.add_climate_overlay()
+terrain.hexGrid.builder.show()
 ```
 
-### ChunkCover: Master Terrain + Zoom with Caching (NEW)
+### ChunkCover + GameBoard
 ```python
 from HexMagic.cover import ChunkCover
 from HexMagic.database import GeoStorage
 
-# Create coarse master terrain
-master = TerraDemo().sanFran()  # 100×120 hexes
+# GameBoard creates cover + basins internally
+board = GameBoard(terrain, top_n=5)
+board.expand_kingdoms(max_rounds=50)
 
-# Setup chunk cover
-cover = ChunkCover(master, rings=5, halo_rings=1)
+# Save
+board.cover.db = GeoStorage()
+board.cover.save(name="My World")
+board.save(storage, world_id=board.cover.ident)
 
-# Attach database for persistence
-storage = GeoStorage()
-cover.db = storage
-
-# Save master terrain
-result = cover.save(name="SF Master")
-cover_id = cover.ident  # Auto-assigned
-
-# Zoom with automatic caching (4× resolution)
-zoomed = cover.zoom_cached(origin=master.hexGrid.middle, scale=4)
-# First call: ⚙ Generated (80ms compute + cache save)
-# Second call: ✓ Cached (50ms load) - 5.6× faster!
-
-# Full data zoom (terrain + weather + watersheds)
-full = cover.zoom_with_full_data(
-    origin=master.hexGrid.middle,
-    scale=4,
-    compute_weather=True,
-    compute_watersheds=True
-)
-
-# Cache management
-storage.invalidate_all_caches(cover_id)  # Clear when master changes
-
-# Load cover later
-cover2 = storage.load_cover(cover_id).data
-zoomed2 = cover2.zoom_cached(origin=middle, scale=4)  # Uses cache
+# Load
+board = storage.gameboard(world_id)
 ```
 
-### Multi-Scale Terrain Generation
+### Region Zoom (DataProxy Pipeline)
 ```python
-from HexMagic.database import GeoStorage, ChunkedTerrainGenerator
+# Zoom into a kingdom's region
+result = storage.kingdom_detail(world_id, country_id, cover, scale=2)
+# Returns ZoomResult(terrain, basins, mapper, chunks_loaded)
 
-storage = GeoStorage()
-gen = ChunkedTerrainGenerator(
-    storage,
-    coarse_radius=100,    # Overview map hex size
-    fine_radius=10,       # Detail chunk hex size
-    chunk_rings=20,       # Hexes per chunk
-    halo_rings=5          # Extra for edge computation
-)
-
-# Generate world in phases
-bounds = MapRect(MapCord(0,0), MapSize(2000, 2000))
-coarse_id = gen.generate_world(
-    bounds,
-    num_plates=15,
-    ocean_fraction=0.4,
-    compute_weather=True
-)
-
-# Load chunks as needed
-chunk = gen.world_to_chunk_ref(HexPosition(10, -5, -5))
-chunk_terrain = gen.load_chunk(chunk)
+# Use mapper to project coarse → fine
+c2f = result.invert_mapper()  # coarse_idx → [fine_indices]
+fine_region = region.project_region(fine_grid, c2f)
 ```
 
-### Terrain Save/Load
+### Terraform (Seismic Events)
 ```python
-storage = GeoStorage()
+from HexMagic.terraform import Terraform, MapRenderConfig, ClimateRenderConfig
 
-# Save terrain
-result = storage.save_world(terrain, name="My World")
-world_id = result.id
-print(f"Saved {result.context}")  # "5000 hexes"
-
-# Load terrain (with temporal query)
-result = storage.load_world(world_id, as_of=timestamp)
-terrain = result.data
-
-# Save/load weather
-storage.save_weather(terrain, world_id, season="annual")
-storage.load_weather(world_id, terrain, season="annual")
-
-# Extract region
-result = storage.extract_region(
-    world_id,
-    center_q=10, center_r=-5, center_s=-5,
-    rings=20,
-    padding=1
-)
-region_terrain = result.data
+terra = Terraform(terrain)
+terra.terrain.elevations += terrain.volcano(center=414, adjusted=800, num_rings=8)
+# Events stack with encode/decode for replay
 ```
 
 ## Design Patterns
 
-**Encode/Decode** - All major classes serialize:
+**Encode/Decode** - All major classes serialize (Terrain, ChunkCover, Kingdom, GameBoard, etc.):
 ```python
-data = terrain.encode()
-terrain = Terrain.decode(data)
+data = cover.encode()  # includes terrain + basin
+cover = ChunkCover.decode(data)
 ```
 
 **Index Mapper** - Transform grids with mapping:
 ```python
-new_grid, new_region, mapper = region.crop_to_centered_grid()
-for new_idx in range(len(new_grid.hexes)):
+grid, region, mapper = region.crop_to_centered_grid()
+for new_idx in range(len(grid.hexes)):
     old_idx = mapper(new_idx)
-    if old_idx >= 0:
-        new_data[new_idx] = old_data[old_idx]
 ```
 
 **FastLite Database:**
@@ -283,45 +216,56 @@ db = database("db.sqlite")
 table = db.create(DataClass, pk='id', if_not_exists=True, transform=True)
 ```
 
-## Real-World Templates
+**@patch Pattern** - Extensive use of fastcore's @patch to add methods to classes across modules.
 
-1. Bay Area - SF Bay (medium)
-2. California - Full coast (large)
-3. Maui - Hawaiian island (simple)
-4. Japan & Korea - Archipelago (complex)
-5. Normandy - D-Day beaches
-6. Hong Kong - Pearl River Delta
-7. Sydney - Harbor
+## Real-World Templates (TerrainTemplate)
 
-Access: `db.get_template(1)` for Bay Area
+Access via `TerrainTemplate()` methods:
+- `bayArea()` - SF Bay (medium)
+- `sanFran()` - San Francisco focused
+- `california()` - Full coast (large)
+- `maui()` - Hawaiian island (simple)
+- `japan()` - Archipelago (complex)
+- `normandy()` - D-Day beaches
+- `hongKong()` - Pearl River Delta
+- `sydney()` - Harbor
+
+Template catalog: `TerrainTemplate().list_templates()` reads `data/templates/config.tsv`.
 
 ## Technology
 
-- Python 3.x, NumPy, Dataclasses
+- Python 3.x, NumPy, SciPy, scikit-learn
 - FastLite + SQLite (database)
-- FastHTML + HTMX (web)
+- FastHTML + HTMX + MonsterUI (web)
 - SVG (visualization)
 - nbdev (development)
-- SRTM elevation data
+- orographic_precipitation (Smith-Barstad model)
+- seaborn (color palettes)
+- treelib (river trees)
 
 ## Status
 
 **Completed:**
 ✅ Core terrain/geology with encode/decode
-✅ Climate modeling (Köppen)
-✅ Real-world data (7+ locations)
-✅ SVG visualization
+✅ Climate modeling (Köppen) + orographic precipitation
+✅ Real-world data (8+ locations via TerrainTemplate)
+✅ SVG visualization with patterns and overlays
 ✅ Database schemas (GeoStorage + GameStorage)
-✅ Multi-scale system (ChunkCover)
-✅ crop_to_centered_grid()
-✅ downsample_climate()
+✅ Multi-scale system (ChunkCover + DataProxy pipeline)
+✅ Region zoom with numpy stitching (10-50x speedup)
+✅ crop_to_centered_grid() + downsample_climate()
 ✅ Game database (PieceRecord, SettlementRecord, KingdomRecord, KingdomHex)
-✅ Territory expansion (watershed-based)
+✅ Territory expansion (watershed-based, round-robin)
 ✅ CountryDetails regional views
+✅ CountryFlag visual identity (split to flag.py)
+✅ Terraform event system (volcano, erosion, seismic)
+✅ Erosion simulation (fluvial, glacial, aeolian, hillslope)
+✅ FastHTML web app with MonsterUI, session management
 
 **In Progress:**
+🔄 Settlement building and citizen management
 🔄 Piece movement and AI
-🔄 Web interface (FastHTML)
+🔄 Web interface routes (hex_clicked, kingdom views)
 🔄 Turn processing system
 
 **Planned:**
@@ -333,20 +277,13 @@ Access: `db.get_template(1)` for Bay Area
 ## Key Insights
 
 1. **HexPosition is Universal** - Use (q,r,s) for cross-grid ops
-2. **Index Mapping Critical** - Track old→new when transforming
-3. **Multi-Scale for Large Worlds** - Downsample, map regions bidirectionally
-4. **Database Optional** - encode/decode works standalone
-5. **Two Schema Worlds** - Core library vs Web game
-6. **Pattern Visualization** - SVG patterns + overlays
-7. **Real + Procedural** - Both equally supported
-
-## Use Cases
-
-- Research: Geographic analysis, climate modeling
-- Games: Strategy/exploration with realistic worlds
-- Education: Geography, climate science, algorithms
-- Art: Map generation for RPGs, worldbuilding
-- Visualization: Novel geographic data rendering
+2. **Index Mapping Critical** - Track old→new when transforming grids
+3. **DataProxy for Performance** - Numpy arrays, no HexGrid geometry until final step
+4. **ChunkCover owns the Basin** - DrainageBasins stored on cover, not recomputed
+5. **GameBoard wraps ChunkCover** - Board creates cover internally, basins are lazy
+6. **Two Module Generations** - kingdom.py (older) vs data.py (newer, has all game classes)
+7. **@patch Everywhere** - Methods added across modules via fastcore @patch
+8. **Real + Procedural** - Both equally supported via TerrainTemplate / Terrain.fromSeeds
 
 For detailed information, see docs/PROJECT_OVERVIEW.md
 For code examples, see docs/CODE_PATTERNS.md
