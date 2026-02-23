@@ -755,6 +755,7 @@ class SVGBuilder(Generatable):
     
     def __init__(self):
         self.styles = {}
+        self.fonts = {}   # font_name -> import URL
         self.definitions: List[Generatable] = []
         self.layers: List[SVGLayer] = [SVGLayer("root", "")]
         self.width = 300
@@ -827,22 +828,23 @@ def adjust(self:SVGBuilder,name:str,body:str):
     self.layers.append(aLayer)
 
 
-# %% ../nbs/01_styles.ipynb #2491d398
+# %% ../nbs/01_styles.ipynb #64263f4d
 @patch
 def _header(self: SVGBuilder) -> str:
-     
     ret = f"<title> {self.title} </title>\n"
     if self.comment is not None:
         ret += f"<!-- \n{self.comment}\n -->\n"
-    
     
     # Add definitions
     if len(self.definitions) > 0:
         defs_content = "\n".join([x.generate() for x in self.definitions])
         ret += f"  <defs>\n    {defs_content}\n  </defs>\n"
     
-    # Add styles (including animations)
+    # Build style content
     style_content = ""
+    
+    # Font imports first (CSS requires @import at top)
+    style_content += self._font_imports()
     
     # Regular CSS styles
     if len(self.styles) > 0:
@@ -860,6 +862,8 @@ def _header(self: SVGBuilder) -> str:
 
     return ret
 
+
+# %% ../nbs/01_styles.ipynb #2491d398
 @patch
 def generate(self: SVGBuilder) -> str:
     attrs = ' '.join(f'{k}="{v}"' for k, v in self.attributes.items())
@@ -1264,6 +1268,33 @@ def showSave(self: SVGBuilder, dim=None, output_dir="outputs", name=None):
         f.write(content)
     
     display(SVG(filename))
+
+
+# %% ../nbs/01_styles.ipynb #06c8c5d1
+@patch
+def add_font(self: SVGBuilder, font_name: str, url: str = None):
+    """Add a web font to the SVG. Defaults to Google Fonts if no URL given.
+    
+    Args:
+        font_name: Font family name (e.g. 'PT Sans', 'Cinzel')
+        url: Full CSS URL. If None, auto-generates a Google Fonts import URL.
+    """
+    if not hasattr(self, 'fonts'):
+        self.fonts = {}
+    
+    if url is None:
+        encoded = font_name.replace(' ', '+')
+        url = f"https://fonts.googleapis.com/css2?family={encoded}&display=swap"
+    
+    self.fonts[font_name] = url
+    return self
+
+@patch
+def _font_imports(self: SVGBuilder) -> str:
+    """Generate @import rules for all added fonts."""
+    if not hasattr(self, 'fonts') or not self.fonts:
+        return ""
+    return "\n".join(f"@import url('{url}');" for url in self.fonts.values()) + "\n"
 
 
 # %% ../nbs/01_styles.ipynb #68821859
