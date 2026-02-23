@@ -641,6 +641,68 @@ def neighborsOf(self: HexGrid, index: int,ring=1) -> list[int]:
     return [i for i in neighbor_indices if i >= 0]  # Filter out-of-bounds
 
 
+# %% ../../nbs/plots/02c_hex.ipynb #b28e33de
+def _ring_coords(r):
+    """Generate ring cube coords as (6*r, 3) numpy array, purely vectorized."""
+    if r == 0:
+        return np.array([[0, 0, 0]])
+    
+    # Cube directions (must match HexPosition's convention)
+    directions = np.array([
+        [+1, -1,  0],  # E
+        [+1,  0, -1],  # SE  
+        [ 0, +1, -1],  # SW
+        [-1, +1,  0],  # W
+        [-1,  0, +1],  # NW
+        [ 0, -1, +1],  # NE
+    ])
+    
+    # Start corner: r steps in direction 4 (NW) from origin
+    start = directions[4] * r
+    
+    # Build all steps: each direction repeated r times
+    steps = np.repeat(directions, r, axis=0)          # (6r, 3)
+    
+    # Cumulative offset, but first position is start (zero offset)
+    offsets = np.vstack([np.zeros((1, 3), dtype=int), 
+                         np.cumsum(steps, axis=0)[:-1]])
+    
+    return start + offsets
+
+
+@patch
+def neighborsNPOf(self: HexGrid, index: int, ring=1) -> np.ndarray:
+    coords = ring_coords(ring)
+    indices = self.hexpositions_to_indices(coords, origin_index=index)
+    return indices[indices >= 0]
+
+
+# %% ../../nbs/plots/02c_hex.ipynb #5e62e478
+@patch
+def indices_in_rangeNP(self: HexGrid, index: int, distance: int) -> np.ndarray:
+    """Get all valid hex indices within `distance` steps of `index`, purely via numpy."""
+    q = np.arange(-distance, distance + 1)
+    qq, rr = np.meshgrid(q, q)
+    ss = -qq - rr
+    mask = np.abs(ss) <= distance
+    coords = np.stack([qq[mask], rr[mask], ss[mask]], axis=-1)
+    indices = self.hexpositions_to_indices(coords, origin_index=index)
+    return indices[indices >= 0]
+
+
+# %% ../../nbs/plots/02c_hex.ipynb #6d438ad8
+@patch
+def indices_in_range(self: HexGrid, index: int, distance: int) -> list[int]:
+    results = []
+    for q in range(-distance, distance + 1):
+        for r in range(max(-distance, -q - distance), min(distance, -q + distance) + 1):
+            s = -q - r
+            idx = self.hexposition_to_index(HexPosition(q, r, s), index)
+            if idx >= 0:
+                results.append(idx)
+    return results
+
+
 # %% ../../nbs/plots/02c_hex.ipynb #8d29cb6e
 @patch
 def direction_index(self: HexPosition) -> int | None:
