@@ -23,7 +23,7 @@ import httpx
 # %% ../nbs/02_primitives.ipynb #0dac2ebf
 # Import from plot modules (single source of truth)
 from .plot.primitives import PrimitiveDemo, MapCord, MapSize, MapRect, MakeCord, MakeSize, MapPath
-from .plot.hex import Hex, HexBackground, HexGrid, HexWrapper, LinearGradient, HexTouchMap, HexButtonGroup
+from .plot.hex import Hex, HexBackground, HexGrid, HexWrapper, LinearGradient, HexTouchMap, HexButtonGroup,HexLegend
 from .plot.cube import HexPosition, GosperCurve
 from .plot.region import HexRegion, windy_edge, variable_windy_edge,unique_windy_edge
 

@@ -29,7 +29,7 @@ from ..plot.hex import Hex, HexWrapper
 from ..styles import StyleCSS,  SVGBuilder
 
 from ..primitives import MapPath, MapSize, MapRect, MapCord 
-from ..primitives import HexGrid, HexPosition ,  HexRegion , windy_edge , unique_windy_edge
+from ..primitives import HexGrid, HexPosition ,  HexRegion , windy_edge , unique_windy_edge ,HexLegend
 from ..terrain import Terrain
 from ..voronoi import generate_plate_terrain
 Terrain.fromSeeds = generate_plate_terrain
