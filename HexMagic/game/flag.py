@@ -403,6 +403,87 @@ def flag_hex(flag:CountryFlag, radius=25):
 
     return Div(NotStr(builder.xml()))
 
+# %% ../../nbs/game/01_flag.ipynb #8901b502
+@patch
+def flag_banner(self: CountryFlag, width=150, height=100,
+                pattern_fn=None, wavy=False, pole=True, attrs=None):
+    """Traditional rectangular flag with optional pole and wavy edge.
+    
+    Returns SVGBuilder. Use .show() for Jupyter or wrap for FastHTML:
+        Div(NotStr(flag.flag_banner().xml()), **htmx_attrs)
+    
+    Args:
+        width/height: flag dimensions
+        pattern_fn: 'swirl','weave','triPattern','circlePattern','yin','sheridan'
+                    (defaults via patternIndex)
+        wavy: wavy right edge via MapPath.make_windy
+        pole: draw flagpole on left
+        attrs: extra SVG attributes dict for the flag polygon
+    """
+    PATTERNS = ['swirl', 'weave', 'triPattern', 'circlePattern', 'yin', 'sheridan']
+    if pattern_fn is None:
+        pattern_fn = PATTERNS[self.patternIndex % len(PATTERNS)]
+    
+    pad, pole_w, finial_r, pole_extra = 6, 5, 6, 30
+    
+    # Layout offsets
+    fx = pad + (pole_w if pole else 0)
+    fy = pad + (finial_r * 2 if pole else 0)
+    
+    builder = SVGBuilder()
+    builder.width = fx + width + pad
+    builder.height = fy + height + (pole_extra if pole else 0) + pad
+    
+    # --- Pattern fill ---
+    pat_id = f"fp_{self.name}"
+    builder.add_definition(getattr(self, pattern_fn)(pat_id))
+    flag_style = StyleCSS(f"flag_{self.name}",
+                          fill=f"url(#{pat_id})", stroke=self.comp, stroke_width=2.5)
+    builder.add_style(flag_style)
+    
+    # --- Flag shape via MapPath ---
+    tl, tr = MapCord(fx, fy), MapCord(fx + width, fy)
+    br, bl = MapCord(fx + width, fy + height), MapCord(fx, fy + height)
+    
+    if wavy:
+        right_edge = MapPath([tr, br]).make_windy(iterations=3, offset_factor=0.12)
+        points = [tl, tr] + right_edge.points[1:] + [bl]
+    else:
+        points = [tl, tr, br, bl]
+    
+    flag_path = MapPath(points, flag_style)
+    builder.adjust("flag", flag_path.drawClosed(CountryFlag._render_attrs(attrs)))
+    
+    # --- Pole + finial ---
+    if pole:
+        pole_style = StyleCSS(f"pole_{self.name}",
+                              stroke=self.darkPrimary, stroke_width=pole_w,
+                              stroke_linecap="round", fill=self.darkPrimary)
+        builder.add_style(pole_style)
+        px = pad + pole_w / 2
+        builder.adjust("pole",
+            f'<line x1="{px}" y1="{pad + finial_r}" '
+            f'x2="{px}" y2="{fy + height + pole_extra}" '
+            f'class="{pole_style.name}"/>'
+            f'<circle cx="{px}" cy="{pad + finial_r}" '
+            f'r="{finial_r}" class="{pole_style.name}"/>')
+    
+    return builder
+
+
+# %% ../../nbs/game/01_flag.ipynb #ed522a5d
+@patch
+def flag_html(self: CountryFlag, width=150, height=100,
+              pattern_fn=None, wavy=False, pole=True, **htmx_attrs):
+    """FastHTML-compatible flag. Pass any HTMX attrs as kwargs.
+    
+    Example: flag.flag_html(hx_get='/click', hx_target='#info')
+    """
+    builder = self.flag_banner(width=width, height=height,
+                               pattern_fn=pattern_fn, wavy=wavy, pole=pole)
+    return Div(NotStr(builder.xml()), **htmx_attrs)
+
+
 # %% ../../nbs/game/01_flag.ipynb #a4d245ca
 @patch
 def kingPiece(self: CountryFlag, center: MapCord, scale: float = 1.0, 
