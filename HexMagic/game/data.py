@@ -103,7 +103,7 @@ class Piece:
     # Identity
     id: str = field(default_factory=lambda: str(uuid.uuid4()))
     owner_id: int = 0
-    parent_id: Optional[str] = None
+    settlement_id: Optional[str] = None
     location: int = None
 
     # Core attributes
@@ -148,7 +148,7 @@ class Piece:
     flag: CountryFlag = None
 
     PIECE_FIELDS = [
-        'id', 'owner_id', 'parent_id', 'location',
+        'id', 'owner_id', 'settlement_id', 'location',
         'size', 'health', 'max_health',
         'sight', 'movement_range', 'current_position',
         'facing', 'rules', 'cursor', 'patrol',
@@ -205,7 +205,7 @@ class Piece:
         kw['location'] = int(kw['location']) if kw['location'] else None
 
         # Optional str
-        kw['parent_id'] = kw['parent_id'] or None
+        kw['settlement_id'] = kw['settlement_id'] or None
 
         # Bool
         kw['patrol'] = kw.get('patrol', '1') not in ('0', '')
@@ -912,6 +912,32 @@ def _map_point(coarse_idx: int, c2f: dict = None) -> int:
         return -1
     return fs[len(fs) // 2]
 
+# %% ../../nbs/game/02_data.ipynb #7cbc5609
+@patch(as_prop=True)
+def c2f(self: ZoomResult) -> dict:
+    """Lazily compute and cache the coarse→fine index mapping."""
+    if not hasattr(self, '_c2f') or self._c2f is None:
+        self._c2f = self.invert_mapper()
+    return self._c2f
+
+@patch
+def project_region(self: ZoomResult, region: HexRegion) -> HexRegion:
+    """Project a coarse region onto the zoomed fine grid."""
+    fine_hexes = set()
+    for coarse_idx in region.hexes:
+        if coarse_idx in self.c2f:
+            fine_hexes.update(self.c2f[coarse_idx])
+    return HexRegion(hexes=fine_hexes, hexGrid=self.terrain.hexGrid)
+
+@patch
+def map_point(self: ZoomResult, coarse_idx: int) -> int:
+    """Map a single coarse index to a representative fine index (middle of mapped set)."""
+    fs = self.c2f.get(coarse_idx)
+    if not fs:
+        return -1
+    return fs[len(fs) // 2]
+
+
 # %% ../../nbs/game/02_data.ipynb #5e570546
 @dataclass
 class PieceRecord:
@@ -1019,7 +1045,7 @@ class GameStorage(GeoStorage):
 # %% ../../nbs/game/02_data.ipynb #93f9832b
 @patch
 def save(self: Piece, db: GameStorage = None, world_id: int = 0,
-         settlement_id: str = "", kingdom_id: int = 0):
+          kingdom_id: int = 0):
     db = db or self.db
     if db is None:
         raise ValueError("No database — pass db or set piece.db")
@@ -1027,7 +1053,7 @@ def save(self: Piece, db: GameStorage = None, world_id: int = 0,
     record = PieceRecord(
         id=self.id,
         kingdom_id=kingdom_id or self.owner_id,
-        settlement_id=settlement_id,
+        settlement_id=self.settlement_id or "",
         location=self.location or -1,
         owner_id=self.owner_id,
         size=self.size,
@@ -1075,8 +1101,8 @@ def save(self: Settlement, world_id: int = 0):
     db.settlements.upsert(asdict(record), pk='id')
     
     for citizen in self.citizens:
-        citizen.save(db=db, world_id=world_id,
-                     settlement_id=self.id, kingdom_id=self.owner_id)
+        citizen.settlement_id = self.id  # ensure it's set
+        citizen.save(db=db, world_id=world_id, kingdom_id=self.owner_id)
     return record
 
 
@@ -1146,6 +1172,64 @@ def save(self: GameBoard, db: GameStorage, world_id: int):
     for kingdom in self.kingdoms:
         kingdom.db = db
         kingdom.save(db=db, world_id=world_id)
+
+# %% ../../nbs/game/02_data.ipynb #c9963778
+@patch
+def recruit(self: Settlement, piece_type: PieceType = PieceType.PAWN,
+            location: int = None, flag: CountryFlag = None) -> Piece:
+    """Create a new piece and add it to this settlement.
+
+    usuage:
+    
+    scout = kingdom.recruit(piece_type=PieceType.KNIGHT)
+# ... later, when you're ready to persist ...
+scout.save(db=store, world_id=world_id,
+           settlement_id=kingdom.settlements[0].id,
+           kingdom_id=kingdom.countryId)
+
+    """
+    piece = Piece(
+        owner_id=self.owner_id,
+        settlement_id=self.id,       # <-- piece knows its home
+        location=location or self.location,
+        piece_type=piece_type,
+    )
+    if flag:
+        piece.flag = flag
+    self.citizens.append(piece)
+    return piece
+
+
+# %% ../../nbs/game/02_data.ipynb #68462fdc
+@patch
+def found_settlement(self: Kingdom, location: int, name: str = "") -> Settlement:
+    """Establish a new settlement in this kingdom.
+    # Kingdom expands, founds a new settlement at a captured watershed's best hex
+ws = score.watershed
+best_hex = ws.max_flow_hex()[0]
+outpost = kingdom.found_settlement(best_hex, name="River's Bend")
+
+# Staff it
+worker = outpost.recruit(PieceType.PAWN, flag=kingdom.flag)
+scout  = outpost.recruit(PieceType.KNIGHT, flag=kingdom.flag)
+
+# Persist when ready
+outpost.save(world_id=world_id)
+worker.save(db=store, world_id=world_id,
+            settlement_id=outpost.id, kingdom_id=kingdom.countryId)
+
+    
+    """
+    settlement = Settlement(
+        owner_id=self.countryId,
+        location=location,
+        name=name or f"{self.flag.name}'s Outpost" if self.flag else "",
+    )
+    if self.flag:
+        settlement.updateFlag(self.flag)
+    self.settlements.append(settlement)
+    return settlement
+
 
 # %% ../../nbs/game/02_data.ipynb #c1e765cc
 @patch
