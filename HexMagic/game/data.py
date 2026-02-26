@@ -70,7 +70,58 @@ class InstructionList:
         self.cursor = cursor
         self.patrol = patrol
 
-    
+    # ── Rendering ─────────────────────────────────────────────
+
+    def __ft__(self):
+        """Full MonsterUI table with SVG glyphs and cursor marker."""
+        if not self.rules:
+            return P("No instructions", cls=TextPresets.muted_sm)
+
+        header = ["#", "", "Action"]
+        rows   = []
+        for i, r in enumerate(self.rules):
+            instr = Instruction(r)
+            label, _ = INSTR_LABELS.get(instr, (instr.name, "?"))
+            step = Strong("▶ ", cls="text-primary") if i == self.cursor else str(i + 1)
+            rows.append([step, _instr_glyph(instr), label])
+
+        tbl  = TableFromLists(header, rows, cls=(TableT.sm, TableT.striped, TableT.hover))
+        mode = "🔁 Patrol (loops)" if self.patrol else "⏹ One-shot"
+        return Card(tbl, footer=Small(mode, cls=TextPresets.muted_sm))
+
+    def compact(self, piece_id: str = "") -> FT:
+        """Compact inline badge strip — lightweight alternative to the full table."""
+        target_id = f"rules-{piece_id[:8]}" if piece_id else "rules-preview"
+
+        if not self.rules:
+            return P("No rules yet — drag a path above",
+                     cls="text-sm opacity-50", id=target_id)
+
+        _COLORS = {
+            0: "#94a3b8", 1: "#ef4444", 2: "#22c55e",
+            3: "#a855f7", 4: "#f59e0b", 5: "#3b82f6",
+            6: "#64748b", 7: "#64748b",
+        }
+        badges = []
+        for r in self.rules:
+            instr  = Instruction(r)
+            label, _ = INSTR_LABELS.get(instr, (instr.name, "?"))
+            color  = _COLORS.get(r, "#888")
+            badges.append(
+                Span(label,
+                     style=(f"background:{color}22; border:1px solid {color}; "
+                            "border-radius:4px; padding:2px 6px; font-size:11px; "
+                            f"color:{color}; margin:2px; display:inline-block;"))
+            )
+
+        return Div(
+            P(f"{len(self.rules)} instructions", cls="text-xs opacity-50 mb-1"),
+            Div(*badges, style="line-height:2"),
+            id=target_id,
+        )
+
+    # ── Factories ─────────────────────────────────────────────
+
     @classmethod
     def from_path(cls, hex_indices: list[int], grid: HexGrid,
                   start_facing: int = 0, patrol: bool = True) -> "InstructionList":
