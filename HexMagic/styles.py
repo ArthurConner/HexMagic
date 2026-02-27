@@ -780,18 +780,16 @@ class SVGBuilder(Generatable):
     def generate(self)->str:
         return "this is patched below"
 
-    def add_definition(self, item: Generatable):
-        if not isinstance(item, Generatable):
-            raise TypeError(f"Item must be Generatable, got {type(item)}")
-        
-        # Check for duplicate by id if the item has one
-        item_id = getattr(item, 'id', None)
-        if item_id is not None:
-            for existing in self.definitions:
-                if getattr(existing, 'id', None) == item_id:
-                    return  # Already exists, skip
-        
-        self.definitions.append(item)
+    def add_definition(self, defn):
+        attrs = getattr(defn, 'attributes', None)
+        pat_id = attrs.get('id') if attrs else None
+        if pat_id and any(
+            getattr(d, 'attributes', {}).get('id') == pat_id 
+            for d in self.definitions
+        ):
+            return  # Already exists
+        self.definitions.append(defn)
+
 
 
     def add_style(self, item: StyleCSS):
@@ -1601,3 +1599,48 @@ def animate_cascade(self: SVGBuilder,
             )
     
     return self
+
+# %% ../nbs/01_styles.ipynb #9e70bc11
+from fasthtml.svg import Svg, Rect, Circle
+
+# %% ../nbs/01_styles.ipynb #dd4a3487
+@patch
+def __ft__(self: SVGBuilder):
+    # Header
+    header = Div(
+        Strong(self.title), 
+        P(f"{self.width} × {self.height}  ‹{self.blockTag}›", cls="text-sm"))
+    
+    # Fonts
+    font_rows = [Tr(Td(name), Td(Span("AaBb 123", style=f"font-family:'{name}'"))) 
+                 for name in self.fonts]
+    fonts_sec = (H4("Fonts"), Table(Thead(Tr(Th("Font"), Th("Sample"))), Tbody(*font_rows))) if font_rows else ()
+
+    # Definitions
+    def_rows = []
+    for d in self.definitions:
+        did = getattr(d, 'attributes', {}).get('id', '?')
+        tag_name = getattr(d, 'tag_name', getattr(d, 'blockTag', '?'))
+        def_rows.append(Tr(Td(did), Td(tag_name), Td(str(len(d.generate())))))
+    defs_sec = (H4("Definitions"), Table(Thead(Tr(Th("ID"), Th("Tag"), Th("Len"))), Tbody(*def_rows))) if def_rows else ()
+
+    # Styles
+    style_rows = []
+    for name in sorted(self.styles):
+        s = self.styles[name]
+        fill = s.properties.get('fill', 'none')
+        stroke = s.properties.get('stroke', 'none')
+        if 'url(' in str(fill):
+            swatch = Code(fill, style="font-size:0.75em")
+        else:
+            swatch = Svg(Rect(width=28, height=18, fill=fill, stroke=stroke, stroke_width=1, rx=3),
+                         width=30, height=20, viewBox="0 0 30 20")
+        style_rows.append(Tr(Td(Code(name)), Td(swatch)))
+    styles_sec = (H4("Styles"), Table(Thead(Tr(Th("Name"), Th("Fill"))), Tbody(*style_rows))) if style_rows else ()
+
+    # Layers
+    layer_rows = [Tr(Td(Code(l.name)), Td(str(len(l.body)))) for l in self.layers]
+    layers_sec = (H4("Layers"), Table(Thead(Tr(Th("Name"), Th("Len"))), Tbody(*layer_rows))) if layer_rows else ()
+
+    return Div(header, *fonts_sec, *defs_sec, *styles_sec, *layers_sec)
+
