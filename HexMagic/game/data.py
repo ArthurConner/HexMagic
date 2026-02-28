@@ -3,7 +3,7 @@
 # %% auto #0
 __all__ = ['PIECE_DEFAULTS', 'Resources', 'InstructionList', 'Instruction', 'Piece', 'BuildQueue', 'Settlement', 'WatershedFlow',
            'TradeRoute', 'Kingdom', 'GameBoard', 'ActiveGame', 'PieceRecord', 'SettlementRecord', 'KingdomRecord',
-           'KingdomHex', 'GameStorage']
+           'KingdomHex', 'GameStorage', 'TerrainFineDisplay', 'TerrainWorldDisplay']
 
 # %% ../../nbs/game/02_data.ipynb #ba445732
 import sys
@@ -41,6 +41,10 @@ from ..geology import Geology, DrainageBasins, Watershed
 from ..weather import TerrainTemplate
 from ..database import ZoomResult, GeoStorageDebugger,GeoStorage, SaveResult, LoadResult, ChunkCover
 
+
+# %% ../../nbs/game/02_data.ipynb #cd0c7235
+from ..overlay import  TerrainDisplay, TerrainOverlay, ClimateOverlay, TerraDemo, DrainageBasins, OverlaySpec
+from ..overlay import TerrainDisplay, CreamOverlay, RiverOverlay, ClimateOverlay
 
 # %% ../../nbs/game/02_data.ipynb #59f517f0
 from .flag import CountryFlag , PieceType
@@ -1774,4 +1778,29 @@ def settlementOverlay(self: GameBoard, terrain: Terrain = None,
             )
 
     return overlay
+
+
+# %% ../../nbs/game/02_data.ipynb #3dd42b6f
+def TerrainFineDisplay(*overlays, result: ZoomResult, board: GameBoard = None, **kw):
+    """Unpack a ZoomResult into TerrainDisplay kwargs for zoomed views."""
+    return TerrainDisplay(
+        *overlays,
+        terrain=result.terrain,
+        basins=result.basins,
+        board=board,
+        c2f=result.c2f,
+        **kw
+    )
+
+
+# %% ../../nbs/game/02_data.ipynb #b5b7f2e0
+def TerrainWorldDisplay(*overlays, board: GameBoard, **kw):
+    """World-level display — no c2f, basins from cover."""
+    return TerrainDisplay(
+        *overlays,
+        terrain=board.terrain,
+        basins=board.cover.basin,
+        board=board,
+        **kw
+    )
 
