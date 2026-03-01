@@ -309,7 +309,17 @@ class Piece:
 class Squad:
     id: int = 0
     name: str = ""
+    animal: str = ""
     pieces: list[Piece] = field(default_factory=list)
+
+    @classmethod
+    def squads(cls,count=4)->['Squad']:
+    
+        flag = CountryFlag.seaborn("husl", 1)[0]
+        ret = []
+        for animal, name in flag.country_squads(count):
+            ret.append(Squad(name=name,animal=animal))
+        return ret
 
     def __iter__(self): return iter(self.pieces)
     def __len__(self): return len(self.pieces)
