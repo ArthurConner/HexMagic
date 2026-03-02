@@ -1026,6 +1026,126 @@ def flag_banner(self: CountryFlag, width=150, height=100,
     return builder
 
 
+# %% ../../nbs/game/01_flag.ipynb #026215d6
+@patch
+def flag_svg(self: CountryFlag, center: MapCord, scale: float = 1.0,
+             size: str = 'board', flag_id: str = None,
+             wavy: bool = False, pole: bool = True,
+             attrs: dict = None) -> tuple:
+    """Render a flag SVG fragment with appropriate fill for the display tier.
+
+    Returns (svg_string, pattern_def | None).
+    Caller registers the def on their SVGBuilder if not None.
+
+    Base flag is 30×20 units, centered at `center`, scaled by `scale`.
+
+    Args:
+        center:  MapCord placement position
+        scale:   SVG scale factor
+        size:    'board' | 'list' | 'large'
+        flag_id: unique SVG element id
+        wavy:    wavy trailing edge
+        pole:    include flagpole + finial
+        attrs:   dict of HTMX / HTML attributes
+    """
+    if flag_id is None:
+        flag_id = f"flag_{self.name}"
+
+    pat_id = f"{flag_id}_pat"
+    pat_def = None
+
+    # --- Fill tier ---
+    if size == 'board':
+        fill = self.primary
+    elif size == 'list':
+        _SIMPLE = [self.bicolorH, self.bicolorV, self.tricolorH,
+                   self.quarters, self.crossFlag, self.chevron]
+        fn = _SIMPLE[self.patternIndex % len(_SIMPLE)]
+        pat_def = fn(pat_id)
+        pat_def.attributes['patternTransform'] = f'scale({scale:.3f})'
+        fill = f"url(#{pat_id})"
+    else:  # 'large'
+        pat_def = self.flagPattern(pat_id, scale=0.1 * scale)
+        fill = f"url(#{pat_id})"
+
+    # --- Base dimensions (local coords) ---
+    fw, fh = 30, 20
+    pole_w, finial_r = 1.2, 1.5
+    pole_pad = (pole_w + 0.5) if pole else 0
+
+    parts = []
+    extra = CountryFlag._render_attrs(attrs) if attrs else ""
+
+    # --- Flag shape ---
+    x0, y0 = pole_pad, 0
+    if wavy:
+        tr, br = MapCord(x0 + fw, y0), MapCord(x0 + fw, fh)
+        right = MapPath([tr, br]).make_windy(iterations=3, offset_factor=0.12)
+        d = f"M {x0},{y0} L {x0 + fw},{y0} "
+        for p in right.points[1:]:
+            d += f"L {p.x:.1f},{p.y:.1f} "
+        d += f"L {x0},{fh} Z"
+        parts.append(f'<path d="{d}" fill="{fill}" stroke="{self.comp}" '
+                     f'stroke-width="0.7"{extra}/>')
+    else:
+        parts.append(f'<rect x="{x0}" y="{y0}" width="{fw}" height="{fh}" '
+                     f'fill="{fill}" stroke="{self.comp}" stroke-width="0.7" '
+                     f'rx="0.5"{extra}/>')
+
+    # Board-tier accent stripe so tiny flags still read as two-tone
+    if size == 'board':
+        sw = fw * 0.3
+        parts.append(f'<rect x="{x0}" y="{y0}" width="{sw:.1f}" height="{fh}" '
+                     f'fill="{self.comp}" opacity="0.85"/>')
+
+    # --- Pole + finial ---
+    if pole:
+        px = pole_w / 2
+        parts.append(
+            f'<line x1="{px}" y1="-{finial_r}" x2="{px}" y2="{fh + 2}" '
+            f'stroke="{self.darkPrimary}" stroke-width="{pole_w}" '
+            f'stroke-linecap="round"/>')
+        parts.append(
+            f'<circle cx="{px}" cy="-{finial_r}" r="{finial_r}" '
+            f'fill="{self.darkPrimary}"/>')
+
+    inner = '\n'.join(parts)
+
+    # Center the whole thing at origin, then place at center
+    total_w = pole_pad + fw
+    cx_off = total_w / 2
+    cy_off = fh / 2
+    tx, ty = center.x, center.y
+
+    svg = (f'<g id="{flag_id}" '
+           f'transform="translate({tx},{ty}) scale({scale}) '
+           f'translate(-{cx_off:.1f},-{cy_off:.1f})" '
+           f'style="cursor:pointer">\n{inner}\n</g>')
+
+    return svg, pat_def
+
+
+@patch
+def draw_flag(self: CountryFlag, center: MapCord, builder: SVGBuilder,
+              scale: float = 1.0, size: str = 'board',
+              flag_id: str = None, layer: str = None,
+              wavy: bool = False, pole: bool = True,
+              opacity: float = 1.0, attrs: dict = None) -> str:
+    """Convenience: render flag, register pattern on builder, return SVG.
+    If layer is given, also calls builder.adjust(layer, svg).
+    """
+    svg, pat_def = self.flag_svg(
+        center, scale=scale, size=size, flag_id=flag_id,
+        wavy=wavy, pole=pole, attrs=attrs)
+    if pat_def is not None:
+        builder.add_definition(pat_def)
+    if opacity < 1.0:
+        svg = f'<g opacity="{opacity:.2f}">{svg}</g>'
+    if layer is not None:
+        builder.adjust(layer, svg)
+    return svg
+
+
 # %% ../../nbs/game/01_flag.ipynb #11ee2bbd
 @patch
 def iconPiece(self: CountryFlag, svg_source: str, center: MapCord,
