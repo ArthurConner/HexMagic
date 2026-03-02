@@ -889,11 +889,12 @@ def HexTouchMap(grid, on_click=None, hover_fill="rgba(128,128,128,0.3)",
     Returns:
         FastHTML Div containing the SVG
     """
-    # Render the visual hex layer
-    grid.update(layer_name=hex_layer)
+    
     
     # Add interactive touch layer if on_click provided
     if on_click is not None:
+        # Render the visual hex layer
+        grid.update(layer_name=hex_layer)
         # Touch style: transparent fill, hover highlight
         touch_style = StyleCSS("hex-touch", fill="transparent", stroke="none", cursor=cursor)
         hover_style = StyleCSS("_hover", fill=hover_fill, cursor=cursor)
