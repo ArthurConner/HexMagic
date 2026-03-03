@@ -402,6 +402,42 @@ class Terrain:
 
 
 
+# %% ../nbs/03_terrain.ipynb #65d8dc93
+@patch
+def repalette(self: Terrain,
+              levels: int = 6,
+              low_color: str = "#c7e9c0",
+              high_color: str = "#9e6b4a",
+              water_color: str = "#6baed6",
+              water_stroke: str = "#4292c6",
+              stroke: str = "#bbb",
+              stroke_width: float = 0.5,
+              apply: bool = True):
+    """Replace seaLevel + colorLevels with a lerped gradient and re-register on builder."""
+    # Sea level
+    self.seaLevel = StyleCSS("sealevel", fill=water_color,
+                             stroke=water_stroke, stroke_width=stroke_width)
+    self.hexGrid.builder.add_style(self.seaLevel)
+
+    # Elevation bands
+    bands = []
+    for i in range(levels):
+        f = i / max(levels - 1, 1)
+        color = StyleCSS.lerp_color(low_color, high_color, f)
+        s = StyleCSS(f"elev_{i}", fill=color,
+                     stroke=stroke, stroke_width=stroke_width)
+        hover = StyleCSS("hover", fill=s.desaturate().properties["fill"],
+                         cursor="pointer")
+        s.customize(hover)
+        self.hexGrid.builder.add_style(s)
+        bands.append(s)
+
+    self.colorLevels = bands
+
+    if apply:
+        self.colorMap()
+
+
 # %% ../nbs/03_terrain.ipynb #3885dbae
 @patch
 def clone(self: Terrain) -> 'Terrain':
@@ -1688,6 +1724,8 @@ def demoCoast(self:TerraDemo):
     """Practice building up coord."""
     
     sampleMap = self.sanFran()
+    #sampleMap.repalette()
+    sampleMap.repalette(levels=8, low_color="#5eb75bff", high_color="#8b4513")
     sampleMap.addCoast()
    
     

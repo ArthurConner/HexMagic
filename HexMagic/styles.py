@@ -25,6 +25,7 @@ import lxml
 import colorsys
 import seaborn as sns
 import matplotlib.pyplot as plt
+from matplotlib.colors import to_rgb, to_hex
 
 
 from IPython.display import SVG, HTML
@@ -234,6 +235,26 @@ class StyleCSS(Generatable):
         # Create new style
         name = f"pat_fill_{counter}"
         return cls(name, **props), True
+
+    @staticmethod
+    def lerp_color(c1, c2, t):
+        """Blend two colors in HSV space. t=0 → c1, t=1 → c2.
+        Uses shortest-path hue interpolation."""
+        r1, g1, b1 = to_rgb(c1)
+        r2, g2, b2 = to_rgb(c2)
+        h1, s1, v1 = colorsys.rgb_to_hsv(r1, g1, b1)
+        h2, s2, v2 = colorsys.rgb_to_hsv(r2, g2, b2)
+
+        # Shortest arc on the hue circle
+        dh = h2 - h1
+        if dh > 0.5:   dh -= 1.0
+        elif dh < -0.5: dh += 1.0
+
+        h = (h1 + dh * t) % 1.0
+        s = s1 + (s2 - s1) * t
+        v = v1 + (v2 - v1) * t
+
+        return to_hex(colorsys.hsv_to_rgb(h, s, v))
 
     @classmethod
     def elevations(cls):
