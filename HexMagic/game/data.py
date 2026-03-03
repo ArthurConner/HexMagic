@@ -3,8 +3,8 @@
 # %% auto #0
 __all__ = ['PIECE_DEFAULTS', 'RANK_ORDER', 'Resources', 'InstructionList', 'Instruction', 'Piece', 'Squad', 'BuildQueue',
            'Settlement', 'WatershedFlow', 'TradeRoute', 'Kingdom', 'GameBoard', 'ActiveGame', 'PieceRecord',
-           'SettlementRecord', 'KingdomRecord', 'KingdomHex', 'GameStorage', 'TerrainFineDisplay',
-           'TerrainWorldDisplay']
+           'SettlementRecord', 'KingdomRecord', 'KingdomHex', 'GameStorage', 'CountryBordersOverlay',
+           'KingdomNamesOverlay', 'SettlementOverlay', 'PieceOverlay', 'TerrainFineDisplay', 'TerrainWorldDisplay']
 
 # %% ../../nbs/game/02_data.ipynb #ba445732
 import sys
@@ -1858,6 +1858,32 @@ def settlementOverlay(self: GameBoard, terrain: Terrain = None,
             overlay += svg_str + "\n"
 
     return overlay
+
+
+# %% ../../nbs/game/02_data.ipynb #5214f837
+def CountryBordersOverlay(**kw) -> OverlaySpec:
+    def render(ctx):
+        c2f = getattr(ctx, 'c2f', None)
+        return ctx.board.countries_overlay(ctx.terrain, c2f)
+    return OverlaySpec("country_borders", render, requires={'board'}, priority=50)
+
+def KingdomNamesOverlay(**kw) -> OverlaySpec:
+    def render(ctx):
+        c2f = getattr(ctx, 'c2f', None)
+        return ctx.board.names_overlay(ctx.terrain, c2f)
+    return OverlaySpec("kingdom_names", render, requires={'board'}, priority=70)
+
+def SettlementOverlay(scale=2.0, **kw) -> OverlaySpec:
+    def render(ctx):
+        c2f = getattr(ctx, 'c2f', None)
+        return ctx.board.settlementOverlay(ctx.terrain, c2f, scale=scale)
+    return OverlaySpec("settlements", render, requires={'board'}, priority=75)
+
+def PieceOverlay(**kw) -> OverlaySpec:
+    def render(ctx):
+        c2f = getattr(ctx, 'c2f', None)
+        return ctx.board.pieceOverlay(ctx.terrain, c2f)
+    return OverlaySpec("pieces", render, requires={'board'}, priority=80)
 
 
 # %% ../../nbs/game/02_data.ipynb #3dd42b6f
