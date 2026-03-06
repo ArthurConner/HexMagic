@@ -1816,19 +1816,14 @@ def names_overlay(self: GameBoard, terrain: Terrain = None,
 # %% ../../nbs/game/02_data.ipynb #d7cac004
 @patch
 def settlementOverlay(self: GameBoard, terrain: Terrain = None,
-                      c2f: dict = None, scale: float = 2.0) -> str:
-    """Settlement markers using flags, with detail tier chosen by scale."""
+                      c2f: dict = None) -> str:
+    """Settlement markers using king pieces with flag-pattern fills."""
     terrain = terrain or self.terrain
     grid = terrain.hexGrid
     num_hexes = len(grid.hexes)
 
-    # Pick detail tier based on scale
-    if scale < 1.5:
-        size = 'board'
-    elif scale < 3.0:
-        size = 'list'
-    else:
-        size = 'large'
+    # King piece is 45 units wide; scale so it's ~1.2× the hex radius
+    scale = grid.radius * 1.2 / 22.5
 
     overlay = ""
     for country in self.kingdoms:
@@ -1843,13 +1838,14 @@ def settlementOverlay(self: GameBoard, terrain: Terrain = None,
                 continue
 
             coords = grid.hexes[local_idx].center
-            piece_id = f"flag_{country.countryId}_{j}"
+            piece_id = f"king_{country.countryId}_{j}"
 
-            svg_str, pat_def = country.flag.flag_svg(
+            svg_str, pat_def = country.flag.piece_svg(
+                PieceType.KING,
                 MapCord(coords.x, coords.y),
                 scale=scale,
-                size=size,
-                flag_id=piece_id,
+                size='large',
+                piece_id=piece_id,
             )
 
             if pat_def is not None:
@@ -1873,10 +1869,10 @@ def KingdomNamesOverlay(**kw) -> OverlaySpec:
         return ctx.board.names_overlay(ctx.terrain, c2f)
     return OverlaySpec("kingdom_names", render, requires={'board'}, priority=70)
 
-def SettlementOverlay(scale=2.0, **kw) -> OverlaySpec:
+def SettlementOverlay( **kw) -> OverlaySpec:
     def render(ctx):
         c2f = getattr(ctx, 'c2f', None)
-        return ctx.board.settlementOverlay(ctx.terrain, c2f, scale=scale)
+        return ctx.board.settlementOverlay(ctx.terrain, c2f)
     return OverlaySpec("settlements", render, requires={'board'}, priority=75)
 
 def PieceOverlay(**kw) -> OverlaySpec:
