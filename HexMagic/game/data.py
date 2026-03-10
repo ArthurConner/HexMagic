@@ -156,27 +156,28 @@ class Instruction(Enum):
     ROT_L   = 6
     ROT_R   = 7
 
-# %% ../../nbs/game/02_data.ipynb #7b7fbaf8
-# Default strengths per type: (attack, move, harvest, scout)
+# %% ../../nbs/game/02_data.ipynb #1808f87e
 PIECE_DEFAULTS = {
-    PieceType.PAWN:   (1, 3, 7, 2),  # worker
-    PieceType.KNIGHT: (2, 7, 1, 5),  # scout
-    PieceType.ROOK:   (7, 2, 1, 1),  # warrior
-    PieceType.BISHOP: (3, 4, 4, 4),  # balanced
-    PieceType.QUEEN:  (6, 5, 3, 5),  # powerful all-rounder
-    PieceType.KING:   (4, 2, 2, 3),  # moderate, defensively placed
+    #                    atk   def    hp   diet   cap    harv  spd
+    PieceType.PAWN:   (  1.5,  0.8,   80,  2.7,   8.7,  2.06,  2),
+    PieceType.BISHOP: (  4.0,  1.0,  100,  1.9, 178.7,  0.84,  3),
+    PieceType.ROOK:   (  2.5,  1.6,  130,  3.5,  12.0,  1.8,   3),
+    PieceType.KNIGHT: (  7.5,  0.5,   55,  4.0,  10.0,  1.5,   4),
+    PieceType.QUEEN:  (  8.4,  1.29, 121, 27.9,  59.0,  0.48,  3),
+    PieceType.KING:   (  3.0,  1.5,  100,  5.0,  14.0,  0.5,   2),
 }
+
 
 RANK_ORDER = {
-    PieceType.KING:   0,
-    PieceType.QUEEN:  1,
-    PieceType.ROOK:   2,
-    PieceType.BISHOP: 3,
-    PieceType.KNIGHT: 4,
-    PieceType.PAWN:   5,
-}
+     PieceType.KING:   0,
+     PieceType.QUEEN:  1,
+     PieceType.ROOK:   2,
+     PieceType.BISHOP: 3,
+     PieceType.KNIGHT: 4,
+     PieceType.PAWN:   5,
+ }
 
-# %% ../../nbs/game/02_data.ipynb #1808f87e
+
 @dataclass
 class Piece:
     """A game piece representing a group of units."""
@@ -186,7 +187,7 @@ class Piece:
     owner_id: int = 0
     settlement_id: Optional[str] = None
     location: int = None
-    name: str = "" 
+    name: str = ""
     birth_year: int = 1900
 
     # Core attributes
@@ -195,21 +196,22 @@ class Piece:
     max_health: int = 100
 
     # Vision
-    sight: int = 3
+    sight: int = 4
 
     # Movement
     movement_range: int = 4
     current_position: int = -1
 
     # Facing & rules
-    facing: int = 0             # direction index 0–5
+    facing: int = 0
     instructions: InstructionList = field(default_factory=lambda: InstructionList([], 0, True))
 
-    # Strengths
-    attack_strength: int = 1
+    # Combat
+    attack_strength: float = 1.0
+    defense: float = 1.0
     move_strength: int = 3
-    harvest_strength: int = 1
-    scout_strength: int = 1
+    harvest_strength: float = 1.0
+    temperment:int = 100
 
     # Type
     piece_type: PieceType = PieceType.PAWN
@@ -217,7 +219,7 @@ class Piece:
 
     # Food
     food: float = 0.0
-    diet: float = 1.0           # food consumed per turn
+    diet: float = 1.0
     food_capacity: float = 10.0
 
     # Settlement state
@@ -230,31 +232,40 @@ class Piece:
     flag: CountryFlag = None
 
     PIECE_FIELDS = [
-        'id', 'owner_id', 'settlement_id', 'location','name','birth_year',
+        'id', 'owner_id', 'settlement_id', 'location', 'name', 'birth_year',
         'size', 'health', 'max_health',
         'sight', 'movement_range', 'current_position',
-        'facing', 'rules', 'cursor', 'patrol','squad',
-        'attack_strength', 'move_strength', 'harvest_strength', 'scout_strength',
-        'piece_type',
+        'facing', 'rules', 'cursor', 'patrol', 'squad',
+        'attack_strength', 'defense', 'move_strength', 'harvest_strength',
+        'temperment',
+        'piece_type', 
         'food', 'diet', 'food_capacity',
         'harvest_goal', 'settle_progress', 'settle_threshold',
     ]
 
     def __post_init__(self):
-        """Apply default strengths from piece type if still at dataclass defaults."""
-        defaults = PIECE_DEFAULTS.get(self.piece_type, (1, 3, 1, 1))
-        if (self.attack_strength, self.move_strength,
-            self.harvest_strength, self.scout_strength) == (1, 3, 1, 1):
-            self.attack_strength = defaults[0]
-            self.move_strength = defaults[1]
-            self.harvest_strength = defaults[2]
-            self.scout_strength = defaults[3]
+        """Apply default stats from piece type if still at dataclass defaults."""
+        defs = PIECE_DEFAULTS.get(self.piece_type)
+        if defs is None:
+            return
+        atk, dfn, hp, diet, cap, harv, spd = defs
+
+        # Only override if still at generic defaults
+        if self.attack_strength == 1.0 and self.defense == 1.0:
+            self.attack_strength  = atk
+            self.defense          = dfn
+            self.max_health       = hp
+            self.health           = hp
+            self.diet             = diet
+            self.food_capacity    = cap
+            self.harvest_strength = harv
+            self.move_strength    = spd
+            self.food             = cap  # start full
 
     def encode(self) -> str:
         """Encode piece as a single tab-delimited line."""
         vals = []
         for f in self.PIECE_FIELDS:
-            # Map flat field names to InstructionList
             if f == 'rules':
                 v = ','.join(str(x) for x in self.instructions.rules)
             elif f == 'cursor':
@@ -279,17 +290,19 @@ class Piece:
 
         # Ints
         for f in ['owner_id', 'size', 'health', 'max_health', 'sight',
-                'movement_range', 'current_position',
-                'facing', 'birth_year','squad',
-                'attack_strength', 'move_strength', 'harvest_strength', 'scout_strength',
-                'settle_progress', 'settle_threshold']:
+                  'movement_range', 'current_position',
+                  'facing', 'birth_year', 'squad','temperment',
+                  'move_strength',
+                  'settle_progress', 'settle_threshold']:
             kw[f] = int(kw[f]) if kw[f] else 0
 
         # Floats
-        for f in ['food', 'diet', 'food_capacity']:
+        for f in ['food', 'diet', 'food_capacity',
+                  'attack_strength', 'defense', 'harvest_strength']:
             kw[f] = float(kw[f]) if kw[f] else 0.0
         if kw['diet'] == 0.0: kw['diet'] = 1.0
         if kw['food_capacity'] == 0.0: kw['food_capacity'] = 10.0
+        if kw['defense'] == 0.0: kw['defense'] = 1.0
 
         # Optional ints
         kw['location'] = int(kw['location']) if kw['location'] else None
@@ -310,7 +323,6 @@ class Piece:
         kw['instructions'] = InstructionList(rules, cursor, patrol)
 
         return cls(**kw)
-
 
 
 # %% ../../nbs/game/02_data.ipynb #68c5f451
@@ -1115,25 +1127,25 @@ class PieceRecord:
     kingdom_id: int = 0
     settlement_id: str = ""
     location: int = 0
-    name:str = ""
-    birth_year:int = 0
+    name: str = ""
+    birth_year: int = 0
     owner_id: int = 0
     size: int = 100
     health: int = 100
     max_health: int = 100
     sight: int = 3
     movement_range: int = 4
-    # Facing & rules
     squad: int = -1
     facing: int = 0
-    rules: str = ""          # comma-separated ints e.g. "5,5,6,5,7,2"
+    rules: str = ""
     cursor: int = 0
-    patrol: int = 1          # sqlite bool
+    patrol: int = 1
     # Strengths
-    attack_strength: int = 1
+    attack_strength: float = 1.0
+    defense: float = 1.0          # was scout_strength
     move_strength: int = 3
-    harvest_strength: int = 1
-    scout_strength: int = 1
+    harvest_strength: float = 1.0
+    temperment:int = 100
     # Type & harvest
     piece_type: str = "pawn"
     # Food
@@ -1244,9 +1256,10 @@ def save(self: Piece, db: GameStorage = None, world_id: int = 0,
         cursor=self.instructions.cursor,
         patrol=1 if self.instructions.patrol else 0,
         attack_strength=self.attack_strength,
+        temperment=self.temperment,
+        defense=self.defense,             # was scout_strength
         move_strength=self.move_strength,
         harvest_strength=self.harvest_strength,
-        scout_strength=self.scout_strength,
         piece_type=self.piece_type.value,
         food=self.food,
         diet=self.diet,
@@ -1500,7 +1513,7 @@ def piece_from_id(db: GameStorage, piece_id: str) -> Piece:
     return Piece(
         id=r['id'],
         owner_id=r['owner_id'],
-        squad= r['squad'],
+        squad=r['squad'],
         name=r.get('name', 'Marvin'),
         birth_year=r.get('birth_year', 0),
         location=r['location'] if r['location'] >= 0 else None,
@@ -1514,9 +1527,10 @@ def piece_from_id(db: GameStorage, piece_id: str) -> Piece:
             rules, int(r.get('cursor', 0)), bool(r.get('patrol', 1))
         ),
         attack_strength=r['attack_strength'],
+        temperment= r['temperment'],
+        defense=r['defense'],             # was scout_strength
         move_strength=r['move_strength'],
         harvest_strength=r['harvest_strength'],
-        scout_strength=r['scout_strength'],
         piece_type=PieceType(r['piece_type']) if r['piece_type'] else PieceType.PAWN,
         food=r.get('food', 0.0),
         diet=r.get('diet', 1.0),
