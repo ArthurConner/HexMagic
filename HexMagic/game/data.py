@@ -48,7 +48,7 @@ from ..overlay import  TerrainDisplay, TerrainOverlay, ClimateOverlay, TerraDemo
 from ..overlay import TerrainDisplay, CreamOverlay, RiverOverlay, ClimateOverlay
 
 # %% ../../nbs/game/02_data.ipynb #59f517f0
-from .flag import CountryFlag , PieceType
+from .flag import CountryFlag , PieceType, GameContext
 import logging
 
 # %% ../../nbs/game/02_data.ipynb #3c7ef09d
@@ -1894,6 +1894,99 @@ def PieceOverlay(**kw) -> OverlaySpec:
         c2f = getattr(ctx, 'c2f', None)
         return ctx.board.pieceOverlay(ctx.terrain, c2f)
     return OverlaySpec("pieces", render, requires={'board'}, priority=80)
+
+
+# %% ../../nbs/game/02_data.ipynb #c7a1ba58
+def PieceOverlay(**kw) -> OverlaySpec:
+    """Render all pieces using their flag's chess-piece SVG."""
+    def render(ctx) -> str:
+        if not ctx.pieces:
+            return ""
+
+        grid = ctx.grid
+        c2f = getattr(ctx, 'c2f', None)
+        num_hexes = len(grid.hexes)
+
+        # Scale piece to ~0.8× hex radius (smaller than king settlement marker)
+        scale = grid.radius * 0.8 / 22.5
+
+        parts = []
+        for i, piece in enumerate(ctx.pieces):
+            if piece.location is None or piece.flag is None:
+                continue
+
+            local_idx = _map_point(piece.location, c2f)
+            if local_idx < 0 or local_idx >= num_hexes:
+                continue
+
+            center = grid.hexes[local_idx].center
+            pid = f"pc_{piece.id}_{i}"
+
+            svg_str, pat_def = piece.flag.piece_svg(
+                piece.piece_type,
+                MapCord(center.x, center.y),
+                scale=scale,
+                size='board',
+                piece_id=pid,
+            )
+
+            if pat_def is not None:
+                ctx.builder.add_definition(pat_def)
+
+            parts.append(svg_str)
+
+        return '\n'.join(parts)
+
+    return OverlaySpec("pieces", render, requires={'pieces'}, priority=80)
+
+
+# %% ../../nbs/game/02_data.ipynb #c2251a61
+def SettlementOverlay(**kw) -> OverlaySpec:
+    """Render settlements as king pieces with flag-pattern fills."""
+    def render(ctx) -> str:
+        board = ctx.board
+        if not board or not board.kingdoms:
+            return ""
+
+        grid = ctx.grid
+        c2f = getattr(ctx, 'c2f', None)
+        num_hexes = len(grid.hexes)
+
+        # King piece is 45 units; scale to ~1.2× hex radius (bigger than regular pieces)
+        scale = grid.radius * 1.2 / 22.5
+
+        parts = []
+        for country in board.kingdoms:
+            if country.flag is None:
+                continue
+
+            for j, s in enumerate(country.settlements):
+                if s.location is None:
+                    continue
+
+                local_idx = _map_point(s.location, c2f)
+                if local_idx < 0 or local_idx >= num_hexes:
+                    continue
+
+                center = grid.hexes[local_idx].center
+                pid = f"settle_{country.countryId}_{j}"
+
+                svg_str, pat_def = country.flag.piece_svg(
+                    PieceType.KING,
+                    MapCord(center.x, center.y),
+                    scale=scale,
+                    size='large',
+                    piece_id=pid,
+                )
+
+                if pat_def is not None:
+                    ctx.builder.add_definition(pat_def)
+
+                parts.append(svg_str)
+
+        return '\n'.join(parts)
+
+    return OverlaySpec("settlements", render, requires={'board'}, priority=75)
 
 
 # %% ../../nbs/game/02_data.ipynb #3dd42b6f
