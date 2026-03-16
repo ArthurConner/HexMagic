@@ -1,0 +1,22 @@
+method	title	description	nRows	nCols	climate
+agincourt_map	Agincourt	Oceanic climate. Wet, mild year-round. Atlantic influence.	35	49	Oceanic Northern France
+aussie_map	Aussie	Mild winters, dry summers. California-like.	70	70	oceanic
+bayArea_map	Bayarea	Mild winters, dry summers. California-like.	70	25	Mediterranean
+california_map	California	Mediterranean with extreme orographic effects. Mojave to redwoods.	40	40	California
+grand_canyon_map	Grand Canyon	High desert. Extreme elevation range (rim to river ~1500m). Hot summers, cold winters at rim.	80	100	High Desert Arizona
+hong_kong_map	Hong Kong	Subtropical monsoon. Hot wet summers, mild dry winters. Typhoon season.	50	50	Subtropical Monsoon Hong Kong
+hundred_years_map	Hundred Years	Maritime temperate. Mild wet winters, cool summers. Atlantic weather systems.	80	70	Maritime Temperate NW Europe
+iwo_jima_map	Iwo Jima	Subtropical oceanic. Warm, humid. Typhoon season June-Oct.	60	40	Subtropical Pacific
+japan_korea_map	Japan Korea	Humid continental to subtropical. Monsoon summers, cold winters. Sea of Japan snow effect.	80	70	East Asian Monsoon
+kathmandu_map	Kathmandu	Subtropical highland with monsoon. Warm wet summers, cool dry winters. Extreme orographic effects.	60	60	Subtropical Highland Monsoon
+marin_map	Marin	Mediterranean with extreme orographic effects. Mojave to redwoods.	89	73	California
+maui_map	Maui		100	70	Maui
+mongol_europe_map	Mongol Europe	Continental steppe. Extreme temperature range. Very dry interior, distance from oceans.	70	80	Continental Steppe
+normandy_map	Normandy	Oceanic. Mild, wet year-round. Strong Atlantic influence.	20	40	Oceanic Normandy
+pompeii_map	Pompeii	Classic Mediterranean. Hot dry summers, mild wet winters.	50	50	Mediterranean Italy
+reykjavik_map	Reykjavik	Subarctic oceanic. Mild for latitude due to Gulf Stream. Windy, changeable.	60	60	Subarctic Oceanic Iceland
+rio_map	Rio	Tropical savanna. Hot humid summers, warm dry winters. Orographic rain on mountains.	60	60	Tropical Rio
+sanFran_map	Sanfran	Cool Mediterranean. Famous fog from cold Pacific upwelling.	30	30	San Francisco
+santorini_map	Santorini	Hot-summer Mediterranean. Very dry summers, mild wet winters. Strong summer winds.	40	40	Mediterranean Aegean
+sydney_map	Sydney	Humid subtropical. Warm summers, mild winters. Rain year-round.	60	60	Humid Subtropical Sydney
+thirteen_colonies_map	Thirteen Colonies	Humid subtropical to continental. Hot humid summers, variable winters. Appalachian orographic effects.	80	60	Humid Subtropical/Continental

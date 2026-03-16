@@ -1,0 +1,83 @@
+# HexMagic Codebase Changes Summary
+
+## Major Refactoring: Chunked Terrain System
+
+### Code Organization
+- **Moved `ChunkedTerrainGenerator` class**: Relocated from `HexMagic/database.py` to `HexMagic/chunked.py` (~370 lines)
+- **Consolidated pathfinding utilities**: Moved A* pathfinding functions (`astar_terrain`, `hex_distance`, `visualize_path`, `refine_coarse_path`) from database module to chunked module
+
+### New Features
+
+#### 1. HexChunk System (`HexMagic/plot/chunk.py`)
+- New `HexChunk` class with comprehensive methods for managing hexagonal terrain chunks:
+  - Core/halo region management
+  - Index-to-world coordinate mapping
+  - Field data management
+  - SVG rendering capabilities
+- Added to primitives module exports
+
+#### 2. Chunk Border Tracking
+- New `ChunkBorder` dataclass for tracking drainage flow across chunk boundaries
+- Stores information about:
+  - Border hex positions
+  - Downstream chunk references
+  - Flow volume data
+- Database table and indices created for efficient border queries
+
+### Database Schema Updates
+- Added `chunk_border` table with indices:
+  - `idx_border_chunk`: Find borders by source chunk
+  - `idx_border_downstream`: Find borders draining into a chunk
+- Enhanced temporal indexing for hex data
+
+### API Changes
+
+#### Removed from `HexMagic.database` module:
+- `ChunkedTerrainGenerator` class and all methods
+- `test_chunked_terrain_generator()`
+- `test_smallWs()`
+- `test_multiscale_watersheds()`
+- `test_offcenter_chunks()`
+- Pathfinding functions (`hex_distance`, `astar_terrain`, `visualize_path`, `refine_coarse_path`)
+
+#### Added to `HexMagic.chunked` module:
+- `ChunkedTerrainGenerator` with expanded functionality:
+  - `_build_chunk_terrain()`
+  - `_find_chunk_drainage()`
+  - `_interpolate_fields()`
+  - `_interpolate_from_coarse()`
+  - `_query_chunk_plates()`
+  - `carve_chunk_to_ocean()`
+  - `chunk_to_coarse_region()`
+  - `compute_coarse_weather()`
+  - `overlay_chunk_on_coarse()`
+  - `visualize_chunks_on_coarse()`
+- New pathfinding functions:
+  - `hex_move_cost()`
+  - `hpa_pathfind_v2()`
+- Utility function `world_to_chunk()`
+
+#### Added to `HexMagic.database` module:
+- `GeoStorage.create_region_index_mapper()`
+- `GeoStorage.save_chunk_borders()`
+
+### Module Index Updates
+The `_modidx.py` file reflects all API changes with updated symbol mappings linking to `largerscale.html` for chunked module documentation.
+
+### Notebook Changes
+Minor updates to several notebooks:
+- Timestamp updates for cell executions
+- Added metadata for solveit dialog mode
+- Experimental code cells in `00_core.ipynb` and `01_styles.ipynb`
+
+## Architecture Impact
+
+This refactoring represents a significant architectural improvement:
+
+1. **Separation of Concerns**: Chunked terrain generation is now isolated from database operations
+2. **Enhanced Scalability**: New chunk border tracking enables better multi-scale watershed and drainage modeling
+3. **Improved API Surface**: More granular methods for chunk manipulation and visualization
+4. **Better Testing**: Removed obsolete tests that depended on old architecture
+
+The changes maintain backward compatibility for core database operations while providing a cleaner, more maintainable chunked terrain system.
+

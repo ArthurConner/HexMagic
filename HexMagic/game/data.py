@@ -47,14 +47,6 @@ from ..database import ZoomResult, GeoStorageDebugger,GeoStorage, SaveResult, Lo
 from ..overlay import  TerrainDisplay, TerrainOverlay, ClimateOverlay, TerraDemo, DrainageBasins, OverlaySpec
 from ..overlay import TerrainDisplay, CreamOverlay, RiverOverlay, ClimateOverlay
 
-# %% ../../nbs/game/02_data.ipynb #59f517f0
-from .flag import CountryFlag , PieceType, GameContext
-import logging
-
-# %% ../../nbs/game/02_data.ipynb #3c7ef09d
-from ..weather import TerraDemo
-from ..geology import  SoilSystem, DrainageBasins, Geology
-
 # %% ../../nbs/game/02_data.ipynb #1d5c556b
 class Resources(Enum):
     """Available Foods for pieces"""
