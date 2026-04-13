@@ -1201,6 +1201,8 @@ def convolution_np(self: Terrain, field, shape, fraction, weights=None, method='
         values = np.where(valid, values, -np.inf)
         new_field = values.max(axis=1)
         new_field = np.where(np.isinf(new_field), 0, new_field)
+    elif method == 'sum':
+        new_field = (values * np.where(valid, 1.0, 0.0)).sum(axis=1)
     elif method == 'min':
         values = np.where(valid, values, np.inf)
         new_field = values.min(axis=1)

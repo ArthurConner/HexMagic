@@ -1387,6 +1387,256 @@ def country_squads(self: CountryFlag, n: int = 6) -> list:
     return [(a, self.squad_name(a, i)) for i, a in enumerate(animals)]
 
 
+# %% ../../nbs/magic/01_flag.ipynb #647f2160
+@patch
+def logoAnimal(self: CountryFlag, svg_source: str, center: MapCord,
+              scale: float = 1.0, piece_id: str = None,
+              bg_padding: float = 1.3, solid: bool = True,
+              detail: bool = True, 
+              attrs: dict = None):
+    """Render an SVG icon as a colored silhouette on a circle background.
+
+    svg_source: raw SVG string — viewBox used for sizing.
+    Normalized to ~45px baseline (chess piece compatible).
+
+    fill:       silhouette color (default: flag.primary)
+    bg_color:   circle background (default: flag.lightComp)
+    bg_padding: circle radius as multiple of icon half-size (1.3 = 30% padding)
+    solid:      True = thick self-stroke to fill outline-style SVGs
+    detail:     True = draw thin detail lines on top
+    """
+    if piece_id is None:
+        piece_id = f"icon_{self.name}"
+
+
+    # Parse viewBox
+    vb_match = re.search(r'viewBox=["\']([^"\']+)["\']', svg_source)
+    if vb_match:
+        parts = vb_match.group(1).split()
+        vb_x, vb_y = float(parts[0]), float(parts[1])
+        vb_w, vb_h = float(parts[2]), float(parts[3])
+    else:
+        vb_x, vb_y, vb_w, vb_h = 0, 0, 512, 512
+
+    # Clean inner content
+    inner_full = re.sub(r'<svg[^>]*>', '', svg_source)
+    inner_full = re.sub(r'</svg>\s*$', '', inner_full).strip()
+    #inner_full = re.sub(r'\s*fill="[^"]*"', '', inner_full)
+    #inner_full = re.sub(r'\s*stroke="[^"]*"', '', inner_full)
+
+    # Silhouette: first subpath only (outer contour)
+    def _first_subpath(m):
+        d = m.group(1)
+        z = d.find('Z')
+        if z < 0: z = d.find('z')
+        return f'd="{d[:z+1]}"' if z >= 0 else f'd="{d}"'
+    inner_silhouette = re.sub(r'd="([^"]*)"', _first_subpath, inner_full)
+
+    # Normalize to 45px baseline
+    norm = 45.0 / max(vb_w, vb_h)
+    cx_vb = vb_w / 2 + vb_x
+    cy_vb = vb_h / 2 + vb_y
+    tx, ty = center.x, center.y
+    extra = CountryFlag._render_attrs(attrs)
+    fill = self.darkPrimary
+
+    solid_sw = max(vb_w, vb_h) * 0.15 if solid else 0
+    stroke_attr = f'stroke="{fill}" stroke-width="{solid_sw:.1f}" stroke-linejoin="round"' if solid else 'stroke="none"'
+
+    base_transform = f"translate({tx},{ty}) scale({scale * norm:.6f}) translate({-cx_vb:.1f},{-cy_vb:.1f})"
+
+    # Circle radius in final px
+    circle_r = 22.5 * scale * bg_padding
+
+    layers = []
+
+
+    # 3. Detail lines on top
+    if detail:
+        detail_sw = max(vb_w, vb_h) * (0.003 + 0.002 * scale)
+        layers.append(
+            f'<g fill="{fill}" stroke-width="{detail_sw:.1f}" '
+            f'stroke-linejoin="round" stroke-linecap="round" '
+            f'transform="{base_transform}">\n{inner_full}\n</g>'
+        )
+
+    return f'''<g id="{piece_id}" style="cursor:pointer"{extra}>
+{''.join(layers)}
+</g>'''
+
+
+
+# %% ../../nbs/magic/01_flag.ipynb #8ccf80e4
+@patch
+def logo(self: CountryFlag,  size = 48,
+               animal: str = None, 
+               piece_id: str = None, detail: bool = True,
+               attrs: dict = None) -> str:
+    """Return SVG string for this flag's animal icon.
+
+    Args:
+        size:   'board' (small, scale=0.5), 'list' (medium, scale=1.5), 
+                'large' (big, scale=3.5)
+        animal: animal name (e.g. 'Bear'). If None, picks deterministically
+                from flag name hash so it's stable across calls.
+        center: placement position (default: centered for the size)
+        piece_id: SVG element id
+        detail: draw interior detail lines
+        attrs:  dict of HTMX/HTML attributes
+
+    Returns: raw SVG string (caller adds to builder or wraps in <svg>)
+    """
+   
+    # Deterministic animal from name if not specified
+    if animal is None:
+        idx = hash(self.name) % len(_ANIMAL_NAMES)
+        animal = _ANIMAL_NAMES[idx]
+
+    svg_source = _ANIMAL_SVGS.get(animal)
+    if svg_source is None:
+        raise ValueError(f"Unknown animal '{animal}'. Available: {_ANIMAL_NAMES}")
+
+    #return svg_source
+
+
+    if piece_id is None:
+        piece_id = f"animal_{self.name}_{size}"
+
+    svg = self.logoAnimal(
+        svg_source,  center=MapCord(size/2,size/2), scale=size/64.0, piece_id=piece_id,
+        detail=detail, attrs=attrs,
+    )
+
+    b = SVGBuilder()
+    b.width, b.height = size, size
+
+#svg = flag.logo(size='list', scale=size/64.0,animal=animal,center=MapCord(size/2,size/2), piece_id=f"foo")
+    b.adjust("back",f'<circle cx="{size/2}" cy="{size/2}", r ="{size/2}" fill="{self.lightComp}" stroke = "{self.primary}"/>')
+    b.adjust("base",svg)
+    return b.xml()
+#print(b.xml())
+
+
+# %% ../../nbs/magic/01_flag.ipynb #8e33dd64
+from fasthtml.common import *
+from fasthtml.jupyter import *
+from fasthtml.common import *
+
+# %% ../../nbs/magic/01_flag.ipynb #81ba978c
+@patch
+def pieceLogo(self: CountryFlag,  
+    piece_type: PieceType,
+    size = 48,
+    piece_id: str = None, 
+    detail: bool = True,
+    attrs: dict = None) -> str:
+    """Convenience: render piece, register pattern on builder, return SVG.
+
+    If layer is given, also calls builder.adjust(layer, svg).
+    """
+    fill = "red"
+    hold = self.comp
+    self.comp = self.darkPrimary
+
+    pSVG = self._piece_renderer(piece_type)(
+        MapCord(size/2,size/2), scale=size/52.0, piece_id=piece_id, fill=self.lightPrimary, attrs=attrs
+    )
+    self.comp = hold
+
+
+    b = SVGBuilder()
+    b.width, b.height = size, size
+
+    b.adjust("back",f'<circle cx="{size/2}" cy="{size/2}", r ="{size/2}" fill="{self.lightComp}" stroke = "{self.primary}"/>')
+    b.adjust("base",pSVG)
+    return b.xml()
+
+    
+    return svg
+
+# %% ../../nbs/magic/01_flag.ipynb #3a29e256
+@patch
+def pantry_badge(self: CountryFlag, amount: int, style: str = "1.2rem") -> FT:
+    """Pantry amount badge — basket emoji + amount in flag colors."""
+    return Span(f"🧺 {amount}", 
+                style=f"font-size:{style};font-weight:700;color:{self.darkPrimary};")
+
+@patch  
+def cost_badge(self: CountryFlag, cost: int, king_pantry: int) -> FT:
+    """Cost badge — food emoji + cost, colored by affordability."""
+    affordable = king_pantry >= cost
+    color = self.darkPrimary if affordable else "#e74c3c"
+    note = Small("✓ affordable" if affordable else f"need {cost - king_pantry} more",
+                 style=f"color:{'#27ae60' if affordable else '#e74c3c'};font-size:0.75rem;")
+    return DivVStacked(
+        Span(f"🍖 {cost}", style=f"font-size:1.1rem;font-weight:700;color:{color};"),
+        note,
+    )
+
+
+# %% ../../nbs/magic/01_flag.ipynb #a7935a03
+@patch
+def food_badge(self: CountryFlag, harvest, diet) -> FT:
+    net = harvest - diet
+    arrow = "▲" if net >= 0 else "▼"
+    color = "#27ae60" if net >= 0 else "#e74c3c"
+    return DivHStacked(
+        Span(f"🍖{harvest}", style=f"font-size:0.85rem;color:{self.darkPrimary};"),
+        Span(f"🍽️{diet}",   style="font-size:0.85rem;color:#888;"),
+        Span(f"{arrow}{abs(net)}", style=f"font-size:0.85rem;font-weight:700;color:{color};"),
+        style="gap:6px;"
+    )
+
+@patch
+def net_badge(self: CountryFlag, post_net: float) -> FT:
+    color = "#27ae60" if post_net >= 0 else "#e74c3c"
+    return Span(f"{post_net:+.0f}🍖",
+                style=f"font-size:1rem;font-weight:700;color:{color};")
+
+@patch
+def link_badge(self: CountryFlag, connected: bool) -> FT:
+    return Span("✅ Linked" if connected else "❌ Isolated",
+                style=f"font-size:0.85rem;color:{'#27ae60' if connected else '#e74c3c'};")
+
+
+
+# %% ../../nbs/magic/01_flag.ipynb #d3aff22e
+@patch
+def role_badge(self: CountryFlag, is_king, is_sink, net, king_pantry=0) -> FT:
+    if is_king:
+        return DivVStacked(
+            Span("👑 King", style=f"font-size:1.1rem;font-weight:700;color:{self.darkPrimary};"),
+        )
+    elif is_sink:
+        return DivVStacked(
+            Span("🍽️ Consumed", style="font-size:1.1rem;font-weight:700;color:#e74c3c;"),
+            Small("needs feeding", style="color:#e74c3c;font-size:0.75rem;"),
+        )
+    elif net > 0:
+        # Mirror cost_badge style — food being produced
+        return DivVStacked(
+            Span(f"🍖 +{net}", style=f"font-size:1.1rem;font-weight:700;color:{self.darkPrimary};"),
+            Small("✓ producing", style=f"color:#27ae60;font-size:0.75rem;"),
+        )
+    else:
+        return DivVStacked(
+            Span("⚖️ Neutral", style="font-size:0.85rem;font-weight:600;color:#888;"),
+        )
+
+
+# %% ../../nbs/magic/01_flag.ipynb #93e4bfef
+@patch
+def pantry_bar_badge(self: CountryFlag, pantry: int, max_p: int) -> FT:
+    frac  = max(0.0, min(1.0, pantry / max_p))
+    color = self.darkPrimary if pantry > 0 else "#e74c3c"
+    return DivVStacked(
+        Div(Div(style=(f"background:{color};border-radius:3px;"
+                       f"width:{frac*60:.0f}px;height:8px;")),
+            style="background:#ddd;border-radius:3px;width:60px;height:8px;"),
+        Span(f"🧺 {pantry}", style=f"font-size:0.85rem;font-weight:700;color:{color};"),
+    )
+
+
 # %% ../../nbs/magic/01_flag.ipynb #6fc2eab2
 from dataclasses import dataclass
 
